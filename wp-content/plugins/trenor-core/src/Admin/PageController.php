@@ -17,18 +17,29 @@ final class PageController
 
     public function handleRequests(): void
     {
-        if (! is_admin()) {
+        if (! is_admin() || ! current_user_can('read')) {
             return;
         }
 
-        $entity = sanitize_key((string) ($_POST['trn_entity'] ?? ''));
-        $action = sanitize_key((string) ($_POST['trn_action'] ?? ''));
+        $rawEntity = isset($_POST['trn_entity']) ? wp_unslash($_POST['trn_entity']) : '';
+        $rawAction = isset($_POST['trn_action']) ? wp_unslash($_POST['trn_action']) : '';
+
+        $entity = sanitize_key((string) $rawEntity);
+        $action = sanitize_key((string) $rawAction);
 
         if ($entity === '' || $action === '') {
             return;
         }
 
+        if (! in_array($action, ['create', 'update', 'archive'], true)) {
+            return;
+        }
+
         check_admin_referer('trn_' . $entity . '_' . $action);
+
+        if (! current_user_can($this->requiredCapability($entity, $action))) {
+            wp_die(esc_html__('You do not have permissions to perform this action.', 'trenor-core'));
+        }
 
         if ($entity === 'client') {
             $this->handleEntity($this->factory->clients(), 'trn_clients', ['name', 'org_number', 'email', 'phone']);
@@ -161,6 +172,20 @@ final class PageController
             submit_button('Archive', 'secondary', 'submit', false);
             echo '</form>';
             echo '</td></tr>';
+
+            echo '<tr><td colspan="' . esc_attr((string) (count($fields) + 3)) . '">';
+            echo '<form method="post" style="padding:8px 0;">';
+            wp_nonce_field('trn_' . $entity . '_update');
+            echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '">';
+            echo '<input type="hidden" name="trn_action" value="update">';
+            echo '<input type="hidden" name="id" value="' . esc_attr((string) $row['id']) . '">';
+            foreach ($fields as $field) {
+                echo '<label style="margin-right:10px;">' . esc_html($field) . ': ';
+                echo '<input name="' . esc_attr($field) . '" value="' . esc_attr((string) ($row[$field] ?? '')) . '">';
+                echo '</label>';
+            }
+            submit_button('Update', 'primary', 'submit', false);
+            echo '</form></td></tr>';
         }
 
         echo '</tbody></table></div>';
@@ -169,30 +194,43 @@ final class PageController
     /** @param array<int,string> $fields */
     private function handleEntity(object $repository, string $redirectPage, array $fields): void
     {
-        $action = sanitize_key((string) ($_POST['trn_action'] ?? ''));
+        $rawAction = isset($_POST['trn_action']) ? wp_unslash($_POST['trn_action']) : '';
+        $action = sanitize_key((string) $rawAction);
+        $id = isset($_POST['id']) ? (int) wp_unslash($_POST['id']) : 0;
 
+        $data = [];
+        foreach ($fields as $field) {
+            $data[$field] = isset($_POST[$field]) ? wp_unslash($_POST[$field]) : '';
+        }
+
+        $isSuccess = false;
         if ($action === 'create') {
-            $data = [];
-            foreach ($fields as $field) {
-                $data[$field] = $_POST[$field] ?? '';
-            }
-            $repository->create($data);
+            $isSuccess = $repository->create($data) !== null;
         }
 
         if ($action === 'update') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $data = [];
-            foreach ($fields as $field) {
-                $data[$field] = $_POST[$field] ?? '';
-            }
-            $repository->updateEntity($id, $data);
+            $isSuccess = $repository->updateEntity($id, $data);
         }
 
         if ($action === 'archive') {
-            $repository->archive((int) ($_POST['id'] ?? 0));
+            $isSuccess = $repository->archive($id);
         }
 
-        wp_safe_redirect(admin_url('admin.php?page=' . $redirectPage));
+        $status = $isSuccess ? 'ok' : 'error';
+        wp_safe_redirect(admin_url('admin.php?page=' . $redirectPage . '&trn_result=' . $status));
         exit;
+    }
+
+    private function requiredCapability(string $entity, string $action): string
+    {
+        if ($entity === 'client') {
+            return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_clients';
+        }
+
+        if (in_array($entity, ['property', 'project', 'room'], true)) {
+            return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_projects';
+        }
+
+        return 'read';
     }
 }

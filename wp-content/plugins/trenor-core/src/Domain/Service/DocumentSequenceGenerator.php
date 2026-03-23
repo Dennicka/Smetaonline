@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Domain\Service;
 
+use RuntimeException;
+
 final class DocumentSequenceGenerator
 {
     /** @var object */
@@ -27,38 +29,49 @@ final class DocumentSequenceGenerator
         $date ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $yyyymm = $date->format('Ym');
 
-        $row = $this->database->get_row(
-            $this->database->prepare(
-                "SELECT id, current_value FROM {$this->table} WHERE doc_type = %s AND yyyymm = %s",
-                $docType,
-                $yyyymm
-            ),
-            ARRAY_A
-        );
+        $this->database->query('START TRANSACTION');
 
-        $next = 1;
-        if (is_array($row)) {
-            $next = ((int) $row['current_value']) + 1;
-            $this->database->update(
-                $this->table,
-                ['current_value' => $next, 'updated_at' => gmdate('Y-m-d H:i:s')],
-                ['id' => (int) $row['id']],
-                ['%d', '%s'],
-                ['%d']
+        try {
+            $this->ensureSequenceRow($docType, $yyyymm);
+            $this->database->query(
+                $this->database->prepare(
+                    "UPDATE {$this->table}
+                    SET current_value = LAST_INSERT_ID(current_value + 1), updated_at = %s
+                    WHERE doc_type = %s AND yyyymm = %s",
+                    gmdate('Y-m-d H:i:s'),
+                    $docType,
+                    $yyyymm
+                )
             );
-        } else {
-            $this->database->insert(
-                $this->table,
-                [
-                    'doc_type' => $docType,
-                    'yyyymm' => $yyyymm,
-                    'current_value' => 1,
-                    'updated_at' => gmdate('Y-m-d H:i:s'),
-                ],
-                ['%s', '%s', '%d', '%s']
-            );
+
+            $next = (int) $this->database->get_var('SELECT LAST_INSERT_ID()');
+            if ($next <= 0) {
+                throw new RuntimeException('Unable to allocate next document sequence value.');
+            }
+
+            $this->database->query('COMMIT');
+        } catch (\Throwable $throwable) {
+            $this->database->query('ROLLBACK');
+            throw $throwable;
         }
 
         return sprintf('%s-%s-%05d', strtoupper($docType), $yyyymm, $next);
+    }
+
+    private function ensureSequenceRow(string $docType, string $yyyymm): void
+    {
+        $insertSql = $this->database->prepare(
+            "INSERT INTO {$this->table} (doc_type, yyyymm, current_value, updated_at)
+            VALUES (%s, %s, 0, %s)
+            ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at)",
+            $docType,
+            $yyyymm,
+            gmdate('Y-m-d H:i:s')
+        );
+
+        $result = $this->database->query($insertSql);
+        if ($result === false) {
+            throw new RuntimeException('Unable to initialize document sequence row.');
+        }
     }
 }

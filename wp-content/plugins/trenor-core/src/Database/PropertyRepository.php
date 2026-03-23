@@ -17,11 +17,11 @@ final class PropertyRepository extends BaseRepository
         return 'property';
     }
 
-    public function create(array $data): int
+    public function create(array $data): ?int
     {
         global $wpdb;
         $now = current_time('mysql', true);
-        $wpdb->insert(
+        $inserted = $wpdb->insert(
             $this->table(),
             [
                 'client_id' => (int) ($data['client_id'] ?? 0),
@@ -36,7 +36,15 @@ final class PropertyRepository extends BaseRepository
             ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
         );
 
+        if ($inserted === false) {
+            return null;
+        }
+
         $id = (int) $wpdb->insert_id;
+        if ($id <= 0) {
+            return null;
+        }
+
         $this->auditLogger->log($this->entityType(), $id, 'create', $data);
 
         return $id;
@@ -61,11 +69,14 @@ final class PropertyRepository extends BaseRepository
             ['%d']
         );
 
-        if ($updated !== false && $updated > 0) {
-            $this->auditLogger->log($this->entityType(), $id, 'update', $data);
-            return true;
+        if ($updated === false) {
+            return false;
         }
 
-        return false;
+        if ($updated > 0) {
+            $this->auditLogger->log($this->entityType(), $id, 'update', $data);
+        }
+
+        return true;
     }
 }

@@ -45,12 +45,13 @@ final class RoleRegistrar
             'trn_manage_prices' => true,
             'trn_manage_templates' => true,
             'trn_view_margin' => true,
+            'trn_archive_records' => true,
         ]);
 
         add_role('trn_worker', 'Worker', [
             'read' => true,
-            'trn_manage_clients' => true,
-            'trn_manage_projects' => true,
+            'trn_manage_estimates' => true,
+            'trn_manage_templates' => true,
         ]);
 
         add_role('trn_viewer_accountant', 'Viewer/Accountant', [

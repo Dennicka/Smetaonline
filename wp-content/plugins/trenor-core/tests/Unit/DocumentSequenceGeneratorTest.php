@@ -13,33 +13,52 @@ final class DocumentSequenceGeneratorTest extends TestCase
     {
         $wpdb = new class {
             public string $prefix = 'wp_';
-            private array $rows = [];
+
+            /** @var array<string, int> */
+            private array $values = [];
+            private int $lastInsertId = 0;
 
             public function prepare(string $query, ...$args): string
             {
-                return vsprintf(str_replace(['%s', '%d'], ['%s', '%d'], $query), $args);
+                $escaped = array_map(static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'", $args);
+                return vsprintf(str_replace(['%s', '%d'], ['%s', '%d'], $query), $escaped);
             }
 
-            public function get_row(string $query, string $output): ?array
+            public function query(string $query)
             {
-                preg_match("/doc_type = ([A-Za-z]+) AND yyyymm = (\d+)/", $query, $m);
-                $key = ($m[1] ?? '') . '|' . ($m[2] ?? '');
-                return $this->rows[$key] ?? null;
-            }
-
-            public function update(string $table, array $data, array $where): void
-            {
-                foreach ($this->rows as $key => $row) {
-                    if ((int) $row['id'] === (int) $where['id']) {
-                        $this->rows[$key] = array_merge($row, $data);
-                    }
+                if (str_starts_with($query, 'START TRANSACTION') || str_starts_with($query, 'COMMIT') || str_starts_with($query, 'ROLLBACK')) {
+                    return 1;
                 }
+
+                if (str_contains($query, 'INSERT INTO')) {
+                    preg_match("/VALUES \('([^']+)', '([0-9]{6})'/", $query, $matches);
+                    $key = ($matches[1] ?? '') . '|' . ($matches[2] ?? '');
+                    if (! isset($this->values[$key])) {
+                        $this->values[$key] = 0;
+                    }
+
+                    return 1;
+                }
+
+                if (str_contains($query, 'UPDATE')) {
+                    preg_match("/WHERE doc_type = '([^']+)' AND yyyymm = '([0-9]{6})'/", $query, $matches);
+                    $key = ($matches[1] ?? '') . '|' . ($matches[2] ?? '');
+                    $this->values[$key] = ($this->values[$key] ?? 0) + 1;
+                    $this->lastInsertId = $this->values[$key];
+
+                    return 1;
+                }
+
+                return false;
             }
 
-            public function insert(string $table, array $data): void
+            public function get_var(string $query)
             {
-                $key = $data['doc_type'] . '|' . $data['yyyymm'];
-                $this->rows[$key] = ['id' => count($this->rows) + 1, 'current_value' => $data['current_value']];
+                if ($query === 'SELECT LAST_INSERT_ID()') {
+                    return $this->lastInsertId;
+                }
+
+                return null;
             }
         };
 

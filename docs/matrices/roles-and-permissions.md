@@ -1,10 +1,10 @@
 # Roles and Permissions Matrix
 
 ## Roles
-- `trn_owner_admin` (Owner/Admin)
-- `trn_manager` (Manager)
-- `trn_worker` (Worker)
-- `trn_viewer_accountant` (Viewer/Accountant)
+- `trn_owner_admin` (Owner/Admin): full capabilities.
+- `trn_manager` (Manager): full operational scope except backups.
+- `trn_worker` (Worker): estimate/template execution scope, no master-data management.
+- `trn_viewer_accountant` (Viewer/Accountant): invoice/payment visibility and accounting actions only.
 
 ## Capabilities
 - `trn_manage_clients`
