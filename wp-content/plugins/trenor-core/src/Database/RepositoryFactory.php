@@ -32,9 +32,8 @@ final class RepositoryFactory
         global $wpdb;
 
         $table = $wpdb->prefix . 'trn_audit_log';
-        return $wpdb->get_results(
-            $wpdb->prepare("SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", $limit),
-            ARRAY_A
-        ) ?: [];
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed from $wpdb->prefix and plugin constant suffix.
+        return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", $limit), ARRAY_A) ?: [];
     }
 }

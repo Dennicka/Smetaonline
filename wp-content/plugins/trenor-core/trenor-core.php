@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: Trenor Core
  * Description: Core domain and infrastructure plugin for Smetaonline.

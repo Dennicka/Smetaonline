@@ -52,6 +52,7 @@ final class DocumentSequenceGeneratorTest extends TestCase
                 return false;
             }
 
+            // phpcs:ignore WordPress.NamingConventions.ValidVariableName.MethodNameInvalid -- Mock mirrors wpdb API naming.
             public function get_var(string $query)
             {
                 if ($query === 'SELECT LAST_INSERT_ID()') {

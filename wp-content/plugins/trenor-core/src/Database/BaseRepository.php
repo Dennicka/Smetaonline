@@ -14,6 +14,7 @@ abstract class BaseRepository
     }
 
     abstract protected function table(): string;
+
     abstract protected function entityType(): string;
 
     /** @return array<int, array<string, mixed>> */
@@ -21,20 +22,16 @@ abstract class BaseRepository
     {
         global $wpdb;
 
-        return $wpdb->get_results(
-            "SELECT * FROM {$this->table()} ORDER BY id DESC",
-            ARRAY_A
-        ) ?: [];
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed from $wpdb->prefix and plugin constant suffix.
+        return $wpdb->get_results("SELECT * FROM {$this->table()} ORDER BY id DESC", ARRAY_A) ?: [];
     }
 
     public function find(int $id): ?array
     {
         global $wpdb;
 
-        $row = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM {$this->table()} WHERE id = %d", $id),
-            ARRAY_A
-        );
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed from $wpdb->prefix and plugin constant suffix.
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table()} WHERE id = %d", $id), ARRAY_A);
 
         return is_array($row) ? $row : null;
     }

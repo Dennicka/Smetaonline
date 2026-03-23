@@ -21,11 +21,13 @@ final class PageController
             return;
         }
 
-        $rawEntity = isset($_POST['trn_entity']) ? wp_unslash($_POST['trn_entity']) : '';
-        $rawAction = isset($_POST['trn_action']) ? wp_unslash($_POST['trn_action']) : '';
+        $postPayload = filter_input_array(INPUT_POST) ?: [];
+        if (! is_array($postPayload) || $postPayload === []) {
+            return;
+        }
 
-        $entity = sanitize_key((string) $rawEntity);
-        $action = sanitize_key((string) $rawAction);
+        $entity = sanitize_key($this->postValue($postPayload, 'trn_entity'));
+        $action = sanitize_key($this->postValue($postPayload, 'trn_action'));
 
         if ($entity === '' || $action === '') {
             return;
@@ -41,20 +43,46 @@ final class PageController
             wp_die(esc_html__('You do not have permissions to perform this action.', 'trenor-core'));
         }
 
+        $id = (int) $this->postValue($postPayload, 'id');
+
         if ($entity === 'client') {
-            $this->handleEntity($this->factory->clients(), 'trn_clients', ['name', 'org_number', 'email', 'phone']);
+            $this->handleEntity(
+                $this->factory->clients(),
+                'trn_clients',
+                $action,
+                $id,
+                $this->collectData($postPayload, ['name', 'org_number', 'email', 'phone'])
+            );
         }
 
         if ($entity === 'property') {
-            $this->handleEntity($this->factory->properties(), 'trn_properties', ['client_id', 'name', 'address_line', 'city', 'postal_code']);
+            $this->handleEntity(
+                $this->factory->properties(),
+                'trn_properties',
+                $action,
+                $id,
+                $this->collectData($postPayload, ['client_id', 'name', 'address_line', 'city', 'postal_code'])
+            );
         }
 
         if ($entity === 'project') {
-            $this->handleEntity($this->factory->projects(), 'trn_projects', ['property_id', 'name', 'code']);
+            $this->handleEntity(
+                $this->factory->projects(),
+                'trn_projects',
+                $action,
+                $id,
+                $this->collectData($postPayload, ['property_id', 'name', 'code'])
+            );
         }
 
         if ($entity === 'room') {
-            $this->handleEntity($this->factory->rooms(), 'trn_rooms', ['project_id', 'name', 'floor']);
+            $this->handleEntity(
+                $this->factory->rooms(),
+                'trn_rooms',
+                $action,
+                $id,
+                $this->collectData($postPayload, ['project_id', 'name', 'floor'])
+            );
         }
     }
 
@@ -191,18 +219,33 @@ final class PageController
         echo '</tbody></table></div>';
     }
 
-    /** @param array<int,string> $fields */
-    private function handleEntity(object $repository, string $redirectPage, array $fields): void
+    /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
+    private function collectData(array $postPayload, array $fields): array
     {
-        $rawAction = isset($_POST['trn_action']) ? wp_unslash($_POST['trn_action']) : '';
-        $action = sanitize_key((string) $rawAction);
-        $id = isset($_POST['id']) ? (int) wp_unslash($_POST['id']) : 0;
-
         $data = [];
+
         foreach ($fields as $field) {
-            $data[$field] = isset($_POST[$field]) ? wp_unslash($_POST[$field]) : '';
+            $data[$field] = $this->postValue($postPayload, $field);
         }
 
+        return $data;
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function postValue(array $postPayload, string $field): string
+    {
+        $value = $postPayload[$field] ?? '';
+
+        if (is_array($value)) {
+            return '';
+        }
+
+        return (string) wp_unslash((string) $value);
+    }
+
+    /** @param array<string,mixed> $data */
+    private function handleEntity(object $repository, string $redirectPage, string $action, int $id, array $data): void
+    {
         $isSuccess = false;
         if ($action === 'create') {
             $isSuccess = $repository->create($data) !== null;
