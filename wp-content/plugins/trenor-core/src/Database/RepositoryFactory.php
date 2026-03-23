@@ -26,6 +26,46 @@ final class RepositoryFactory
         return new RoomRepository();
     }
 
+    public function workCategories(): WorkCategoryRepository
+    {
+        return new WorkCategoryRepository();
+    }
+
+    public function workItems(): WorkItemRepository
+    {
+        return new WorkItemRepository();
+    }
+
+    public function materialCategories(): MaterialCategoryRepository
+    {
+        return new MaterialCategoryRepository();
+    }
+
+    public function materials(): MaterialRepository
+    {
+        return new MaterialRepository();
+    }
+
+    public function estimates(): EstimateRepository
+    {
+        return new EstimateRepository();
+    }
+
+    public function estimateLines(): EstimateLineRepository
+    {
+        return new EstimateLineRepository();
+    }
+
+    public function estimateMaterialLines(): EstimateMaterialLineRepository
+    {
+        return new EstimateMaterialLineRepository();
+    }
+
+    public function estimateSnapshots(): EstimateSnapshotRepository
+    {
+        return new EstimateSnapshotRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {
