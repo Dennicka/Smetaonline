@@ -39,10 +39,14 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertSame('application/pdf', $artifact['mime_type']);
         self::assertFileExists((string) $artifact['storage_path']);
         self::assertStringContainsString('OFF-2026-001-id101-v3.pdf', (string) $artifact['storage_path']);
+        self::assertGreaterThan(0, (int) ($artifact['file_size_bytes'] ?? 0));
+        self::assertStringStartsWith('%PDF-', (string) file_get_contents((string) $artifact['storage_path']));
         self::assertSame(
             hash_file('sha256', (string) $artifact['storage_path']),
             (string) $artifact['checksum_sha256']
         );
+        self::assertFileExists(dirname((string) $artifact['storage_path']) . '/index.php');
+        self::assertFileExists(dirname((string) $artifact['storage_path']) . '/.htaccess');
     }
 
     public function testCreatesInvoicePdfArtifactMetadata(): void
@@ -86,6 +90,14 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertSame((int) $first['id'], (int) $second['id']);
         self::assertSame((string) $first['storage_path'], (string) $second['storage_path']);
         self::assertCount(1, $wpdb->documentArtifacts);
+    }
+
+    public function testMissingDocumentThrowsExplicitException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('invoice', 99999);
     }
 
     private function service(): DocumentPdfArtifactService
