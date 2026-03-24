@@ -64,10 +64,11 @@ final class DocumentArtifactRepository
                 'artifact_type' => sanitize_key((string) ($data['artifact_type'] ?? 'pdf')),
                 'storage_path' => sanitize_text_field((string) ($data['storage_path'] ?? '')),
                 'mime_type' => sanitize_text_field((string) ($data['mime_type'] ?? 'application/pdf')),
+                'file_size_bytes' => (int) ($data['file_size_bytes'] ?? 0),
                 'checksum_sha256' => sanitize_text_field((string) ($data['checksum_sha256'] ?? '')),
                 'created_at' => (string) ($data['created_at'] ?? $now),
             ],
-            ['%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s']
+            ['%s', '%d', '%d', '%s', '%s', '%s', '%d', '%s', '%s']
         );
 
         if ($ok === false) {
@@ -85,6 +86,7 @@ final class DocumentArtifactRepository
             'version_no' => (int) ($data['version_no'] ?? 1),
             'artifact_type' => (string) ($data['artifact_type'] ?? 'pdf'),
             'storage_path' => (string) ($data['storage_path'] ?? ''),
+            'file_size_bytes' => (int) ($data['file_size_bytes'] ?? 0),
         ]);
 
         return $artifactId;

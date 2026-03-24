@@ -27,7 +27,12 @@ final class DocumentPdfArtifactService
     public function getOrCreate(string $documentType, int $documentId): array
     {
         $normalizedType = sanitize_key($documentType);
+        if ($documentId <= 0) {
+            throw new RuntimeException('Document id must be a positive integer.');
+        }
+
         $document = $this->loadDocument($normalizedType, $documentId);
+        $this->assertDocumentGenerationPreconditions($normalizedType, $document);
         $versionNo = (int) ($document['version_no'] ?? 1);
 
         $existing = $this->artifactRepository->findByDocumentVersion($normalizedType, $documentId, $versionNo, 'pdf');
@@ -47,10 +52,16 @@ final class DocumentPdfArtifactService
             'artifact_type' => 'pdf',
             'storage_path' => $storagePath,
             'mime_type' => 'application/pdf',
+            'file_size_bytes' => strlen($pdfBinary),
             'checksum_sha256' => $checksum,
         ]);
 
         if (! is_int($artifactId) || $artifactId <= 0) {
+            $raceSafeLookup = $this->artifactRepository->findByDocumentVersion($normalizedType, $documentId, $versionNo, 'pdf');
+            if (is_array($raceSafeLookup) && $this->fileExists((string) ($raceSafeLookup['storage_path'] ?? ''))) {
+                return $raceSafeLookup;
+            }
+
             throw new RuntimeException('Failed to persist document artifact metadata.');
         }
 
@@ -60,6 +71,27 @@ final class DocumentPdfArtifactService
         }
 
         return $created;
+    }
+
+    /** @param array<string, mixed> $document */
+    private function assertDocumentGenerationPreconditions(string $documentType, array $document): void
+    {
+        $documentNumber = trim((string) ($document['document_number'] ?? ''));
+        if ($documentNumber === '') {
+            throw new RuntimeException('Document source is invalid: missing document_number.');
+        }
+
+        $versionNo = (int) ($document['version_no'] ?? 0);
+        if ($versionNo <= 0) {
+            throw new RuntimeException('Document source is invalid: missing version marker.');
+        }
+
+        $snapshotJson = trim((string) ($document['snapshot_json'] ?? ''));
+        if ($snapshotJson === '') {
+            throw new RuntimeException(
+                sprintf('Document source is invalid for %s: missing snapshot_json.', $documentType)
+            );
+        }
     }
 
     private function loadDocument(string $documentType, int $documentId): array
@@ -106,6 +138,8 @@ final class DocumentPdfArtifactService
             throw new RuntimeException('Failed to prepare artifact directory.');
         }
 
+        $this->hardenStorageFolder($folder);
+
         return $folder . DIRECTORY_SEPARATOR . $documentNumber . '-id' . $documentId . '-v' . $versionNo . '.pdf';
     }
 
@@ -129,6 +163,25 @@ final class DocumentPdfArtifactService
     private function fileExists(string $path): bool
     {
         return $path !== '' && file_exists($path) && is_file($path);
+    }
+
+    private function hardenStorageFolder(string $folder): void
+    {
+        $indexPath = $folder . DIRECTORY_SEPARATOR . 'index.php';
+        if (! file_exists($indexPath)) {
+            $written = file_put_contents($indexPath, "<?php\nhttp_response_code(404);\nexit;\n");
+            if (! is_int($written) || $written <= 0) {
+                throw new RuntimeException('Failed to harden artifact directory.');
+            }
+        }
+
+        $htaccessPath = $folder . DIRECTORY_SEPARATOR . '.htaccess';
+        if (! file_exists($htaccessPath)) {
+            $written = file_put_contents($htaccessPath, "Require all denied\n");
+            if (! is_int($written) || $written <= 0) {
+                throw new RuntimeException('Failed to harden artifact directory.');
+            }
+        }
     }
 
     private function writeArtifact(string $path, string $contents): void

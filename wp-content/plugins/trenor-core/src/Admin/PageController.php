@@ -2400,10 +2400,23 @@ final class PageController
             exit;
         }
 
+        $storedChecksum = (string) ($artifact['checksum_sha256'] ?? '');
+        $actualChecksum = hash_file('sha256', $path);
+        if (! is_string($actualChecksum) || $storedChecksum === '' || ! hash_equals($storedChecksum, $actualChecksum)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_dashboard&trn_result=error&trn_message=PDF%20artifact%20checksum%20mismatch'));
+            exit;
+        }
+
         $filename = basename($path);
-        header('Content-Type: application/pdf');
+        $mimeType = (string) ($artifact['mime_type'] ?? 'application/pdf');
+        $fileSize = filesize($path);
+
+        header('Content-Type: ' . $mimeType);
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         header('X-Content-Type-Options: nosniff');
+        if (is_int($fileSize) && $fileSize > 0) {
+            header('Content-Length: ' . (string) $fileSize);
+        }
         readfile($path);
         exit;
     }

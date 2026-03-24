@@ -39,10 +39,14 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertSame('application/pdf', $artifact['mime_type']);
         self::assertFileExists((string) $artifact['storage_path']);
         self::assertStringContainsString('OFF-2026-001-id101-v3.pdf', (string) $artifact['storage_path']);
+        self::assertGreaterThan(0, (int) ($artifact['file_size_bytes'] ?? 0));
+        self::assertStringStartsWith('%PDF-', (string) file_get_contents((string) $artifact['storage_path']));
         self::assertSame(
             hash_file('sha256', (string) $artifact['storage_path']),
             (string) $artifact['checksum_sha256']
         );
+        self::assertFileExists(dirname((string) $artifact['storage_path']) . '/index.php');
+        self::assertFileExists(dirname((string) $artifact['storage_path']) . '/.htaccess');
     }
 
     public function testCreatesInvoicePdfArtifactMetadata(): void
@@ -86,6 +90,76 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertSame((int) $first['id'], (int) $second['id']);
         self::assertSame((string) $first['storage_path'], (string) $second['storage_path']);
         self::assertCount(1, $wpdb->documentArtifacts);
+    }
+
+    public function testMissingDocumentThrowsExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('invoice', 99999);
+    }
+
+    public function testMissingOffertDocumentThrowsExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('offert', 99999);
+    }
+
+    public function testMissingCreditNoteDocumentThrowsExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('credit_note', 99999);
+    }
+
+    public function testUnsupportedDocumentTypeThrowsExplicitException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unsupported document type for PDF generation.');
+
+        $this->service()->getOrCreate('estimate', 10);
+    }
+
+    public function testInvalidGenerationPreconditionsThrowExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->rowsById[787] = [
+            'id' => 787,
+            'document_number' => 'INV-2026-INVALID',
+            'version_no' => 1,
+            'status' => 'issued',
+            'snapshot_json' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document source is invalid for invoice: missing snapshot_json.');
+
+        $this->service()->getOrCreate('invoice', 787);
+    }
+
+    public function testNonPositiveDocumentIdThrowsExplicitException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document id must be a positive integer.');
+
+        $this->service()->getOrCreate('invoice', 0);
     }
 
     private function service(): DocumentPdfArtifactService

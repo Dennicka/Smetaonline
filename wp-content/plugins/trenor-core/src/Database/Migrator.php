@@ -57,6 +57,11 @@ final class Migrator
             $this->runQueries($this->documentPdfArtifactQueries($charsetCollate));
             $this->markMigration('009_document_pdf_artifacts');
         }
+
+        if (! $this->hasMigration('010_document_pdf_artifact_filesize')) {
+            $this->runQueries($this->documentPdfArtifactFilesizeQueries($charsetCollate));
+            $this->markMigration('010_document_pdf_artifact_filesize');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -573,6 +578,32 @@ final class Migrator
                 artifact_type VARCHAR(32) NOT NULL DEFAULT 'pdf',
                 storage_path TEXT NOT NULL,
                 mime_type VARCHAR(127) NOT NULL DEFAULT 'application/pdf',
+                file_size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                checksum_sha256 CHAR(64) NOT NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY unique_document_artifact (document_type, document_id, version_no, artifact_type),
+                KEY document_lookup (document_type, document_id, version_no),
+                KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function documentPdfArtifactFilesizeQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_document_artifacts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                document_type VARCHAR(64) NOT NULL,
+                document_id BIGINT UNSIGNED NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                artifact_type VARCHAR(32) NOT NULL DEFAULT 'pdf',
+                storage_path TEXT NOT NULL,
+                mime_type VARCHAR(127) NOT NULL DEFAULT 'application/pdf',
+                file_size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 checksum_sha256 CHAR(64) NOT NULL,
                 created_at DATETIME NOT NULL,
                 PRIMARY KEY (id),
