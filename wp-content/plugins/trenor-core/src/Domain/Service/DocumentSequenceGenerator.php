@@ -6,7 +6,7 @@ namespace Trenor\Core\Domain\Service;
 
 use RuntimeException;
 
-final class DocumentSequenceGenerator
+final class DocumentSequenceGenerator implements DocumentNumberGenerator
 {
     /** @var object */
     private object $database;

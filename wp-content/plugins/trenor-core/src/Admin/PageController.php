@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Trenor\Core\Admin;
 
 use Trenor\Core\Database\RepositoryFactory;
+use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 use Trenor\Core\Domain\Exception\EstimateCalculationException;
 use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
+use Trenor\Core\Domain\Service\OffertFromEstimateService;
 
 final class PageController
 {
@@ -83,6 +85,10 @@ final class PageController
 
         if ($entity === 'estimate_recalculate' && $action === 'recalculate') {
             $this->recalculateEstimate((int) $this->postValue($postPayload, 'estimate_id'));
+        }
+
+        if ($entity === 'offert') {
+            $this->handleOffert($action, $id, $postPayload);
         }
     }
 
@@ -179,6 +185,44 @@ final class PageController
     public function renderSettings(): void
     {
         echo '<div class="wrap"><h1>Настройки</h1><p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p></div>';
+    }
+
+    public function renderOfferts(): void
+    {
+        if (! current_user_can('trn_issue_offerts')) {
+            wp_die('Forbidden');
+        }
+
+        $offertId = filter_input(INPUT_GET, 'offert_id', FILTER_VALIDATE_INT);
+        $offertId = $offertId !== false && $offertId !== null ? (int) $offertId : 0;
+        $offerts = $this->factory->offerts()->all();
+
+        echo '<div class="wrap"><h1>Offerter / Offerts / Оферты</h1>';
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($offerts as $offert) {
+            $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $offert['id']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['estimate_id']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['document_number']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['version_no']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['status']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['total_inc_vat_minor']) . '</td>';
+            echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a> ';
+            $this->renderOffertActionForm((int) $offert['id'], 'accept', 'Accept');
+            $this->renderOffertActionForm((int) $offert['id'], 'reject', 'Reject');
+            if (current_user_can('trn_archive_records')) {
+                $this->renderOffertActionForm((int) $offert['id'], 'archive', 'Archive');
+            }
+            echo '</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        if ($offertId > 0) {
+            $this->renderOffertDetail($offertId);
+        }
+        echo '</div>';
     }
 
     public function renderAuditLog(): void
@@ -285,6 +329,14 @@ final class PageController
         echo '<input type="hidden" name="trn_entity" value="estimate_recalculate"><input type="hidden" name="trn_action" value="recalculate"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
         submit_button('Recalculate');
         echo '</form>';
+
+        if (current_user_can('trn_issue_offerts')) {
+            echo '<form method="post" style="margin-top:10px;">';
+            wp_nonce_field('trn_offert_issue');
+            echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
+            submit_button('Issue Offert', 'primary', 'submit', false);
+            echo '</form>';
+        }
 
         echo '<h3>Work lines</h3>';
         $this->renderEstimateLinesTable($lines);
@@ -449,6 +501,52 @@ final class PageController
         exit;
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleOffert(string $action, int $id, array $postPayload): void
+    {
+        $offertRepo = $this->factory->offerts();
+
+        if ($action === 'issue') {
+            $estimateId = (int) $this->postValue($postPayload, 'estimate_id');
+            $estimate = $this->factory->estimates()->find($estimateId);
+            if ($estimate === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('Estimate not found.')));
+                exit;
+            }
+
+            $lines = $this->factory->estimateLines()->byEstimate($estimateId);
+            $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
+            if ($lines === [] && $materialLines === []) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode('Cannot issue offert without labour/material lines.')));
+                exit;
+            }
+
+            $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+            $service = new OffertFromEstimateService($offertRepo, new DocumentSequenceGenerator());
+            $payload = $service->buildPayload($estimate, $lines, $materialLines, $totals);
+            $offertId = $offertRepo->create($payload);
+
+            if ($offertId === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode('Offert issue failed.')));
+                exit;
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=ok'));
+            exit;
+        }
+
+        if (in_array($action, ['accept', 'reject', 'archive'], true)) {
+            if ($action === 'archive' && ! current_user_can('trn_archive_records')) {
+                wp_die(esc_html__('You do not have permissions to perform this action.', 'trenor-core'));
+            }
+
+            $isSuccess = $offertRepo->transitionStatus($id, $action === 'archive' ? 'archived' : $action . 'ed');
+            $status = $isSuccess ? 'ok' : 'error';
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=' . $status));
+            exit;
+        }
+    }
+
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
     private function collectData(array $postPayload, array $fields): array
     {
@@ -508,6 +606,46 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_estimates';
         }
 
+        if ($entity === 'offert') {
+            if ($action === 'archive') {
+                return 'trn_archive_records';
+            }
+
+            return 'trn_issue_offerts';
+        }
+
         return 'read';
+    }
+
+    private function renderOffertActionForm(int $offertId, string $action, string $label): void
+    {
+        echo '<form method="post" style="display:inline-block; margin-left:6px;">';
+        wp_nonce_field('trn_offert_' . $action);
+        echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="' . esc_attr($action) . '"><input type="hidden" name="id" value="' . esc_attr((string) $offertId) . '">';
+        submit_button($label, 'secondary', 'submit', false);
+        echo '</form>';
+    }
+
+    private function renderOffertDetail(int $offertId): void
+    {
+        $offert = $this->factory->offerts()->find($offertId);
+        if ($offert === null) {
+            echo '<h2>Offert detail</h2><p>Offert not found.</p>';
+            return;
+        }
+
+        $snapshot = json_decode((string) ($offert['snapshot_json'] ?? ''), true);
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+        $header = is_array($snapshot['header'] ?? null) ? $snapshot['header'] : [];
+        $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
+        $lines = is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : [];
+        $materialLines = is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [];
+
+        echo '<h2>Offert #' . esc_html((string) $offertId) . ' (read-only)</h2>';
+        echo '<p><strong>Document:</strong> ' . esc_html((string) $offert['document_number']) . ' | <strong>Version:</strong> ' . esc_html((string) $offert['version_no']) . ' | <strong>Status:</strong> ' . esc_html((string) $offert['status']) . '</p>';
+        echo '<h3>Header</h3><pre>' . esc_html((string) wp_json_encode($header, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+        echo '<h3>Totals</h3><pre>' . esc_html((string) wp_json_encode($totals, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+        echo '<h3>Lines (snapshot)</h3><pre>' . esc_html((string) wp_json_encode($lines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+        echo '<h3>Material lines (snapshot)</h3><pre>' . esc_html((string) wp_json_encode($materialLines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
     }
 }
