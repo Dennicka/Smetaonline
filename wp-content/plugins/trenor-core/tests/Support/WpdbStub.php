@@ -11,12 +11,19 @@ final class WpdbStub
     /** @var array<int, array<string, mixed>> */
     public array $updatedRows = [];
 
+    public int $updateResult = 1;
+
     public string $insertedTable = '';
 
     /** @var array<int, array<string, mixed>> */
     public array $insertHistory = [];
 
     public int $insert_id = 1;
+
+    public bool $failReceiptInsert = false;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $receipts = [];
 
     public int $maxVersion = 0;
 
@@ -28,6 +35,14 @@ final class WpdbStub
 
     /** @var array<int, array<string, mixed>> */
     public array $rowsById = [];
+
+    /** @var array<int, string> */
+    public array $queries = [];
+
+    /** @var array<int, string> */
+    public array $queryHistory = [];
+
+    public bool $deleteCalled = false;
 
     public function prepare(string $query, ...$args): string
     {
@@ -42,9 +57,15 @@ final class WpdbStub
     /** @param array<string, mixed> $data @param array<string, mixed> $where @param array<int, string> $format @param array<int, string> $whereFormat */
     public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
     {
-        $this->updatedRows[] = ['table' => $table, 'data' => $data, 'where' => $where];
+        $this->updatedRows[] = [
+            'table' => $table,
+            'data' => $data,
+            'where' => $where,
+            'format' => $format,
+            'where_format' => $whereFormat,
+        ];
 
-        return 1;
+        return $this->updateResult;
     }
 
     public function getVar(string $query): int
@@ -56,7 +77,7 @@ final class WpdbStub
         return 0;
     }
 
-    public function insert(string $table, array $data, array $format = []): int
+    public function insert(string $table, array $data, array $format = []): int|false
     {
         $this->insertedTable = $table;
         $this->insertHistory[] = [
@@ -65,9 +86,34 @@ final class WpdbStub
             'format' => $format,
         ];
 
+        if ($table === $this->prefix . 'trn_operation_receipts') {
+            if ($this->failReceiptInsert) {
+                return false;
+            }
+
+            $data['id'] = $this->insert_id;
+            $this->receipts[] = $data;
+        }
+
         if ($this->insert_id <= 0) {
             $this->insert_id = 1;
         }
+
+        $this->insert_id++;
+
+        return 1;
+    }
+
+    public function delete(string $table, array $where, array $format = []): int
+    {
+        $this->deleteCalled = true;
+
+        return 1;
+    }
+
+    public function query(string $query): int
+    {
+        $this->queryHistory[] = $query;
 
         return 1;
     }
@@ -90,6 +136,7 @@ final class WpdbStub
 
         if ($name === 'get_results') {
             $query = (string) ($arguments[0] ?? '');
+            $this->queries[] = $query;
 
             if (preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
                 return $this->paymentsByInvoice[(int) $matches[1]] ?? [];
@@ -102,6 +149,10 @@ final class WpdbStub
             $query = (string) ($arguments[0] ?? '');
             if (preg_match('/id\s*=\s*(\d+)/', $query, $matches) === 1) {
                 return $this->rowsById[(int) $matches[1]] ?? null;
+            }
+
+            if ($this->receipts !== []) {
+                return $this->receipts[0];
             }
 
             return null;
