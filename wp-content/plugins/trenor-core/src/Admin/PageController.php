@@ -328,19 +328,21 @@ final class PageController
         $invoiceFilter = new InvoiceListFilter();
         $allInvoices = $this->factory->invoices()->all();
         $invoices = $invoiceFilter->apply($allInvoices, $rawFilters);
-        $summary = (new InvoiceListSummary())->summarize($invoices);
         $formFilters = $invoiceFilter->normalizedForForm($rawFilters);
         $calculator = new InvoicePaymentSummaryCalculator();
         $invoicePayments = $this->factory->invoicePayments();
+        $invoiceIds = array_map(static fn (array $invoice): int => (int) ($invoice['id'] ?? 0), $invoices);
+        $allPayments = $invoicePayments->all();
+        $paymentsForSummary = array_values(array_filter(
+            $allPayments,
+            static fn (array $payment): bool => in_array((int) ($payment['invoice_id'] ?? 0), $invoiceIds, true)
+        ));
+        $summary = (new InvoiceLedgerSummaryBuilder())->build($invoices, $paymentsForSummary);
 
         echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
         $this->renderAdminNoticeFromRequest();
         $this->renderInvoiceFilterForm($formFilters);
-        echo '<p><strong>Total rows:</strong> ' . esc_html((string) $summary['total_rows']) . ' | ';
-        echo '<strong>Issued:</strong> ' . esc_html((string) $summary['issued']) . ' | ';
-        echo '<strong>Partially paid:</strong> ' . esc_html((string) $summary['partially_paid']) . ' | ';
-        echo '<strong>Paid:</strong> ' . esc_html((string) $summary['paid']) . ' | ';
-        echo '<strong>Archived:</strong> ' . esc_html((string) $summary['archived']) . '</p>';
+        $this->renderInvoiceLedgerSummary($summary, $this->invoiceListCurrency($invoices));
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>computed_status</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         if ($invoices === []) {
@@ -1393,7 +1395,6 @@ final class PageController
 
         echo '<form method="get" style="margin:10px 0;">';
         echo '<input type="hidden" name="page" value="trn_invoices">';
-        echo '<label style="margin-right:8px;">invoice_id <input type="text" name="invoice_id" value="' . esc_attr($filters['invoice_id'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">offert_id <input type="text" name="offert_id" value="' . esc_attr($filters['offert_id'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">estimate_id <input type="text" name="estimate_id" value="' . esc_attr($filters['estimate_id'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">status <select name="status">';
@@ -1406,6 +1407,37 @@ final class PageController
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';
+    }
+
+    /** @param array<string, int> $summary */
+    private function renderInvoiceLedgerSummary(array $summary, string $currency): void
+    {
+        echo '<div style="margin:10px 0; padding:10px; border:1px solid #ccd0d4; background:#fff;">';
+        echo '<h2 style="margin-top:0;">Invoice Ledger / AR Summary</h2>';
+        echo '<table class="widefat striped" style="max-width:900px;"><tbody>';
+        echo '<tr><th>invoice_count</th><td>' . esc_html((string) ($summary['invoice_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>issued_count</th><td>' . esc_html((string) ($summary['issued_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>partially_paid_count</th><td>' . esc_html((string) ($summary['partially_paid_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>paid_count</th><td>' . esc_html((string) ($summary['paid_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>archived_count</th><td>' . esc_html((string) ($summary['archived_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>total_invoiced_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_invoiced_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '<tr><th>total_paid_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_paid_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '<tr><th>total_outstanding_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_outstanding_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '</tbody></table>';
+        echo '</div>';
+    }
+
+    /** @param array<int, array<string, mixed>> $invoices */
+    private function invoiceListCurrency(array $invoices): string
+    {
+        foreach ($invoices as $invoice) {
+            $currency = strtoupper(trim((string) ($invoice['currency'] ?? '')));
+            if ($currency !== '') {
+                return $currency;
+            }
+        }
+
+        return 'SEK';
     }
 
     /** @param array<int, mixed> $rows */
