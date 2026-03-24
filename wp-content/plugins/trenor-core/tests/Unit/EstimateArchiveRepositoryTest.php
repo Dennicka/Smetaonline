@@ -13,7 +13,7 @@ final class EstimateArchiveRepositoryTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new class() extends WpdbStub {
+        trn_set_test_wpdb(new class () extends WpdbStub {
             public int $updateResult = 1;
 
             /** @var array<int, string> */
@@ -41,7 +41,7 @@ final class EstimateArchiveRepositoryTest extends TestCase
                 return 1;
             }
 
-            // phpcs:ignore Squiz.NamingConventions.ValidFunctionName.MethodNameNotCamelCaps -- Mimics wpdb API method name.
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- Mimics wpdb API method name.
             public function get_results(string $query, string $output = ARRAY_A): array
             {
                 $this->queries[] = $query;

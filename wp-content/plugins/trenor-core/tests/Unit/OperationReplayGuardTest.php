@@ -11,7 +11,7 @@ final class OperationReplayGuardTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new class() {
+        trn_set_test_wpdb(new class () {
             public string $prefix = 'wp_';
 
             /** @var array<int, array<string, mixed>> */
