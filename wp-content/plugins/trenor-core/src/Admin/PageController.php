@@ -388,53 +388,58 @@ final class PageController
         $invoices = $invoiceFilter->apply($allInvoices, $rawFilters);
         $formFilters = $invoiceFilter->normalizedForForm($rawFilters);
         $hasActiveFilters = $invoiceFilter->hasActiveFilters($rawFilters);
-        $calculator = new InvoicePaymentSummaryCalculator();
+        $rowBuilder = new InvoiceRegisterRowBuilder(new InvoicePaymentSummaryCalculator());
+        $summaryBuilder = new InvoiceRegisterSummaryBuilder();
         $invoicePayments = $this->factory->invoicePayments();
-        $invoiceIds = array_map(static fn (array $invoice): int => (int) ($invoice['id'] ?? 0), $invoices);
-        $allPayments = $invoicePayments->all();
-        $paymentsForSummary = array_values(array_filter(
-            $allPayments,
-            static fn (array $payment): bool => in_array((int) ($payment['invoice_id'] ?? 0), $invoiceIds, true)
-        ));
-        $summary = (new InvoiceLedgerSummaryBuilder())->build($invoices, $paymentsForSummary);
+        $registerRows = [];
+
+        foreach ($invoices as $invoice) {
+            $invoiceId = (int) ($invoice['id'] ?? 0);
+            $paymentRows = $invoiceId > 0 ? $invoicePayments->byInvoice($invoiceId) : [];
+            $registerRows[] = $rowBuilder->build($invoice, $paymentRows);
+        }
+
+        $summary = $summaryBuilder->build($registerRows);
 
         echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
         $this->renderAdminNoticeFromRequest();
         $this->renderInvoiceFilterForm($formFilters);
-        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($invoices));
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($registerRows));
         if ($hasActiveFilters) {
             echo ' <em>(filtered results)</em>';
         }
         echo '</p>';
         $this->renderInvoiceLedgerSummary($summary, $this->invoiceListCurrency($invoices));
 
-        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>computed_status</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
-        if ($invoices === []) {
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>stored_status</th><th>computed_status</th><th>total_inc_vat</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($registerRows === []) {
             echo '<tr><td colspan="13">No invoices found for current filters.</td></tr>';
         }
-        foreach ($invoices as $invoice) {
-            $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id']);
-            $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id'] . '&view=print');
-            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $invoice['offert_id']);
-            $paymentRows = $invoicePayments->byInvoice((int) ($invoice['id'] ?? 0));
-            $paymentSummary = $calculator->calculate($invoice, $paymentRows);
-            $currency = (string) ($invoice['currency'] ?? 'SEK');
+        foreach ($registerRows as $row) {
+            $invoiceIdValue = (int) ($row['id'] ?? 0);
+            $offertIdValue = (int) ($row['offert_id'] ?? 0);
+            $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceIdValue);
+            $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceIdValue . '&view=print');
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertIdValue);
+            $paymentsUrl = admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceIdValue);
+            $currency = (string) ($row['currency'] ?? 'SEK');
             echo '<tr>';
-            echo '<td>' . esc_html((string) $invoice['id']) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['offert_id']) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['estimate_id']) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['document_number']) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['version_no']) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['status']) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, $currency)) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($paymentSummary['paid_total_minor'] ?? null, $currency)) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($paymentSummary['outstanding_minor'] ?? null, $currency)) . '</td>';
-            echo '<td>' . esc_html((string) ($paymentSummary['payment_count'] ?? 0)) . '</td>';
-            echo '<td>' . esc_html((string) ($paymentSummary['computed_status'] ?? 'issued')) . '</td>';
-            echo '<td>' . esc_html((string) $invoice['issued_at']) . '</td>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['offert_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['estimate_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['stored_status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['computed_status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($row['total_inc_vat_minor'] ?? 0, $currency)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['paid_total_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['outstanding_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['payment_count'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
             echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
-            if ((int) ($invoice['offert_id'] ?? 0) > 0) {
+            echo '<a class="button" href="' . esc_url($paymentsUrl) . '" style="margin-left:6px;">Open payments register</a>';
+            if ($offertIdValue > 0) {
                 echo '<a class="button" href="' . esc_url($offertUrl) . '" style="margin-left:6px;">Open source offert</a>';
             }
             echo '</td>';
@@ -1739,16 +1744,15 @@ final class PageController
     private function renderInvoiceLedgerSummary(array $summary, string $currency): void
     {
         echo '<div style="margin:10px 0; padding:10px; border:1px solid #ccd0d4; background:#fff;">';
-        echo '<h2 style="margin-top:0;">Invoice Ledger / AR Summary</h2>';
+        echo '<h2 style="margin-top:0;">Invoice Register Summary</h2>';
         echo '<table class="widefat striped" style="max-width:900px;"><tbody>';
-        echo '<tr><th>invoice_count</th><td>' . esc_html((string) ($summary['invoice_count'] ?? 0)) . '</td></tr>';
-        echo '<tr><th>issued_count</th><td>' . esc_html((string) ($summary['issued_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>invoices_count</th><td>' . esc_html((string) ($summary['invoices_count'] ?? 0)) . '</td></tr>';
+        echo '<tr><th>issued_total_minor</th><td>' . esc_html($this->formatMinorMoney($summary['issued_total_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '<tr><th>paid_total_minor</th><td>' . esc_html($this->formatMinorMoney($summary['paid_total_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '<tr><th>outstanding_total_minor</th><td>' . esc_html($this->formatMinorMoney($summary['outstanding_total_minor'] ?? 0, $currency)) . '</td></tr>';
+        echo '<tr><th>fully_paid_count</th><td>' . esc_html((string) ($summary['fully_paid_count'] ?? 0)) . '</td></tr>';
         echo '<tr><th>partially_paid_count</th><td>' . esc_html((string) ($summary['partially_paid_count'] ?? 0)) . '</td></tr>';
-        echo '<tr><th>paid_count</th><td>' . esc_html((string) ($summary['paid_count'] ?? 0)) . '</td></tr>';
         echo '<tr><th>archived_count</th><td>' . esc_html((string) ($summary['archived_count'] ?? 0)) . '</td></tr>';
-        echo '<tr><th>total_invoiced_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_invoiced_minor'] ?? 0, $currency)) . '</td></tr>';
-        echo '<tr><th>total_paid_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_paid_minor'] ?? 0, $currency)) . '</td></tr>';
-        echo '<tr><th>total_outstanding_minor</th><td>' . esc_html($this->formatMinorMoney($summary['total_outstanding_minor'] ?? 0, $currency)) . '</td></tr>';
         echo '</tbody></table>';
         echo '</div>';
     }
