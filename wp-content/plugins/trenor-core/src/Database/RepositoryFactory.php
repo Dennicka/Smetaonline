@@ -87,6 +87,12 @@ final class RepositoryFactory
         return new CreditNoteRepository();
     }
 
+
+    public function avtals(): AvtalRepository
+    {
+        return new AvtalRepository();
+    }
+
     public function documentArtifacts(): DocumentArtifactRepository
     {
         return new DocumentArtifactRepository();

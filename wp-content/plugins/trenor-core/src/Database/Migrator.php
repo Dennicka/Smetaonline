@@ -62,6 +62,12 @@ final class Migrator
             $this->runQueries($this->documentPdfArtifactFilesizeQueries($charsetCollate));
             $this->markMigration('010_document_pdf_artifact_filesize');
         }
+
+
+        if (! $this->hasMigration('011_avtal_core')) {
+            $this->runQueries($this->avtalCoreQueries($charsetCollate));
+            $this->markMigration('011_avtal_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -590,6 +596,42 @@ final class Migrator
     }
 
     /** @return array<int, string> */
+
+    /** @return array<int, string> */
+    private function avtalCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_avtals (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                offert_id BIGINT UNSIGNED NOT NULL,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                project_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                client_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                title VARCHAR(191) NOT NULL DEFAULT '',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                archived_at DATETIME NULL,
+                actor_user_id BIGINT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY offert_id (offert_id),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+        ];
+    }
+
+
     private function documentPdfArtifactFilesizeQueries(string $charsetCollate): array
     {
         global $wpdb;

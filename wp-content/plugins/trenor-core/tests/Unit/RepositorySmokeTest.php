@@ -6,6 +6,7 @@ namespace Trenor\Core\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use Trenor\Core\Database\AvtalRepository;
 use Trenor\Core\Database\InvoicePaymentRepository;
 use Trenor\Core\Database\InvoiceRepository;
 use Trenor\Core\Database\OffertRepository;
@@ -22,6 +23,7 @@ final class RepositorySmokeTest extends TestCase
     {
         $offert = new OffertRepository();
         $invoice = new InvoiceRepository();
+        $avtal = new AvtalRepository();
         $payment = new InvoicePaymentRepository();
 
         self::assertSame('wp_trn_offerts', $this->invokeProtected($offert, 'table'));
@@ -29,6 +31,9 @@ final class RepositorySmokeTest extends TestCase
 
         self::assertSame('wp_trn_invoices', $this->invokeProtected($invoice, 'table'));
         self::assertSame('invoice', $this->invokeProtected($invoice, 'entityType'));
+
+        self::assertSame('wp_trn_avtals', $this->invokeProtected($avtal, 'table'));
+        self::assertSame('avtal', $this->invokeProtected($avtal, 'entityType'));
 
         self::assertSame('wp_trn_invoice_payments', $this->invokeProtected($payment, 'table'));
         self::assertSame('invoice_payment', $this->invokeProtected($payment, 'entityType'));
