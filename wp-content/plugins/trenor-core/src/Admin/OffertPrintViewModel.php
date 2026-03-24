@@ -25,6 +25,9 @@ final class OffertPrintViewModel
      * @return array{
      *     document: array<string, string>,
      *     context: array<string, string>,
+     *     recipient: array<string, string>,
+     *     project_object: array<string, string>,
+     *     commercial_summary: array<string, string>,
      *     totals: array<int, array{label: string, minor: string}>,
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
@@ -51,9 +54,15 @@ final class OffertPrintViewModel
             $estimate['currency'] ?? null,
         ]);
 
+        $document = $this->buildDocumentSection($offert, $header, $metadata, $currency);
+        $contextSection = $this->buildContextSection($offert, $header, $metadata, $estimate, $project, $property, $client);
+
         return [
-            'document' => $this->buildDocumentSection($offert, $header, $metadata, $currency),
-            'context' => $this->buildContextSection($offert, $header, $metadata, $estimate, $project, $property, $client),
+            'document' => $document,
+            'context' => $contextSection,
+            'recipient' => $this->buildRecipientSection($contextSection),
+            'project_object' => $this->buildProjectObjectSection($contextSection),
+            'commercial_summary' => $this->buildCommercialSummarySection($document, $contextSection),
             'totals' => $this->buildTotalsSection($totals, $offert),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
@@ -139,6 +148,48 @@ final class OffertPrintViewModel
             'client_org_number' => $this->firstScalarString([$client['org_number'] ?? null]),
             'client_email' => $this->firstScalarString([$client['email'] ?? null]),
             'client_phone' => $this->firstScalarString([$client['phone'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, string> $contextSection @return array<string, string> */
+    private function buildRecipientSection(array $contextSection): array
+    {
+        return [
+            'client_name' => $contextSection['client_name'] ?? '',
+            'client_org_number' => $contextSection['client_org_number'] ?? '',
+            'client_email' => $contextSection['client_email'] ?? '',
+            'client_phone' => $contextSection['client_phone'] ?? '',
+        ];
+    }
+
+    /** @param array<string, string> $contextSection @return array<string, string> */
+    private function buildProjectObjectSection(array $contextSection): array
+    {
+        return [
+            'project_name' => $contextSection['project_name'] ?? '',
+            'project_code' => $contextSection['project_code'] ?? '',
+            'property_name' => $contextSection['property_name'] ?? '',
+            'property_address' => $contextSection['property_address'] ?? '',
+            'property_city' => $contextSection['property_city'] ?? '',
+            'property_postal_code' => $contextSection['property_postal_code'] ?? '',
+        ];
+    }
+
+    /**
+     * @param array<string, string> $document
+     * @param array<string, string> $contextSection
+     * @return array<string, string>
+     */
+    private function buildCommercialSummarySection(array $document, array $contextSection): array
+    {
+        return [
+            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
+            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
+            'document_number' => $document['document_number'] ?? '',
+            'version_no' => $document['version_no'] ?? '',
+            'issued_at' => $document['issued_at'] ?? '',
+            'currency' => $document['currency'] ?? '',
+            'vat_rate_percent' => $document['vat_rate_percent'] ?? '',
         ];
     }
 

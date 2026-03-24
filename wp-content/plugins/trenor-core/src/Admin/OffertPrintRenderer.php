@@ -67,11 +67,14 @@ final class OffertPrintRenderer
 
         echo '<div class="trn-print-doc">';
         echo '<h2>Printable offert document</h2>';
-        echo '<h3>Document</h3>';
-        $this->renderKeyValueTable($view['document']);
+        echo '<h3>Commercial summary</h3>';
+        $this->renderKeyValueTable($view['commercial_summary']);
 
-        echo '<h3>Commercial/source context</h3>';
-        $this->renderKeyValueTable($view['context']);
+        echo '<h3>Recipient / Customer</h3>';
+        $this->renderKeyValueTable($view['recipient']);
+
+        echo '<h3>Project / Object</h3>';
+        $this->renderKeyValueTable($view['project_object']);
 
         echo '<h3>Totals</h3>';
         $this->renderTotalsTable($view['totals'], $view['currency']);
