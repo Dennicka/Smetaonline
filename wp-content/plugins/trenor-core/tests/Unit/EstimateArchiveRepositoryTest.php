@@ -7,19 +7,33 @@ namespace Trenor\Core\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Trenor\Core\Database\EstimateLineRepository;
 use Trenor\Core\Database\EstimateMaterialLineRepository;
-use Trenor\Core\Tests\Support\WpdbStub;
 
 final class EstimateArchiveRepositoryTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new class () extends WpdbStub {
+        trn_set_test_wpdb(new class () {
+            public string $prefix = 'wp_';
+
+            /** @var array<int, array<string, mixed>> */
+            public array $updatedRows = [];
+
             public int $updateResult = 1;
 
             /** @var array<int, string> */
             public array $queries = [];
 
             public bool $deleteCalled = false;
+
+            public function prepare(string $query, ...$args): string
+            {
+                $escaped = array_map(
+                    static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
+                    $args
+                );
+
+                return vsprintf($query, $escaped);
+            }
 
             public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
             {
