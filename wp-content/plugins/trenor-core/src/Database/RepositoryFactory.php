@@ -72,6 +72,11 @@ final class RepositoryFactory
         return new EstimateSnapshotRepository();
     }
 
+    public function invoices(): InvoiceRepository
+    {
+        return new InvoiceRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {

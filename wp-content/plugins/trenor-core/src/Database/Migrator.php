@@ -27,6 +27,11 @@ final class Migrator
             $this->runQueries($this->offertCoreQueries($charsetCollate));
             $this->markMigration('003_offert_core');
         }
+
+        if (! $this->hasMigration('004_invoice_core')) {
+            $this->runQueries($this->invoiceCoreQueries($charsetCollate));
+            $this->markMigration('004_invoice_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -325,6 +330,39 @@ final class Migrator
                 PRIMARY KEY (id),
                 KEY estimate_id (estimate_id),
                 KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function invoiceCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_invoices (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                offert_id BIGINT UNSIGNED NOT NULL,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY offert_id (offert_id),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
             ) {$charsetCollate};",
         ];
     }

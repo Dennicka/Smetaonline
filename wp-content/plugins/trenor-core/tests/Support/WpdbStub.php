@@ -11,6 +11,8 @@ final class WpdbStub
     /** @var array<int, array<string, mixed>> */
     public array $updatedRows = [];
 
+    public int $insert_id = 1;
+
     public int $maxVersion = 0;
 
     public function prepare(string $query, ...$args): string
@@ -42,6 +44,10 @@ final class WpdbStub
 
     public function insert(string $table, array $data, array $format = []): int
     {
+        if ($this->insert_id <= 0) {
+            $this->insert_id = 1;
+        }
+
         return 1;
     }
 
