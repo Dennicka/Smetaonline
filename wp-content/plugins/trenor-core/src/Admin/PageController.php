@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Admin;
 
+use RuntimeException;
 use Trenor\Core\Database\RepositoryFactory;
 use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 use Trenor\Core\Domain\Exception\EstimateCalculationException;
 use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
+use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
 
 final class PageController
@@ -89,6 +91,10 @@ final class PageController
 
         if ($entity === 'offert') {
             $this->handleOffert($action, $id, $postPayload);
+        }
+
+        if ($entity === 'invoice') {
+            $this->handleInvoice($action, $postPayload);
         }
     }
 
@@ -284,6 +290,47 @@ final class PageController
             echo '<tr><td>' . esc_html((string) $row['id']) . '</td><td>' . esc_html((string) $row['entity_type']) . '</td><td>' . esc_html((string) $row['entity_id']) . '</td><td>' . esc_html((string) $row['action']) . '</td><td>' . esc_html((string) $row['actor_user_id']) . '</td><td>' . esc_html((string) $row['created_at']) . '</td><td><code>' . esc_html((string) $row['changes_json']) . '</code></td></tr>';
         }
         echo '</tbody></table></div>';
+    }
+
+    public function renderInvoices(): void
+    {
+        if (! current_user_can('trn_issue_invoices')) {
+            wp_die('Forbidden');
+        }
+
+        $invoiceId = filter_input(INPUT_GET, 'invoice_id', FILTER_VALIDATE_INT);
+        $invoiceId = $invoiceId !== false && $invoiceId !== null ? (int) $invoiceId : 0;
+        $invoices = $this->factory->invoices()->all();
+
+        echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($invoices as $invoice) {
+            $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id']);
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $invoice['offert_id']);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $invoice['id']) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['offert_id']) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['estimate_id']) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['document_number']) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['version_no']) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['status']) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, (string) ($invoice['currency'] ?? 'SEK'))) . '</td>';
+            echo '<td>' . esc_html((string) $invoice['issued_at']) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
+            if ((int) ($invoice['offert_id'] ?? 0) > 0) {
+                echo '<a class="button" href="' . esc_url($offertUrl) . '" style="margin-left:6px;">Open source offert</a>';
+            }
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+
+        if ($invoiceId > 0) {
+            $this->renderInvoiceDetail($invoiceId);
+        }
+
+        echo '</div>';
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
@@ -695,6 +742,68 @@ final class PageController
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=' . $status));
             exit;
         }
+
+        if ($action === 'issue_invoice') {
+            $offertId = (int) $this->postValue($postPayload, 'offert_id');
+            $offert = $offertRepo->find($offertId);
+            if ($offert === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
+                exit;
+            }
+
+            $snapshot = (new OffertSnapshotReader())->read($offert);
+            $service = new InvoiceFromOffertService($this->factory->invoices(), new DocumentSequenceGenerator());
+
+            try {
+                $payload = $service->buildPayload($offert, $snapshot);
+            } catch (RuntimeException $exception) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
+
+            $invoiceId = $this->factory->invoices()->create($payload);
+            if ($invoiceId === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice issue failed.')));
+                exit;
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok'));
+            exit;
+        }
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function handleInvoice(string $action, array $postPayload): void
+    {
+        if ($action !== 'issue') {
+            return;
+        }
+
+        $offertId = (int) $this->postValue($postPayload, 'offert_id');
+        $offert = $this->factory->offerts()->find($offertId);
+        if ($offert === null) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
+            exit;
+        }
+
+        $snapshot = (new OffertSnapshotReader())->read($offert);
+        $service = new InvoiceFromOffertService($this->factory->invoices(), new DocumentSequenceGenerator());
+
+        try {
+            $payload = $service->buildPayload($offert, $snapshot);
+        } catch (RuntimeException $exception) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+            exit;
+        }
+
+        $invoiceId = $this->factory->invoices()->create($payload);
+        if ($invoiceId === null) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice issue failed.')));
+            exit;
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok'));
+        exit;
     }
 
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
@@ -764,6 +873,10 @@ final class PageController
             return 'trn_issue_offerts';
         }
 
+        if ($entity === 'invoice') {
+            return 'trn_issue_invoices';
+        }
+
         return 'read';
     }
 
@@ -797,11 +910,41 @@ final class PageController
         }
         echo '</p>';
 
+        if ((string) ($offert['status'] ?? '') === 'accepted' && current_user_can('trn_issue_invoices')) {
+            echo '<form method="post" style="margin:10px 0;">';
+            wp_nonce_field('trn_offert_issue_invoice');
+            echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue_invoice"><input type="hidden" name="offert_id" value="' . esc_attr((string) $offertId) . '">';
+            submit_button('Issue Invoice', 'primary', 'submit', false);
+            echo '</form>';
+        }
+
         $reader = new OffertSnapshotReader();
         $snapshot = $reader->read($offert);
 
         $renderer = new OffertDetailRenderer();
         $renderer->render($offert, $snapshot);
+    }
+
+    private function renderInvoiceDetail(int $invoiceId): void
+    {
+        $invoice = $this->factory->invoices()->find($invoiceId);
+        if ($invoice === null) {
+            echo '<h2>Invoice detail</h2><p>Invoice not found.</p>';
+
+            return;
+        }
+
+        $invoicesUrl = admin_url('admin.php?page=trn_invoices');
+        $offertId = (int) ($invoice['offert_id'] ?? 0);
+        echo '<p><a href="' . esc_url($invoicesUrl) . '">Back to invoices list</a>';
+        if ($offertId > 0) {
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
+            echo ' | <a href="' . esc_url($offertUrl) . '">Open source offert</a>';
+        }
+        echo '</p>';
+
+        $snapshot = (new OffertSnapshotReader())->read($invoice);
+        (new InvoiceDetailRenderer())->render($invoice, $snapshot);
     }
 
     private function renderAdminNoticeFromRequest(): void

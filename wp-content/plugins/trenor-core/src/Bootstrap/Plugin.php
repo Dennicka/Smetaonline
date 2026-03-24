@@ -11,7 +11,7 @@ use Trenor\Core\Database\RepositoryFactory;
 
 final class Plugin
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.3.0';
     public const VERSION_OPTION = 'trn_core_version';
 
     private static string $pluginFile;
