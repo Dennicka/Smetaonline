@@ -20,16 +20,19 @@ use Trenor\Core\Domain\Service\OffertFromEstimateService;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
 use Trenor\Core\Domain\Service\DocumentSettings;
 use Trenor\Core\Domain\Service\OperationReplayGuard;
+use Trenor\Core\Domain\Service\BusinessEffectFingerprint;
 
 final class PageController
 {
     private RepositoryFactory $factory;
     private OperationReplayGuard $operationReplayGuard;
+    private BusinessEffectFingerprint $businessEffectFingerprint;
 
-    public function __construct(RepositoryFactory $factory, ?OperationReplayGuard $operationReplayGuard = null)
+    public function __construct(RepositoryFactory $factory, ?OperationReplayGuard $operationReplayGuard = null, ?BusinessEffectFingerprint $businessEffectFingerprint = null)
     {
         $this->factory = $factory;
         $this->operationReplayGuard = $operationReplayGuard ?? new OperationReplayGuard();
+        $this->businessEffectFingerprint = $businessEffectFingerprint ?? new BusinessEffectFingerprint();
     }
 
     public function handleRequests(): void
@@ -1231,15 +1234,27 @@ final class PageController
             }
 
             $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+            $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+                'issue_offert',
+                $this->issueOffertScope($estimateId),
+                $this->businessEffectFingerprint->offertForEstimate($estimate, $lines, $materialLines, $totals)
+            );
+            if (! $this->handleDuplicateBusinessEffect($businessEffect, 'offert', 'admin.php?page=trn_estimates&estimate_id=' . $estimateId, 'admin.php?page=trn_offerts&offert_id=')) {
+                exit;
+            }
+
+            $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
             $service = new OffertFromEstimateService($offertRepo, new DocumentSequenceGenerator());
             $payload = $service->buildPayload($estimate, $lines, $materialLines, $totals);
             $offertId = $offertRepo->create($payload);
 
             if ($offertId === null) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
                 wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode('Offert issue failed.')));
                 exit;
             }
 
+            $this->operationReplayGuard->completeBusinessEffect($receiptId, 'offert', $offertId);
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=ok'));
             exit;
         }
@@ -1278,21 +1293,34 @@ final class PageController
             }
 
             $snapshot = (new OffertSnapshotReader())->read($offert);
+            $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+                'issue_invoice',
+                $this->issueInvoiceScope($offertId),
+                $this->businessEffectFingerprint->invoiceForOffert($offert, $snapshot)
+            );
+            if (! $this->handleDuplicateBusinessEffect($businessEffect, 'invoice', 'admin.php?page=trn_offerts&offert_id=' . $offertId, 'admin.php?page=trn_invoices&invoice_id=')) {
+                exit;
+            }
+
+            $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
             $service = new InvoiceFromOffertService($this->factory->invoices(), new DocumentSequenceGenerator());
 
             try {
                 $payload = $service->buildPayload($offert, $snapshot);
             } catch (RuntimeException $exception) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
                 wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
                 exit;
             }
 
             $invoiceId = $this->factory->invoices()->create($payload);
             if ($invoiceId === null) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
                 wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice issue failed.')));
                 exit;
             }
 
+            $this->operationReplayGuard->completeBusinessEffect($receiptId, 'invoice', $invoiceId);
             wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok'));
             exit;
         }
@@ -1321,21 +1349,34 @@ final class PageController
         }
 
         $snapshot = (new OffertSnapshotReader())->read($offert);
+        $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+            'issue_invoice',
+            $this->issueInvoiceScope($offertId),
+            $this->businessEffectFingerprint->invoiceForOffert($offert, $snapshot)
+        );
+        if (! $this->handleDuplicateBusinessEffect($businessEffect, 'invoice', 'admin.php?page=trn_offerts&offert_id=' . $offertId, 'admin.php?page=trn_invoices&invoice_id=')) {
+            exit;
+        }
+
+        $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
         $service = new InvoiceFromOffertService($this->factory->invoices(), new DocumentSequenceGenerator());
 
         try {
             $payload = $service->buildPayload($offert, $snapshot);
         } catch (RuntimeException $exception) {
+            $this->operationReplayGuard->abandonBusinessEffect($receiptId);
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
             exit;
         }
 
         $invoiceId = $this->factory->invoices()->create($payload);
         if ($invoiceId === null) {
+            $this->operationReplayGuard->abandonBusinessEffect($receiptId);
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice issue failed.')));
             exit;
         }
 
+        $this->operationReplayGuard->completeBusinessEffect($receiptId, 'invoice', $invoiceId);
         wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok'));
         exit;
     }
@@ -1356,23 +1397,35 @@ final class PageController
             $this->factory->invoicePayments(),
             new InvoicePaymentSummaryCalculator()
         );
+        $payload = [
+            'invoice_id' => $invoiceId,
+            'payment_date' => $this->postValue($postPayload, 'payment_date'),
+            'amount_minor' => (int) $this->postValue($postPayload, 'amount_minor'),
+            'currency' => $this->postValue($postPayload, 'currency'),
+            'method' => $this->postValue($postPayload, 'method'),
+            'reference' => $this->postValue($postPayload, 'reference'),
+            'note' => $this->postValue($postPayload, 'note'),
+            'actor_user_id' => get_current_user_id(),
+        ];
+        $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+            'record_payment',
+            $this->recordPaymentScope($invoiceId),
+            $this->businessEffectFingerprint->paymentPayload($payload)
+        );
+        if (! $this->handleDuplicateBusinessEffect($businessEffect, 'invoice_payment', 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId, 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId, 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) {
+            exit;
+        }
+        $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
 
         try {
-            $service->record([
-                'invoice_id' => $invoiceId,
-                'payment_date' => $this->postValue($postPayload, 'payment_date'),
-                'amount_minor' => (int) $this->postValue($postPayload, 'amount_minor'),
-                'currency' => $this->postValue($postPayload, 'currency'),
-                'method' => $this->postValue($postPayload, 'method'),
-                'reference' => $this->postValue($postPayload, 'reference'),
-                'note' => $this->postValue($postPayload, 'note'),
-                'actor_user_id' => get_current_user_id(),
-            ]);
+            $paymentId = $service->record($payload);
         } catch (PaymentRegistrationException $exception) {
+            $this->operationReplayGuard->abandonBusinessEffect($receiptId);
             wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
             exit;
         }
 
+        $this->operationReplayGuard->completeBusinessEffect($receiptId, 'invoice_payment', $paymentId);
         wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok&trn_msg=' . rawurlencode('Payment recorded.')));
         exit;
     }
@@ -1394,19 +1447,32 @@ final class PageController
             }
 
             $service = new CreditNoteFromInvoiceService($repo, new DocumentSequenceGenerator());
+            $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+                'issue_credit_note',
+                $this->issueCreditNoteScope($invoiceId),
+                $this->businessEffectFingerprint->creditNoteForInvoice($invoice)
+            );
+            if (! $this->handleDuplicateBusinessEffect($businessEffect, 'credit_note', 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId, 'admin.php?page=trn_credit_notes&credit_note_id=')) {
+                exit;
+            }
+
+            $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
             try {
                 $payload = $service->buildPayload($invoice);
             } catch (RuntimeException $exception) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
                 wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
                 exit;
             }
 
             $creditNoteId = $repo->create($payload);
             if ($creditNoteId === null) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
                 wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode('Credit note issue failed.')));
                 exit;
             }
 
+            $this->operationReplayGuard->completeBusinessEffect($receiptId, 'credit_note', $creditNoteId);
             wp_safe_redirect(admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&trn_result=ok'));
             exit;
         }
@@ -1734,6 +1800,27 @@ final class PageController
         $text = is_string($message) && $message !== '' ? $message : $defaultMessage;
 
         echo '<div class="notice ' . esc_attr($className) . ' is-dismissible"><p>' . esc_html($text) . '</p></div>';
+    }
+
+    /**
+     * @param array{status:'started'|'duplicate_completed'|'duplicate_in_progress',receipt_id?:int,entity_type?:string,entity_id?:int} $businessEffect
+     */
+    private function handleDuplicateBusinessEffect(array $businessEffect, string $entityType, string $fallbackRedirectPath, string $entityRedirectPath, ?string $duplicateRedirectPath = null): bool
+    {
+        if (($businessEffect['status'] ?? '') === 'started') {
+            return true;
+        }
+
+        if (($businessEffect['status'] ?? '') === 'duplicate_completed' && (string) ($businessEffect['entity_type'] ?? '') === $entityType && (int) ($businessEffect['entity_id'] ?? 0) > 0) {
+            $redirectPath = $duplicateRedirectPath ?? ($entityRedirectPath . (int) $businessEffect['entity_id']);
+            wp_safe_redirect(admin_url($redirectPath . '&trn_result=ok&trn_msg=' . rawurlencode('This action was already processed. Redirected to existing document.')));
+
+            return false;
+        }
+
+        wp_safe_redirect(admin_url($fallbackRedirectPath . '&trn_result=error&trn_msg=' . rawurlencode('This action is already being processed. Please refresh in a few seconds.')));
+
+        return false;
     }
 
     private function issueOffertScope(int $estimateId): string
