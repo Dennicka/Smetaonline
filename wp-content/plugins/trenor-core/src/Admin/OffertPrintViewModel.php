@@ -19,7 +19,8 @@ final class OffertPrintViewModel
      *     estimate?: array<string, mixed>,
      *     project?: array<string, mixed>,
      *     property?: array<string, mixed>,
-     *     client?: array<string, mixed>
+     *     client?: array<string, mixed>,
+     *     document_settings?: array<string, mixed>
      * } $context
      * @return array{
      *     document: array<string, string>,
@@ -27,6 +28,9 @@ final class OffertPrintViewModel
      *     totals: array<int, array{label: string, minor: string}>,
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
+     *     issuer: array<string, string>,
+     *     payment: array<string, string>,
+     *     terms_notes: array<string, string>,
      *     currency: string
      * }
      */
@@ -39,6 +43,7 @@ final class OffertPrintViewModel
         $project = $this->normalizeMap($context['project'] ?? null);
         $property = $this->normalizeMap($context['property'] ?? null);
         $client = $this->normalizeMap($context['client'] ?? null);
+        $settings = $this->normalizeMap($context['document_settings'] ?? null);
 
         $currency = $this->firstScalarString([
             $offert['currency'] ?? null,
@@ -52,6 +57,9 @@ final class OffertPrintViewModel
             'totals' => $this->buildTotalsSection($totals, $offert),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
+            'issuer' => $this->buildIssuerSection($settings),
+            'payment' => $this->buildPaymentSection($settings),
+            'terms_notes' => $this->buildTermsNotesSection($settings),
             'currency' => $currency,
         ];
     }
@@ -221,6 +229,48 @@ final class OffertPrintViewModel
         return $rows;
     }
 
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildIssuerSection(array $settings): array
+    {
+        return [
+            'company_name' => $this->firstScalarString([$settings['company_name'] ?? null]),
+            'company_legal_name' => $this->firstScalarString([$settings['company_legal_name'] ?? null]),
+            'org_number' => $this->firstScalarString([$settings['org_number'] ?? null]),
+            'vat_number' => $this->firstScalarString([$settings['vat_number'] ?? null]),
+            'address_line_1' => $this->firstScalarString([$settings['address_line_1'] ?? null]),
+            'address_line_2' => $this->firstScalarString([$settings['address_line_2'] ?? null]),
+            'postal_code' => $this->firstScalarString([$settings['postal_code'] ?? null]),
+            'city' => $this->firstScalarString([$settings['city'] ?? null]),
+            'country' => $this->firstScalarString([$settings['country'] ?? null]),
+            'email' => $this->firstScalarString([$settings['email'] ?? null]),
+            'phone' => $this->firstScalarString([$settings['phone'] ?? null]),
+            'website' => $this->firstScalarString([$settings['website'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildPaymentSection(array $settings): array
+    {
+        return [
+            'bank_name' => $this->firstScalarString([$settings['bank_name'] ?? null]),
+            'iban' => $this->firstScalarString([$settings['iban'] ?? null]),
+            'bic' => $this->firstScalarString([$settings['bic'] ?? null]),
+            'plusgiro' => $this->firstScalarString([$settings['plusgiro'] ?? null]),
+            'bankgiro' => $this->firstScalarString([$settings['bankgiro'] ?? null]),
+            'swish' => $this->firstScalarString([$settings['swish'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildTermsNotesSection(array $settings): array
+    {
+        return [
+            'offert_intro_text' => $this->firstScalarString([$settings['offert_intro_text'] ?? null]),
+            'offert_footer_text' => $this->firstScalarString([$settings['offert_footer_text'] ?? null]),
+            'payment_terms_days' => $this->firstScalarString([$settings['payment_terms_days'] ?? null]),
+        ];
+    }
     private function firstScalarString(array $candidates): string
     {
         foreach ($candidates as $candidate) {

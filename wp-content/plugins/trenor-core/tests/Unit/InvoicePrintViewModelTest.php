@@ -206,4 +206,34 @@ final class InvoicePrintViewModelTest extends TestCase
         self::assertSame('', $result['context']['project_name']);
         self::assertSame('', $result['context']['client_name']);
     }
+
+    public function testBuildIntegratesDocumentSettingsFallbackAndPopulatedData(): void
+    {
+        $emptyResult = $this->viewModel->build(
+            ['id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => []]
+        );
+        self::assertSame('', $emptyResult['issuer']['company_name']);
+        self::assertSame('', $emptyResult['payment_details']['iban']);
+        self::assertSame('', $emptyResult['terms_notes']['invoice_footer_text']);
+
+        $result = $this->viewModel->build(
+            ['id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => [
+                'company_legal_name' => 'ACME Legal AB',
+                'email' => 'billing@example.com',
+                'iban' => 'SE22',
+                'payment_terms_days' => '15',
+                'invoice_footer_text' => 'Pay on time',
+            ]]
+        );
+
+        self::assertSame('ACME Legal AB', $result['issuer']['company_legal_name']);
+        self::assertSame('billing@example.com', $result['issuer']['email']);
+        self::assertSame('SE22', $result['payment_details']['iban']);
+        self::assertSame('15', $result['payment_details']['payment_terms_days']);
+        self::assertSame('Pay on time', $result['terms_notes']['invoice_footer_text']);
+    }
 }

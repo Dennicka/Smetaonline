@@ -111,4 +111,35 @@ final class OffertPrintViewModelTest extends TestCase
         self::assertSame('RU title', $result['labour_lines'][0]['title']);
         self::assertSame('SV material', $result['material_lines'][0]['name']);
     }
+
+    public function testBuildIntegratesDocumentSettingsWithFallbackAndPopulatedValues(): void
+    {
+        $emptyResult = $this->viewModel->build(
+            ['estimate_id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => []]
+        );
+        self::assertSame('', $emptyResult['issuer']['company_name']);
+        self::assertSame('', $emptyResult['terms_notes']['offert_intro_text']);
+
+        $result = $this->viewModel->build(
+            ['estimate_id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => [
+                'company_name' => 'ACME AB',
+                'vat_number' => 'SE123',
+                'iban' => 'SE111',
+                'payment_terms_days' => '20',
+                'offert_intro_text' => 'Hello',
+                'offert_footer_text' => 'Thanks',
+            ]]
+        );
+
+        self::assertSame('ACME AB', $result['issuer']['company_name']);
+        self::assertSame('SE123', $result['issuer']['vat_number']);
+        self::assertSame('SE111', $result['payment']['iban']);
+        self::assertSame('20', $result['terms_notes']['payment_terms_days']);
+        self::assertSame('Hello', $result['terms_notes']['offert_intro_text']);
+        self::assertSame('Thanks', $result['terms_notes']['offert_footer_text']);
+    }
 }

@@ -8,6 +8,8 @@ if (! defined('ARRAY_A')) {
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
+$GLOBALS['trn_test_options'] = [];
+
 if (! function_exists('wp_json_encode')) {
     function wp_json_encode($value, int $flags = 0, int $depth = 512): string|false
     {
@@ -26,6 +28,38 @@ if (! function_exists('sanitize_text_field')) {
     function sanitize_text_field(string $value): string
     {
         return trim($value);
+    }
+}
+
+if (! function_exists('sanitize_textarea_field')) {
+    function sanitize_textarea_field(string $value): string
+    {
+        return trim($value);
+    }
+}
+
+if (! function_exists('get_option')) {
+    function get_option(string $option, mixed $default = false): mixed
+    {
+        return $GLOBALS['trn_test_options'][$option] ?? $default;
+    }
+}
+
+if (! function_exists('update_option')) {
+    function update_option(string $option, mixed $value): bool
+    {
+        $GLOBALS['trn_test_options'][$option] = $value;
+
+        return true;
+    }
+}
+
+if (! function_exists('delete_option')) {
+    function delete_option(string $option): bool
+    {
+        unset($GLOBALS['trn_test_options'][$option]);
+
+        return true;
     }
 }
 
