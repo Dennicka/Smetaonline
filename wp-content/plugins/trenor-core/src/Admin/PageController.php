@@ -153,6 +153,8 @@ final class PageController
 
         $selectedEstimateId = filter_input(INPUT_GET, 'estimate_id', FILTER_VALIDATE_INT);
         $selectedEstimateId = $selectedEstimateId !== false && $selectedEstimateId !== null ? (int) $selectedEstimateId : 0;
+        $selectedSnapshotId = filter_input(INPUT_GET, 'snapshot_id', FILTER_VALIDATE_INT);
+        $selectedSnapshotId = $selectedSnapshotId !== false && $selectedSnapshotId !== null ? (int) $selectedSnapshotId : 0;
         $estimates = $this->factory->estimates()->all();
 
         echo '<div class="wrap"><h1>Сметы</h1>';
@@ -178,6 +180,16 @@ final class PageController
 
         if ($selectedEstimateId > 0) {
             $this->renderEstimateBuilder($selectedEstimateId);
+            if ($selectedSnapshotId > 0) {
+                $snapshot = $this->factory->estimateSnapshots()->find($selectedSnapshotId);
+                if ($snapshot === null) {
+                    $this->renderInlineErrorNotice('Snapshot not found.');
+                } elseif ((int) ($snapshot['estimate_id'] ?? 0) !== $selectedEstimateId) {
+                    $this->renderInlineErrorNotice('Snapshot does not belong to the selected estimate.');
+                } else {
+                    $this->renderEstimateSnapshotDetail($snapshot);
+                }
+            }
         }
 
         echo '</div>';
@@ -370,6 +382,29 @@ final class PageController
             echo '<li>' . esc_html($key) . ': <strong>' . esc_html((string) $value) . '</strong></li>';
         }
         echo '</ul>';
+
+        $snapshots = $this->factory->estimateSnapshots()->byEstimate($estimateId);
+        echo '<h3>Recalculation snapshots</h3>';
+        if ($snapshots === []) {
+            $this->renderEmptyState('No snapshots yet.');
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>snapshot_type</th><th>actor_user_id</th><th>created_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($snapshots as $snapshot) {
+            $snapshotId = (int) ($snapshot['id'] ?? 0);
+            $detailUrl = admin_url(
+                'admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&snapshot_id=' . $snapshotId
+            );
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $snapshotId) . '</td>';
+            echo '<td>' . esc_html((string) ($snapshot['snapshot_type'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($snapshot['actor_user_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($snapshot['created_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Open snapshot</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
     }
 
     /** @param array<int, array<string, mixed>> $rows */
@@ -755,6 +790,122 @@ final class PageController
         $text = is_string($message) && $message !== '' ? $message : $defaultMessage;
 
         echo '<div class="notice ' . esc_attr($className) . ' is-dismissible"><p>' . esc_html($text) . '</p></div>';
+    }
+
+    /** @param array<string, mixed> $snapshotRow */
+    private function renderEstimateSnapshotDetail(array $snapshotRow): void
+    {
+        $snapshot = json_decode((string) ($snapshotRow['snapshot_json'] ?? ''), true);
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+
+        $header = is_array($snapshot['header'] ?? null) ? $snapshot['header'] : [];
+        $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
+        $lines = is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : [];
+        $materialLines = is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [];
+
+        echo '<h3>Snapshot detail</h3>';
+
+        $summaryRows = [
+            'snapshot id' => $snapshotRow['id'] ?? '',
+            'estimate_id' => $snapshotRow['estimate_id'] ?? '',
+            'snapshot_type' => $snapshotRow['snapshot_type'] ?? '',
+            'actor_user_id' => $snapshotRow['actor_user_id'] ?? '',
+            'created_at' => $snapshotRow['created_at'] ?? '',
+        ];
+        $this->renderKeyValueTable($summaryRows);
+
+        echo '<h4>Header</h4>';
+        $headerRows = [
+            'id' => $header['id'] ?? '',
+            'project_id' => $header['project_id'] ?? '',
+            'title' => $header['title'] ?? '',
+            'status' => $header['status'] ?? '',
+            'currency' => $header['currency'] ?? '',
+            'vat_rate_percent' => $header['vat_rate_percent'] ?? '',
+            'labour_rate_minor' => $header['labour_rate_minor'] ?? '',
+            'calculated_at' => $header['calculated_at'] ?? '',
+        ];
+        $this->renderKeyValueTable($headerRows);
+
+        echo '<h4>Totals</h4>';
+        echo '<table class="widefat striped"><tbody>';
+        $totalRows = [
+            'labour_total_minor' => $totals['labour_total_minor'] ?? 0,
+            'materials_total_minor' => $totals['materials_total_minor'] ?? 0,
+            'subtotal_ex_vat_minor' => $totals['subtotal_ex_vat_minor'] ?? 0,
+            'vat_minor' => $totals['vat_minor'] ?? 0,
+            'total_inc_vat_minor' => $totals['total_inc_vat_minor'] ?? 0,
+        ];
+        foreach ($totalRows as $label => $value) {
+            echo '<tr><th style="width:220px;">' . esc_html($label) . '</th><td>' . esc_html($this->formatMinorValue($value)) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        echo '<h4>Labour lines</h4>';
+        if ($lines === []) {
+            $this->renderEmptyState('No labour lines in snapshot.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>line_title_ru_snapshot</th><th>line_title_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>calculated_hours</th><th>labour_subtotal_minor</th></tr></thead><tbody>';
+            foreach ($lines as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+
+                echo '<tr>';
+                echo '<td>' . esc_html((string) ($line['id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['line_title_ru_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['line_title_sv_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['unit_code_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['quantity'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['calculated_hours'] ?? '')) . '</td>';
+                echo '<td>' . esc_html($this->formatMinorValue($line['labour_subtotal_minor'] ?? 0)) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        echo '<h4>Material lines</h4>';
+        if ($materialLines === []) {
+            $this->renderEmptyState('No material lines in snapshot.');
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>material_name_ru_snapshot</th><th>material_name_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>subtotal_minor</th></tr></thead><tbody>';
+        foreach ($materialLines as $materialLine) {
+            if (! is_array($materialLine)) {
+                continue;
+            }
+
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($materialLine['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($materialLine['material_name_ru_snapshot'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($materialLine['material_name_sv_snapshot'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($materialLine['unit_code_snapshot'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($materialLine['quantity'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorValue($materialLine['subtotal_minor'] ?? 0)) . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, mixed> $rows */
+    private function renderKeyValueTable(array $rows): void
+    {
+        echo '<table class="widefat striped"><tbody>';
+        foreach ($rows as $label => $value) {
+            echo '<tr><th style="width:220px;">' . esc_html((string) $label) . '</th><td>' . esc_html((string) $value) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    private function renderEmptyState(string $text): void
+    {
+        echo '<p>' . esc_html($text) . '</p>';
+    }
+
+    private function renderInlineErrorNotice(string $message): void
+    {
+        echo '<div class="notice notice-error"><p>' . esc_html($message) . '</p></div>';
     }
 
     /** @param mixed $value */
