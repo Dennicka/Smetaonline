@@ -27,7 +27,12 @@ final class DocumentPdfArtifactService
     public function getOrCreate(string $documentType, int $documentId): array
     {
         $normalizedType = sanitize_key($documentType);
+        if ($documentId <= 0) {
+            throw new RuntimeException('Document id must be a positive integer.');
+        }
+
         $document = $this->loadDocument($normalizedType, $documentId);
+        $this->assertDocumentGenerationPreconditions($normalizedType, $document);
         $versionNo = (int) ($document['version_no'] ?? 1);
 
         $existing = $this->artifactRepository->findByDocumentVersion($normalizedType, $documentId, $versionNo, 'pdf');
@@ -66,6 +71,27 @@ final class DocumentPdfArtifactService
         }
 
         return $created;
+    }
+
+    /** @param array<string, mixed> $document */
+    private function assertDocumentGenerationPreconditions(string $documentType, array $document): void
+    {
+        $documentNumber = trim((string) ($document['document_number'] ?? ''));
+        if ($documentNumber === '') {
+            throw new RuntimeException('Document source is invalid: missing document_number.');
+        }
+
+        $versionNo = (int) ($document['version_no'] ?? 0);
+        if ($versionNo <= 0) {
+            throw new RuntimeException('Document source is invalid: missing version marker.');
+        }
+
+        $snapshotJson = trim((string) ($document['snapshot_json'] ?? ''));
+        if ($snapshotJson === '') {
+            throw new RuntimeException(
+                sprintf('Document source is invalid for %s: missing snapshot_json.', $documentType)
+            );
+        }
     }
 
     private function loadDocument(string $documentType, int $documentId): array

@@ -94,10 +94,72 @@ final class DocumentPdfArtifactServiceTest extends TestCase
 
     public function testMissingDocumentThrowsExplicitException(): void
     {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Document not found.');
 
         $this->service()->getOrCreate('invoice', 99999);
+    }
+
+    public function testMissingOffertDocumentThrowsExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('offert', 99999);
+    }
+
+    public function testMissingCreditNoteDocumentThrowsExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->defaultRowByIdEnabled = false;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document not found.');
+
+        $this->service()->getOrCreate('credit_note', 99999);
+    }
+
+    public function testUnsupportedDocumentTypeThrowsExplicitException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unsupported document type for PDF generation.');
+
+        $this->service()->getOrCreate('estimate', 10);
+    }
+
+    public function testInvalidGenerationPreconditionsThrowExplicitException(): void
+    {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->rowsById[787] = [
+            'id' => 787,
+            'document_number' => 'INV-2026-INVALID',
+            'version_no' => 1,
+            'status' => 'issued',
+            'snapshot_json' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document source is invalid for invoice: missing snapshot_json.');
+
+        $this->service()->getOrCreate('invoice', 787);
+    }
+
+    public function testNonPositiveDocumentIdThrowsExplicitException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Document id must be a positive integer.');
+
+        $this->service()->getOrCreate('invoice', 0);
     }
 
     private function service(): DocumentPdfArtifactService
