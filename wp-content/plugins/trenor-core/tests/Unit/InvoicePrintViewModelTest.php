@@ -70,7 +70,7 @@ final class InvoicePrintViewModelTest extends TestCase
 
         self::assertSame('IN-2026-001', $result['document']['document_number']);
         self::assertSame('17', $result['context']['source_offert_id']);
-        self::assertSame('Kitchen renovation', $result['context']['source_title']);
+        self::assertSame('Kitchen renovation', $result['context']['source_estimate_title']);
         self::assertSame('7000', $result['totals'][0]['minor']);
         self::assertSame('Paint walls', $result['labour_lines'][0]['title']);
         self::assertSame('Paint', $result['material_lines'][0]['name']);
@@ -143,7 +143,7 @@ final class InvoicePrintViewModelTest extends TestCase
             ]
         );
 
-        self::assertSame('Header title', $result['context']['source_title']);
+        self::assertSame('Header title', $result['context']['source_estimate_title']);
         self::assertSame('RU title', $result['labour_lines'][0]['title']);
         self::assertSame('SV material', $result['material_lines'][0]['name']);
         self::assertSame('SEK', $result['payments'][0]['currency']);
