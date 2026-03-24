@@ -21,6 +21,7 @@ use Trenor\Core\Domain\Service\PaymentRecorderService;
 use Trenor\Core\Domain\Service\DocumentSettings;
 use Trenor\Core\Domain\Service\OperationReplayGuard;
 use Trenor\Core\Domain\Service\BusinessEffectFingerprint;
+use Trenor\Core\Domain\Service\DocumentPdfArtifactService;
 
 final class PageController
 {
@@ -347,6 +348,12 @@ final class PageController
             return;
         }
 
+        if ($view === 'pdf' && $offertId > 0) {
+            $this->renderPdfDownload('offert', $offertId, 'trn_issue_offerts');
+
+            return;
+        }
+
         $filter = new OffertListFilter();
         $allOfferts = $this->factory->offerts()->all();
         $offerts = $filter->apply($allOfferts, $estimateFilter, $statusFilter, $documentNumberFilter);
@@ -366,6 +373,7 @@ final class PageController
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
             $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id'] . '&view=print');
+            $pdfUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id'] . '&view=pdf');
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . (int) $offert['estimate_id']);
             echo '<tr>';
             echo '<td>' . esc_html((string) $offert['id']) . '</td>';
@@ -377,6 +385,7 @@ final class PageController
             echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a> ';
             echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a> ';
+            echo '<a class="button" href="' . esc_url($pdfUrl) . '" style="margin-left:6px;">Generate / Download PDF</a> ';
             echo '<a class="button" href="' . esc_url($estimateUrl) . '" style="margin-left:6px;">Open estimate</a> ';
             $this->renderOffertActionForm((int) $offert['id'], 'accept', 'Accept');
             $this->renderOffertActionForm((int) $offert['id'], 'reject', 'Reject');
@@ -426,6 +435,12 @@ final class PageController
             return;
         }
 
+        if ($view === 'pdf' && $invoiceId > 0) {
+            $this->renderPdfDownload('invoice', $invoiceId, 'trn_issue_invoices');
+
+            return;
+        }
+
         $rawFilters = [
             'offert_id' => filter_input(INPUT_GET, 'offert_id', FILTER_UNSAFE_RAW),
             'estimate_id' => filter_input(INPUT_GET, 'estimate_id', FILTER_UNSAFE_RAW),
@@ -469,6 +484,7 @@ final class PageController
             $offertIdValue = (int) ($row['offert_id'] ?? 0);
             $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceIdValue);
             $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceIdValue . '&view=print');
+            $pdfUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceIdValue . '&view=pdf');
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertIdValue);
             $paymentsUrl = admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceIdValue);
             $currency = (string) ($row['currency'] ?? 'SEK');
@@ -487,6 +503,7 @@ final class PageController
             echo '<td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
             echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
+            echo '<a class="button" href="' . esc_url($pdfUrl) . '" style="margin-left:6px;">Generate / Download PDF</a>';
             echo '<a class="button" href="' . esc_url($paymentsUrl) . '" style="margin-left:6px;">Open payments register</a>';
             if ($offertIdValue > 0) {
                 echo '<a class="button" href="' . esc_url($offertUrl) . '" style="margin-left:6px;">Open source offert</a>';
@@ -709,6 +726,12 @@ final class PageController
             return;
         }
 
+        if ($view === 'pdf' && $creditNoteId > 0) {
+            $this->renderPdfDownload('credit_note', $creditNoteId, 'trn_issue_credit_notes');
+
+            return;
+        }
+
         $rawFilters = [
             'invoice_id' => filter_input(INPUT_GET, 'invoice_id', FILTER_UNSAFE_RAW),
             'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
@@ -732,6 +755,7 @@ final class PageController
             $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
             $viewUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id);
             $printUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id . '&view=print');
+            $pdfUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id . '&view=pdf');
             $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
             $currency = (string) ($creditNote['currency'] ?? 'SEK');
 
@@ -745,6 +769,7 @@ final class PageController
             echo '<td>' . esc_html((string) ($creditNote['issued_at'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
             echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
+            echo '<a class="button" href="' . esc_url($pdfUrl) . '" style="margin-left:6px;">Generate / Download PDF</a>';
             if ($invoiceId > 0) {
                 echo '<a class="button" href="' . esc_url($invoiceUrl) . '" style="margin-left:6px;">Open source invoice</a>';
             }
@@ -1591,8 +1616,10 @@ final class PageController
         $offertsUrl = admin_url('admin.php?page=trn_offerts');
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
         $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&view=print');
+        $pdfUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&view=pdf');
         echo '<p><a href="' . esc_url($offertsUrl) . '">Back to offerts list</a>';
         echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
+        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
         if ($estimateId > 0) {
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
             $estimateOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
@@ -1661,8 +1688,10 @@ final class PageController
         $invoicesUrl = admin_url('admin.php?page=trn_invoices');
         $offertId = (int) ($invoice['offert_id'] ?? 0);
         $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&view=print');
+        $pdfUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&view=pdf');
         echo '<p><a href="' . esc_url($invoicesUrl) . '">Back to invoices list</a>';
         echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
+        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
         if ($offertId > 0) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
             echo ' | <a href="' . esc_url($offertUrl) . '">Open source offert</a>';
@@ -1699,8 +1728,10 @@ final class PageController
         $estimateId = (int) ($creditNote['estimate_id'] ?? 0);
 
         $printUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&view=print');
+        $pdfUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&view=pdf');
         echo '<p><a href="' . esc_url($creditNotesUrl) . '">Back to credit notes list</a>';
         echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
+        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
         if ($invoiceId > 0) {
             echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) . '">Open source invoice</a>';
             echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)) . '">View all credit notes for this invoice</a>';
@@ -2347,6 +2378,34 @@ final class PageController
 
         $snapshot = (new CreditNoteSnapshotReader())->read($creditNote);
         (new CreditNotePrintRenderer())->render($creditNote, $snapshot, $this->loadCreditNoteContext($creditNote));
+    }
+
+    private function renderPdfDownload(string $documentType, int $documentId, string $requiredCapability): void
+    {
+        if (! current_user_can($requiredCapability)) {
+            wp_die('Forbidden');
+        }
+
+        try {
+            $artifact = (new DocumentPdfArtifactService($this->factory))->getOrCreate($documentType, $documentId);
+        } catch (RuntimeException $exception) {
+            $message = rawurlencode($exception->getMessage());
+            wp_safe_redirect(admin_url('admin.php?page=trn_dashboard&trn_result=error&trn_message=' . $message));
+            exit;
+        }
+
+        $path = (string) ($artifact['storage_path'] ?? '');
+        if ($path === '' || ! file_exists($path) || ! is_file($path)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_dashboard&trn_result=error&trn_message=PDF%20artifact%20missing'));
+            exit;
+        }
+
+        $filename = basename($path);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('X-Content-Type-Options: nosniff');
+        readfile($path);
+        exit;
     }
 
     /**

@@ -70,6 +70,19 @@ if (! function_exists('current_time')) {
     }
 }
 
+if (! function_exists('wp_upload_dir')) {
+    /** @return array<string, string> */
+    function wp_upload_dir(): array
+    {
+        $override = $GLOBALS['trn_test_wp_upload_dir'] ?? null;
+        if (is_array($override) && isset($override['basedir']) && is_string($override['basedir'])) {
+            return ['basedir' => $override['basedir']];
+        }
+
+        return ['basedir' => sys_get_temp_dir()];
+    }
+}
+
 if (! function_exists('get_current_user_id')) {
     function get_current_user_id(): int
     {

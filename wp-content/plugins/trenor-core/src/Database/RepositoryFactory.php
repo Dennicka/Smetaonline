@@ -87,6 +87,11 @@ final class RepositoryFactory
         return new CreditNoteRepository();
     }
 
+    public function documentArtifacts(): DocumentArtifactRepository
+    {
+        return new DocumentArtifactRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {
