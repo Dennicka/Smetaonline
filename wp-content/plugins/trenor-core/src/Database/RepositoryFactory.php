@@ -82,6 +82,11 @@ final class RepositoryFactory
         return new InvoicePaymentRepository();
     }
 
+    public function creditNotes(): CreditNoteRepository
+    {
+        return new CreditNoteRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {

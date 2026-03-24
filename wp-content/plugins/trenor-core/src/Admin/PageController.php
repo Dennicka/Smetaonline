@@ -13,6 +13,7 @@ use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
 use Trenor\Core\Domain\Service\InvoicePaymentSummaryCalculator;
+use Trenor\Core\Domain\Service\CreditNoteFromInvoiceService;
 use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
@@ -102,6 +103,10 @@ final class PageController
 
         if ($entity === 'invoice_payment') {
             $this->handleInvoicePayment($action, $postPayload);
+        }
+
+        if ($entity === 'credit_note') {
+            $this->handleCreditNote($action, $postPayload);
         }
     }
 
@@ -454,6 +459,57 @@ final class PageController
             echo '</tr>';
         }
         echo '</tbody></table></div>';
+    }
+
+    public function renderCreditNotes(): void
+    {
+        if (! current_user_can('trn_issue_credit_notes')) {
+            wp_die('Forbidden');
+        }
+
+        $creditNoteId = filter_input(INPUT_GET, 'credit_note_id', FILTER_VALIDATE_INT);
+        $creditNoteId = $creditNoteId !== false && $creditNoteId !== null ? (int) $creditNoteId : 0;
+        $creditNotes = $this->factory->creditNotes()->all();
+
+        echo '<div class="wrap"><h1>Kreditnotor / Credit Notes / Кредит-ноты</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($creditNotes as $creditNote) {
+            $id = (int) ($creditNote['id'] ?? 0);
+            $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
+            $viewUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id);
+            $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
+            $currency = (string) ($creditNote['currency'] ?? 'SEK');
+
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($creditNote['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) $invoiceId) . '</td>';
+            echo '<td>' . esc_html((string) ($creditNote['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($creditNote['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($creditNote['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($creditNote['total_inc_vat_minor'] ?? null, $currency)) . '</td>';
+            echo '<td>' . esc_html((string) ($creditNote['issued_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
+            if ($invoiceId > 0) {
+                echo '<a class="button" href="' . esc_url($invoiceUrl) . '" style="margin-left:6px;">Open source invoice</a>';
+            }
+            if (current_user_can('trn_archive_records') && (string) ($creditNote['status'] ?? '') !== 'archived') {
+                echo '<form method="post" style="display:inline-block; margin-left:6px;">';
+                wp_nonce_field('trn_credit_note_archive');
+                echo '<input type="hidden" name="trn_entity" value="credit_note">';
+                echo '<input type="hidden" name="trn_action" value="archive">';
+                echo '<input type="hidden" name="id" value="' . esc_attr((string) $id) . '">';
+                submit_button('Archive', 'secondary', 'submit', false);
+                echo '</form>';
+            }
+            echo '</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        if ($creditNoteId > 0) {
+            $this->renderCreditNoteDetail($creditNoteId);
+        }
+        echo '</div>';
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
@@ -963,6 +1019,45 @@ final class PageController
         exit;
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleCreditNote(string $action, array $postPayload): void
+    {
+        $repo = $this->factory->creditNotes();
+
+        if ($action === 'issue') {
+            $invoiceId = (int) $this->postValue($postPayload, 'invoice_id');
+            $invoice = $this->factory->invoices()->find($invoiceId);
+            if ($invoice === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_invoices&trn_result=error&trn_msg=' . rawurlencode('Source invoice not found.')));
+                exit;
+            }
+
+            $service = new CreditNoteFromInvoiceService($repo, new DocumentSequenceGenerator());
+            try {
+                $payload = $service->buildPayload($invoice);
+            } catch (RuntimeException $exception) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
+
+            $creditNoteId = $repo->create($payload);
+            if ($creditNoteId === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode('Credit note issue failed.')));
+                exit;
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&trn_result=ok'));
+            exit;
+        }
+
+        if ($action === 'archive') {
+            $creditNoteId = (int) $this->postValue($postPayload, 'id');
+            $isSuccess = $repo->transitionStatus($creditNoteId, 'archived');
+            wp_safe_redirect(admin_url('admin.php?page=trn_credit_notes&trn_result=' . ($isSuccess ? 'ok' : 'error')));
+            exit;
+        }
+    }
+
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
     private function collectData(array $postPayload, array $fields): array
     {
@@ -1038,6 +1133,10 @@ final class PageController
             return 'trn_record_payments';
         }
 
+        if ($entity === 'credit_note') {
+            return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_credit_notes';
+        }
+
         return 'read';
     }
 
@@ -1106,9 +1205,47 @@ final class PageController
         }
         echo '</p>';
 
+        if (current_user_can('trn_issue_credit_notes') && (string) ($invoice['status'] ?? '') !== 'archived') {
+            echo '<form method="post" style="margin:10px 0;">';
+            wp_nonce_field('trn_credit_note_issue');
+            echo '<input type="hidden" name="trn_entity" value="credit_note"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="invoice_id" value="' . esc_attr((string) $invoiceId) . '">';
+            submit_button('Issue credit note', 'secondary', 'submit', false);
+            echo '</form>';
+        }
+
         $snapshot = (new OffertSnapshotReader())->read($invoice);
         (new InvoiceDetailRenderer())->render($invoice, $snapshot);
         $this->renderInvoicePaymentSection($invoice);
+    }
+
+    private function renderCreditNoteDetail(int $creditNoteId): void
+    {
+        $creditNote = $this->factory->creditNotes()->find($creditNoteId);
+        if ($creditNote === null) {
+            echo '<h2>Credit note detail</h2><p>Credit note not found.</p>';
+
+            return;
+        }
+
+        $creditNotesUrl = admin_url('admin.php?page=trn_credit_notes');
+        $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
+        $offertId = (int) ($creditNote['offert_id'] ?? 0);
+        $estimateId = (int) ($creditNote['estimate_id'] ?? 0);
+
+        echo '<p><a href="' . esc_url($creditNotesUrl) . '">Back to credit notes list</a>';
+        if ($invoiceId > 0) {
+            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) . '">Open source invoice</a>';
+        }
+        if ($offertId > 0) {
+            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId)) . '">Open source offert</a>';
+        }
+        if ($estimateId > 0) {
+            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId)) . '">Open source estimate</a>';
+        }
+        echo '</p>';
+
+        $snapshot = (new CreditNoteSnapshotReader())->read($creditNote);
+        (new CreditNoteDetailRenderer())->render($creditNote, $snapshot);
     }
 
     /** @param array<string, mixed> $invoice */

@@ -78,7 +78,7 @@ final class WpdbStub
         if ($name === 'get_var') {
             $query = (string) ($arguments[0] ?? '');
 
-            if (preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
+            if (str_contains($query, 'SUM(amount_minor)') && preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
                 return $this->sumByInvoice[(int) $matches[1]] ?? 0;
             }
 
