@@ -20,7 +20,7 @@ final class OffertPrintViewModel
      *     project?: array<string, mixed>,
      *     property?: array<string, mixed>,
      *     client?: array<string, mixed>,
-     *     document_settings?: array<string, mixed>
+     *     document_profile?: array<string, mixed>
      * } $context
      * @return array{
      *     document: array<string, string>,
@@ -32,8 +32,7 @@ final class OffertPrintViewModel
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
      *     issuer: array<string, string>,
-     *     payment: array<string, string>,
-     *     terms_notes: array<string, string>,
+     *     commercial_terms: array<string, string>,
      *     currency: string
      * }
      */
@@ -46,7 +45,7 @@ final class OffertPrintViewModel
         $project = $this->normalizeMap($context['project'] ?? null);
         $property = $this->normalizeMap($context['property'] ?? null);
         $client = $this->normalizeMap($context['client'] ?? null);
-        $settings = $this->normalizeMap($context['document_settings'] ?? null);
+        $documentProfile = $this->normalizeMap($context['document_profile'] ?? null);
 
         $currency = $this->firstScalarString([
             $offert['currency'] ?? null,
@@ -66,9 +65,8 @@ final class OffertPrintViewModel
             'totals' => $this->buildTotalsSection($totals, $offert),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
-            'issuer' => $this->buildIssuerSection($settings),
-            'payment' => $this->buildPaymentSection($settings),
-            'terms_notes' => $this->buildTermsNotesSection($settings),
+            'issuer' => $this->buildIssuerSection($documentProfile),
+            'commercial_terms' => $this->buildCommercialTermsSection($documentProfile),
             'currency' => $currency,
         ];
     }
@@ -281,47 +279,37 @@ final class OffertPrintViewModel
     }
 
 
-    /** @param array<string, mixed> $settings @return array<string, string> */
-    private function buildIssuerSection(array $settings): array
+    /** @param array<string, mixed> $profile @return array<string, string> */
+    private function buildIssuerSection(array $profile): array
     {
         return [
-            'company_name' => $this->firstScalarString([$settings['company_name'] ?? null]),
-            'org_number' => $this->firstScalarString([$settings['org_number'] ?? null]),
-            'vat_number' => $this->firstScalarString([$settings['vat_number'] ?? null, $settings['moms_number'] ?? null]),
-            'address_line' => $this->firstScalarString([
-                $settings['address_line'] ?? null,
-                $settings['address_line_1'] ?? null,
-            ]),
-            'postal_code' => $this->firstScalarString([$settings['postal_code'] ?? null]),
-            'city' => $this->firstScalarString([$settings['city'] ?? null]),
-            'country' => $this->firstScalarString([$settings['country'] ?? null]),
-            'email' => $this->firstScalarString([$settings['email'] ?? null]),
-            'phone' => $this->firstScalarString([$settings['phone'] ?? null]),
-            'website' => $this->firstScalarString([$settings['website'] ?? null]),
+            'company_name' => $this->firstScalarString([$profile['company_name'] ?? null]),
+            'org_number' => $this->firstScalarString([$profile['org_number'] ?? null]),
+            'vat_number' => $this->firstScalarString([$profile['vat_number'] ?? null]),
+            'email' => $this->firstScalarString([$profile['email'] ?? null]),
+            'phone' => $this->firstScalarString([$profile['phone'] ?? null]),
+            'website' => $this->firstScalarString([$profile['website'] ?? null]),
+            'address_line' => $this->firstScalarString([$profile['address_line'] ?? null]),
+            'postal_code' => $this->firstScalarString([$profile['postal_code'] ?? null]),
+            'city' => $this->firstScalarString([$profile['city'] ?? null]),
+            'country' => $this->firstScalarString([$profile['country'] ?? null]),
+            'bankgiro' => $this->firstScalarString([$profile['bankgiro'] ?? null]),
+            'plusgiro' => $this->firstScalarString([$profile['plusgiro'] ?? null]),
+            'swish' => $this->firstScalarString([$profile['swish'] ?? null]),
+            'iban' => $this->firstScalarString([$profile['iban'] ?? null]),
+            'bic' => $this->firstScalarString([$profile['bic'] ?? null]),
         ];
     }
 
-    /** @param array<string, mixed> $settings @return array<string, string> */
-    private function buildPaymentSection(array $settings): array
+    /** @param array<string, mixed> $profile @return array<string, string> */
+    private function buildCommercialTermsSection(array $profile): array
     {
         return [
-            'iban' => $this->firstScalarString([$settings['iban'] ?? null]),
-            'swift' => $this->firstScalarString([$settings['swift'] ?? null, $settings['bic'] ?? null]),
-            'plusgiro' => $this->firstScalarString([$settings['plusgiro'] ?? null]),
-            'bankgiro' => $this->firstScalarString([$settings['bankgiro'] ?? null]),
+            'offert_valid_days' => $this->firstScalarString([$profile['offert_valid_days'] ?? null]),
+            'offert_note' => $this->firstScalarString([$profile['offert_note'] ?? null]),
         ];
     }
 
-    /** @param array<string, mixed> $settings @return array<string, string> */
-    private function buildTermsNotesSection(array $settings): array
-    {
-        return [
-            'offert_intro_text' => $this->firstScalarString([$settings['offert_intro_text'] ?? null]),
-            'offert_footer_text' => $this->firstScalarString([$settings['offert_footer_text'] ?? null]),
-            'payment_terms' => $this->firstScalarString([$settings['payment_terms'] ?? null]),
-            'due_days' => $this->firstScalarString([$settings['due_days'] ?? null, $settings['payment_terms_days'] ?? null]),
-        ];
-    }
     private function firstScalarString(array $candidates): string
     {
         foreach ($candidates as $candidate) {

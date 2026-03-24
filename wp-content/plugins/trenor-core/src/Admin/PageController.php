@@ -113,6 +113,10 @@ final class PageController
         if ($entity === 'document_settings' && $action === 'save') {
             $this->handleDocumentSettingsSave($postPayload);
         }
+
+        if ($entity === 'document_profile_settings' && $action === 'save') {
+            $this->handleDocumentProfileSettingsSave($postPayload);
+        }
     }
 
     public function renderDashboard(): void
@@ -273,6 +277,44 @@ final class PageController
         ], $settings);
 
         submit_button('Save settings');
+        echo '</form>';
+
+        $documentProfile = (new DocumentProfileProvider())->get();
+        echo '<h2>Document profile / Företagsprofil / Профиль документов</h2>';
+        echo '<form method="post">';
+        wp_nonce_field('trn_document_profile_settings_save');
+        echo '<input type="hidden" name="trn_entity" value="document_profile_settings">';
+        echo '<input type="hidden" name="trn_action" value="save">';
+
+        $this->renderDocumentProfileFieldset('Issuer / Company', [
+            'company_name' => 'Company name',
+            'org_number' => 'Org number',
+            'vat_number' => 'VAT number',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'website' => 'Website',
+            'address_line' => 'Address line',
+            'postal_code' => 'Postal code',
+            'city' => 'City',
+            'country' => 'Country',
+            'bankgiro' => 'Bankgiro',
+            'plusgiro' => 'Plusgiro',
+            'swish' => 'Swish',
+            'iban' => 'IBAN',
+            'bic' => 'BIC',
+        ], $documentProfile);
+
+        $this->renderDocumentProfileFieldset('Commercial terms', [
+            'payment_terms_days' => 'Payment terms days',
+            'offert_valid_days' => 'Offert valid days',
+        ], $documentProfile);
+
+        $this->renderDocumentProfileTextareaFieldset('Document notes', [
+            'invoice_note' => 'Invoice note',
+            'offert_note' => 'Offert note',
+        ], $documentProfile);
+
+        submit_button('Save document profile');
         echo '</form></div>';
     }
 
@@ -1420,7 +1462,7 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_credit_notes';
         }
 
-        if ($entity === 'document_settings') {
+        if ($entity === 'document_settings' || $entity === 'document_profile_settings') {
             return 'trn_manage_backups';
         }
 
@@ -2208,7 +2250,7 @@ final class PageController
      *     client: array<string, mixed>,
      *     payments: array<int, array<string, mixed>>,
      *     payment_summary: array<string, mixed>,
-     *     document_settings: array<string, string>
+     *     document_profile: array<string, string|int>
      * }
      */
     private function loadInvoicePrintContext(array $invoice): array
@@ -2221,7 +2263,7 @@ final class PageController
             'client' => [],
             'payments' => [],
             'payment_summary' => [],
-            'document_settings' => (new DocumentSettings())->get(),
+            'document_profile' => (new DocumentProfileProvider())->get(),
         ];
 
         $invoiceId = (int) ($invoice['id'] ?? 0);
@@ -2290,7 +2332,7 @@ final class PageController
 
     /**
      * @param array<string, mixed> $offert
-     * @return array{estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>, document_settings: array<string, string>}
+     * @return array{estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>, document_profile: array<string, string|int>}
      */
     private function loadOffertPrintContext(array $offert): array
     {
@@ -2299,7 +2341,7 @@ final class PageController
             'project' => [],
             'property' => [],
             'client' => [],
-            'document_settings' => (new DocumentSettings())->get(),
+            'document_profile' => (new DocumentProfileProvider())->get(),
         ];
 
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
@@ -2356,6 +2398,14 @@ final class PageController
         exit;
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleDocumentProfileSettingsSave(array $postPayload): void
+    {
+        (new DocumentProfileProvider())->save($postPayload);
+        wp_safe_redirect(admin_url('admin.php?page=trn_settings&trn_result=ok'));
+        exit;
+    }
+
     /** @param array<string, string> $labels @param array<string, string> $values */
     private function renderDocumentSettingsFieldset(string $title, array $labels, array $values): void
     {
@@ -2372,6 +2422,34 @@ final class PageController
 
     /** @param array<string, string> $labels @param array<string, string> $values */
     private function renderDocumentSettingsTextareaFieldset(string $title, array $labels, array $values): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        echo '<table class="form-table" role="presentation"><tbody>';
+        foreach ($labels as $field => $label) {
+            echo '<tr>';
+            echo '<th scope="row"><label for="' . esc_attr($field) . '">' . esc_html($label) . '</label></th>';
+            echo '<td><textarea class="large-text" rows="4" id="' . esc_attr($field) . '" name="' . esc_attr($field) . '">' . esc_textarea((string) ($values[$field] ?? '')) . '</textarea></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, string> $labels @param array<string, string|int> $values */
+    private function renderDocumentProfileFieldset(string $title, array $labels, array $values): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        echo '<table class="form-table" role="presentation"><tbody>';
+        foreach ($labels as $field => $label) {
+            echo '<tr>';
+            echo '<th scope="row"><label for="' . esc_attr($field) . '">' . esc_html($label) . '</label></th>';
+            echo '<td><input class="regular-text" id="' . esc_attr($field) . '" name="' . esc_attr($field) . '" value="' . esc_attr((string) ($values[$field] ?? '')) . '"></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, string> $labels @param array<string, string|int> $values */
+    private function renderDocumentProfileTextareaFieldset(string $title, array $labels, array $values): void
     {
         echo '<h3>' . esc_html($title) . '</h3>';
         echo '<table class="form-table" role="presentation"><tbody>';

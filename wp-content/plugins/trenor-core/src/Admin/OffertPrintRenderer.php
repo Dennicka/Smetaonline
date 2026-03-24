@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Admin;
 
-use Trenor\Core\Domain\Service\DocumentSettings;
-
 final class OffertPrintRenderer
 {
     private OffertPrintViewModel $viewModel;
-    private DocumentSettings $documentSettings;
 
-    public function __construct(?OffertPrintViewModel $viewModel = null, ?DocumentSettings $documentSettings = null)
+    public function __construct(?OffertPrintViewModel $viewModel = null)
     {
         $this->viewModel = $viewModel ?? new OffertPrintViewModel();
-        $this->documentSettings = $documentSettings ?? new DocumentSettings();
     }
 
     /**
@@ -30,12 +26,12 @@ final class OffertPrintRenderer
      *     estimate?: array<string, mixed>,
      *     project?: array<string, mixed>,
      *     property?: array<string, mixed>,
-     *     client?: array<string, mixed>
+     *     client?: array<string, mixed>,
+     *     document_profile?: array<string, mixed>
      * } $context
      */
     public function render(array $offert, array $snapshot, array $context = []): void
     {
-        $context['document_settings'] = $this->documentSettings->get();
         $view = $this->viewModel->build($offert, $snapshot, $context);
         $offertId = (int) ($offert['id'] ?? 0);
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
@@ -88,11 +84,8 @@ final class OffertPrintRenderer
         echo '<h3>Issuer / Company</h3>';
         $this->renderKeyValueTable($view['issuer']);
 
-        echo '<h3>Contact / Payment details</h3>';
-        $this->renderKeyValueTable($view['payment']);
-
-        echo '<h3>Terms / Notes</h3>';
-        $this->renderKeyValueTable($view['terms_notes']);
+        echo '<h3>Commercial terms</h3>';
+        $this->renderKeyValueTable($view['commercial_terms']);
         echo '</div>';
     }
 
