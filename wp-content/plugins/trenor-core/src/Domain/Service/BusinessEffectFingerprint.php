@@ -119,6 +119,23 @@ final class BusinessEffectFingerprint
         ]);
     }
 
+    /** @param array<string, mixed> $ata */
+    public function ataStatusTransition(array $ata, string $toStatus): string
+    {
+        return $this->hash([
+            'ata' => [
+                'id' => (int) ($ata['id'] ?? 0),
+                'project_id' => (int) ($ata['project_id'] ?? 0),
+                'document_number' => (string) ($ata['document_number'] ?? ''),
+                'version_no' => (int) ($ata['version_no'] ?? 1),
+                'status' => (string) ($ata['status'] ?? ''),
+                'snapshot_json' => (string) ($ata['snapshot_json'] ?? ''),
+                'total_inc_vat_minor' => (int) ($ata['total_inc_vat_minor'] ?? 0),
+            ],
+            'to_status' => sanitize_key($toStatus),
+        ]);
+    }
+
     /** @param array<string, mixed> $line @return array<string, mixed> */
     private function normalizeEstimateLine(array $line): array
     {

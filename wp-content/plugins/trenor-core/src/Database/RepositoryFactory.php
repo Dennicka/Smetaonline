@@ -103,6 +103,11 @@ final class RepositoryFactory
         return new DocumentArtifactRepository();
     }
 
+    public function atas(): AtaRepository
+    {
+        return new AtaRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {

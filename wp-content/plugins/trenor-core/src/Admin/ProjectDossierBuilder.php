@@ -23,6 +23,7 @@ final class ProjectDossierBuilder
      * @param array<int, array<string, mixed>> $offerts
      * @param array<int, array<string, mixed>> $invoices
      * @param array<int, array<int, array<string, mixed>>> $paymentsByInvoiceId
+     * @param array<int, array<string, mixed>> $atas
      * @return array<string, mixed>
      */
     public function build(
@@ -32,7 +33,8 @@ final class ProjectDossierBuilder
         array $estimates,
         array $offerts,
         array $invoices,
-        array $paymentsByInvoiceId
+        array $paymentsByInvoiceId,
+        array $atas = []
     ): array {
         $estimateIds = [];
         foreach ($estimates as $estimate) {
@@ -71,6 +73,7 @@ final class ProjectDossierBuilder
         $summary = [
             'estimates_count' => count($estimates),
             'offerts_count' => count($filteredOfferts),
+            'atas_count' => 0,
             'invoices_count' => count($filteredInvoices),
             'payments_count' => 0,
             'invoiced_total_minor' => 0,
@@ -125,12 +128,22 @@ final class ProjectDossierBuilder
 
         $summary['payments_count'] = count($filteredPayments);
 
+        $filteredAtas = [];
+        foreach ($atas as $ata) {
+            $ataProjectId = $this->toInt($ata['project_id'] ?? null);
+            if ($ataProjectId === $this->toInt($project['id'] ?? null)) {
+                $filteredAtas[] = $ata;
+            }
+        }
+        $summary['atas_count'] = count($filteredAtas);
+
         return [
             'project' => $project,
             'property' => $property,
             'client' => $client,
             'estimates' => $estimates,
             'offerts' => $filteredOfferts,
+            'atas' => $filteredAtas,
             'invoices' => $invoiceRows,
             'payments' => $filteredPayments,
             'summary' => $summary,

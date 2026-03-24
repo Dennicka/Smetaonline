@@ -77,6 +77,7 @@ final class ProjectDossierViewNormalizerTest extends TestCase
 
         self::assertSame([], $normalized['estimates']);
         self::assertSame([], $normalized['offerts']);
+        self::assertSame([], $normalized['atas']);
         self::assertSame([], $normalized['invoices']);
         self::assertSame([], $normalized['payments']);
         self::assertSame(0, $normalized['summary']['estimates_count']);

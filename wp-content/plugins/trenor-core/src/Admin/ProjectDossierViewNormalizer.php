@@ -18,6 +18,7 @@ final class ProjectDossierViewNormalizer
             'client' => $this->normalizeClientRow($this->toArray($dossier['client'] ?? [])),
             'estimates' => $this->normalizeEstimateRows($dossier['estimates'] ?? []),
             'offerts' => $this->normalizeOffertRows($dossier['offerts'] ?? []),
+            'atas' => $this->normalizeAtaRows($dossier['atas'] ?? []),
             'invoices' => $this->normalizeInvoiceRows($dossier['invoices'] ?? []),
             'payments' => $this->normalizePaymentRows($dossier['payments'] ?? []),
             'summary' => $this->normalizeSummaryRow($this->toArray($dossier['summary'] ?? [])),
@@ -138,6 +139,32 @@ final class ProjectDossierViewNormalizer
     }
 
     /** @param mixed $rows */
+    private function normalizeAtaRows(mixed $rows): array
+    {
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            $item = $this->toArray($row);
+            $normalized[] = [
+                'id' => $this->scalar($item['id'] ?? null),
+                'project_id' => $this->scalar($item['project_id'] ?? null),
+                'document_number' => $this->scalar($item['document_number'] ?? null),
+                'version_no' => $this->scalar($item['version_no'] ?? null),
+                'status' => $this->scalar($item['status'] ?? null),
+                'invoice_link_status' => $this->scalar($item['invoice_link_status'] ?? null),
+                'total_inc_vat_minor' => $this->toInt($item['total_inc_vat_minor'] ?? null),
+                'issued_at' => $this->scalar($item['issued_at'] ?? null),
+                'approved_at' => $this->scalar($item['approved_at'] ?? null),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /** @param mixed $rows */
     private function normalizePaymentRows(mixed $rows): array
     {
         if (! is_array($rows)) {
@@ -168,6 +195,7 @@ final class ProjectDossierViewNormalizer
         return [
             'estimates_count' => $this->toInt($row['estimates_count'] ?? null),
             'offerts_count' => $this->toInt($row['offerts_count'] ?? null),
+            'atas_count' => $this->toInt($row['atas_count'] ?? null),
             'invoices_count' => $this->toInt($row['invoices_count'] ?? null),
             'payments_count' => $this->toInt($row['payments_count'] ?? null),
             'invoiced_total_minor' => $this->toInt($row['invoiced_total_minor'] ?? null),

@@ -24,6 +24,8 @@ use Trenor\Core\Domain\Service\OperationReplayGuard;
 use Trenor\Core\Domain\Service\BusinessEffectFingerprint;
 use Trenor\Core\Domain\Service\DocumentPdfArtifactService;
 use Trenor\Core\Domain\Service\AvtalFromOffertService;
+use Trenor\Core\Domain\Service\AtaIssueService;
+use Trenor\Core\Domain\Service\AtaTotalsCalculator;
 
 final class PageController
 {
@@ -126,6 +128,10 @@ final class PageController
 
         if ($entity === 'avtal') {
             $this->handleAvtal($action, $postPayload);
+        }
+
+        if ($entity === 'ata') {
+            $this->handleAta($action, $postPayload);
         }
 
         if ($entity === 'document_settings' && $action === 'save') {
@@ -366,8 +372,15 @@ final class PageController
 
         $avtalId = filter_input(INPUT_GET, 'avtal_id', FILTER_VALIDATE_INT);
         $avtalId = $avtalId !== false && $avtalId !== null ? (int) $avtalId : 0;
+        $ataId = filter_input(INPUT_GET, 'ata_id', FILTER_VALIDATE_INT);
+        $ataId = $ataId !== false && $ataId !== null ? (int) $ataId : 0;
         if ($view === 'avtal_pdf' && $avtalId > 0) {
             $this->renderPdfDownload('avtal', $avtalId, 'trn_issue_offerts');
+
+            return;
+        }
+        if ($view === 'ata_pdf' && $ataId > 0) {
+            $this->renderPdfDownload('ata', $ataId, 'trn_issue_offerts');
 
             return;
         }
@@ -419,6 +432,11 @@ final class PageController
             filter_input(INPUT_GET, 'avtal_status', FILTER_UNSAFE_RAW),
             filter_input(INPUT_GET, 'avtal_document_number', FILTER_UNSAFE_RAW)
         );
+        $this->renderAtaRegister(
+            filter_input(INPUT_GET, 'ata_project_id', FILTER_UNSAFE_RAW),
+            filter_input(INPUT_GET, 'ata_status', FILTER_UNSAFE_RAW),
+            filter_input(INPUT_GET, 'ata_document_number', FILTER_UNSAFE_RAW)
+        );
 
         if ($offertId > 0) {
             $this->renderOffertDetail($offertId);
@@ -426,6 +444,9 @@ final class PageController
 
         if ($avtalId > 0) {
             $this->renderAvtalDetail($avtalId);
+        }
+        if ($ataId > 0) {
+            $this->renderAtaDetail($ataId);
         }
         echo '</div>';
     }
@@ -683,7 +704,8 @@ final class PageController
             $estimates,
             $this->factory->offerts()->all(),
             $allInvoices,
-            $paymentsByInvoiceId
+            $paymentsByInvoiceId,
+            $this->factory->atas()->all()
         ));
 
         echo '<h2>Project summary</h2>';
@@ -715,6 +737,7 @@ final class PageController
 
         $this->renderDossierEstimatesTable(is_array($dossier['estimates'] ?? null) ? $dossier['estimates'] : []);
         $this->renderDossierOffertsTable(is_array($dossier['offerts'] ?? null) ? $dossier['offerts'] : []);
+        $this->renderDossierAtasTable(is_array($dossier['atas'] ?? null) ? $dossier['atas'] : []);
         $this->renderDossierInvoicesTable(is_array($dossier['invoices'] ?? null) ? $dossier['invoices'] : []);
         $this->renderDossierPaymentsTable(is_array($dossier['payments'] ?? null) ? $dossier['payments'] : []);
 
@@ -722,6 +745,7 @@ final class PageController
         $this->renderKeyValueTable([
             'estimates_count' => (string) (($dossier['summary']['estimates_count'] ?? 0)),
             'offerts_count' => (string) (($dossier['summary']['offerts_count'] ?? 0)),
+            'atas_count' => (string) (($dossier['summary']['atas_count'] ?? 0)),
             'invoices_count' => (string) (($dossier['summary']['invoices_count'] ?? 0)),
             'payments_count' => (string) (($dossier['summary']['payments_count'] ?? 0)),
             'invoiced_total_minor' => (string) (($dossier['summary']['invoiced_total_minor'] ?? 0)),
@@ -1727,6 +1751,147 @@ final class PageController
         }
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleAta(string $action, array $postPayload): void
+    {
+        $repo = $this->factory->atas();
+
+        if ($action === 'create') {
+            $projectId = (int) $this->postValue($postPayload, 'project_id');
+            $project = $this->factory->projects()->find($projectId);
+            if (! is_array($project)) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Project not found.')));
+                exit;
+            }
+
+            $service = new AtaIssueService($repo, new DocumentSequenceGenerator(), new AtaTotalsCalculator());
+            try {
+                $payload = $service->buildDraftPayload([
+                    'project_id' => $projectId,
+                    'estimate_id' => (int) $this->postValue($postPayload, 'estimate_id'),
+                    'offert_id' => (int) $this->postValue($postPayload, 'offert_id'),
+                    'invoice_id' => (int) $this->postValue($postPayload, 'invoice_id'),
+                    'title' => $this->postValue($postPayload, 'title'),
+                    'scope_change_text' => $this->postValue($postPayload, 'scope_change_text'),
+                    'amount_ex_vat_minor' => (int) $this->postValue($postPayload, 'amount_ex_vat_minor'),
+                    'vat_rate_percent' => (float) $this->postValue($postPayload, 'vat_rate_percent'),
+                    'currency' => $this->postValue($postPayload, 'currency'),
+                ]);
+            } catch (RuntimeException $exception) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
+
+            $ataId = $repo->create($payload);
+            if (! is_int($ataId) || $ataId <= 0) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Failed to create ÄTA draft.')));
+                exit;
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=ok'));
+            exit;
+        }
+
+        $ataId = (int) $this->postValue($postPayload, 'id');
+        $ata = $repo->find($ataId);
+        if (! is_array($ata)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('ÄTA not found.')));
+            exit;
+        }
+
+        if ($action === 'update') {
+            $totals = (new AtaTotalsCalculator())->calculate(
+                (int) $this->postValue($postPayload, 'amount_ex_vat_minor'),
+                (float) $this->postValue($postPayload, 'vat_rate_percent'),
+                $this->postValue($postPayload, 'currency')
+            );
+            $snapshotPayload = [
+                'metadata' => [
+                    'project_id' => (int) ($ata['project_id'] ?? 0),
+                    'estimate_id' => (int) ($ata['estimate_id'] ?? 0),
+                    'offert_id' => (int) ($ata['offert_id'] ?? 0),
+                    'invoice_id' => (int) ($ata['invoice_id'] ?? 0),
+                    'document_number' => (string) ($ata['document_number'] ?? ''),
+                    'version_no' => (int) ($ata['version_no'] ?? 1),
+                    'title' => $this->postValue($postPayload, 'title'),
+                    'scope_change_text' => $this->postValue($postPayload, 'scope_change_text'),
+                ],
+                'totals' => $totals,
+            ];
+            $ok = $repo->updateDraft($ataId, [
+                'title' => $this->postValue($postPayload, 'title'),
+                'scope_change_text' => $this->postValue($postPayload, 'scope_change_text'),
+                'amount_ex_vat_minor' => $totals['amount_ex_vat_minor'],
+                'vat_rate_percent' => $totals['vat_rate_percent'],
+                'vat_minor' => $totals['vat_minor'],
+                'total_inc_vat_minor' => $totals['total_inc_vat_minor'],
+                'currency' => $totals['currency'],
+                'snapshot_json' => (string) wp_json_encode($snapshotPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+                'actor_user_id' => get_current_user_id() ?: null,
+            ]);
+
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=' . ($ok ? 'ok' : 'error')));
+            exit;
+        }
+
+        if ($action === 'link_invoice') {
+            $invoiceId = (int) $this->postValue($postPayload, 'invoice_id');
+            $invoice = $this->factory->invoices()->find($invoiceId);
+            if (! is_array($invoice)) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice not found.')));
+                exit;
+            }
+
+            $ok = $repo->linkInvoice($ataId, $invoiceId);
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=' . ($ok ? 'ok' : 'error')));
+            exit;
+        }
+
+        $statusMap = [
+            'issue' => 'issued',
+            'approve' => 'approved',
+            'reject' => 'rejected',
+            'archive' => 'archived',
+        ];
+        $nextStatus = $statusMap[$action] ?? '';
+        if ($nextStatus === '') {
+            return;
+        }
+
+        if (in_array($action, ['issue', 'approve'], true)) {
+            $scopeKey = 'ata:' . $ataId;
+            $actionName = $action === 'issue' ? 'issue_ata' : 'approve_ata';
+            if (! $this->consumeOperationToken($postPayload, $actionName, $scopeKey, 'admin.php?page=trn_offerts&ata_id=' . $ataId)) {
+                exit;
+            }
+
+            $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+                $actionName,
+                $scopeKey,
+                $this->businessEffectFingerprint->ataStatusTransition($ata, $nextStatus)
+            );
+            if (! $this->handleDuplicateBusinessEffect($businessEffect, 'ata', 'admin.php?page=trn_offerts&ata_id=' . $ataId, 'admin.php?page=trn_offerts&ata_id=' . $ataId, 'admin.php?page=trn_offerts&ata_id=' . $ataId)) {
+                exit;
+            }
+
+            $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
+            $ok = $repo->transitionStatus($ataId, $nextStatus, get_current_user_id() ?: null);
+            if (! $ok) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=error&trn_msg=' . rawurlencode('Invalid ÄTA transition.')));
+                exit;
+            }
+
+            $this->operationReplayGuard->completeBusinessEffect($receiptId, 'ata', $ataId);
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=ok'));
+            exit;
+        }
+
+        $ok = $repo->transitionStatus($ataId, $nextStatus, get_current_user_id() ?: null);
+        wp_safe_redirect(admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&trn_result=' . ($ok ? 'ok' : 'error')));
+        exit;
+    }
+
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
     private function collectData(array $postPayload, array $fields): array
     {
@@ -1814,6 +1979,10 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_offerts';
         }
 
+        if ($entity === 'ata') {
+            return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_offerts';
+        }
+
         if ($entity === 'document_settings' || $entity === 'document_profile_settings') {
             return 'trn_manage_templates';
         }
@@ -1826,6 +1995,109 @@ final class PageController
         echo '<form method="post" style="display:inline-block; margin-left:6px;">';
         wp_nonce_field('trn_offert_' . $action);
         echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="' . esc_attr($action) . '"><input type="hidden" name="id" value="' . esc_attr((string) $offertId) . '">';
+        submit_button($label, 'secondary', 'submit', false);
+        echo '</form>';
+    }
+
+    private function renderAtaCreateForm(): void
+    {
+        echo '<h2>Create ÄTA draft</h2><form method="post">';
+        wp_nonce_field('trn_ata_create');
+        echo '<input type="hidden" name="trn_entity" value="ata"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>project_id<br><input class="small-text" name="project_id" value=""></label></p>';
+        echo '<p><label>estimate_id (optional)<br><input class="small-text" name="estimate_id" value=""></label></p>';
+        echo '<p><label>offert_id (optional)<br><input class="small-text" name="offert_id" value=""></label></p>';
+        echo '<p><label>invoice_id (optional)<br><input class="small-text" name="invoice_id" value=""></label></p>';
+        echo '<p><label>title<br><input class="regular-text" name="title" value=""></label></p>';
+        echo '<p><label>scope_change_text<br><textarea class="large-text" rows="4" name="scope_change_text"></textarea></label></p>';
+        echo '<p><label>amount_ex_vat_minor<br><input class="small-text" name="amount_ex_vat_minor" value="0"></label></p>';
+        echo '<p><label>vat_rate_percent<br><input class="small-text" name="vat_rate_percent" value="25"></label></p>';
+        echo '<p><label>currency<br><input class="small-text" name="currency" value="SEK"></label></p>';
+        submit_button('Create draft ÄTA');
+        echo '</form>';
+    }
+
+    private function renderAtaDetail(int $ataId): void
+    {
+        $ata = $this->factory->atas()->find($ataId);
+        if (! is_array($ata)) {
+            echo '<h2>ÄTA detail</h2><p>ÄTA not found.</p>';
+
+            return;
+        }
+
+        $pdfUrl = admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&view=ata_pdf');
+        echo '<h2>ÄTA detail</h2>';
+        echo '<p><a href="' . esc_url(admin_url('admin.php?page=trn_offerts')) . '">Back to ÄTA register</a> | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a></p>';
+
+        $this->renderKeyValueTable([
+            'id' => (string) ($ata['id'] ?? ''),
+            'project_id' => (string) ($ata['project_id'] ?? ''),
+            'estimate_id' => (string) ($ata['estimate_id'] ?? ''),
+            'offert_id' => (string) ($ata['offert_id'] ?? ''),
+            'invoice_id' => (string) ($ata['invoice_id'] ?? ''),
+            'document_number' => (string) ($ata['document_number'] ?? ''),
+            'version_no' => (string) ($ata['version_no'] ?? ''),
+            'status' => (string) ($ata['status'] ?? ''),
+            'title' => (string) ($ata['title'] ?? ''),
+            'scope_change_text' => (string) ($ata['scope_change_text'] ?? ''),
+            'amount_ex_vat_minor' => (string) ($ata['amount_ex_vat_minor'] ?? ''),
+            'vat_rate_percent' => (string) ($ata['vat_rate_percent'] ?? ''),
+            'vat_minor' => (string) ($ata['vat_minor'] ?? ''),
+            'total_inc_vat_minor' => (string) ($ata['total_inc_vat_minor'] ?? ''),
+            'currency' => (string) ($ata['currency'] ?? ''),
+            'invoice_link_status' => (string) ($ata['invoice_link_status'] ?? ''),
+            'issued_at' => (string) ($ata['issued_at'] ?? ''),
+            'approved_at' => (string) ($ata['approved_at'] ?? ''),
+            'actor_user_id' => (string) ($ata['actor_user_id'] ?? ''),
+        ]);
+
+        $status = sanitize_key((string) ($ata['status'] ?? ''));
+        if ($status === 'draft') {
+            echo '<h3>Edit draft</h3><form method="post">';
+            wp_nonce_field('trn_ata_update');
+            echo '<input type="hidden" name="trn_entity" value="ata"><input type="hidden" name="trn_action" value="update"><input type="hidden" name="id" value="' . esc_attr((string) $ataId) . '">';
+            echo '<p><label>title<br><input class="regular-text" name="title" value="' . esc_attr((string) ($ata['title'] ?? '')) . '"></label></p>';
+            echo '<p><label>scope_change_text<br><textarea class="large-text" rows="4" name="scope_change_text">' . esc_textarea((string) ($ata['scope_change_text'] ?? '')) . '</textarea></label></p>';
+            echo '<p><label>amount_ex_vat_minor<br><input class="small-text" name="amount_ex_vat_minor" value="' . esc_attr((string) ($ata['amount_ex_vat_minor'] ?? 0)) . '"></label></p>';
+            echo '<p><label>vat_rate_percent<br><input class="small-text" name="vat_rate_percent" value="' . esc_attr((string) ($ata['vat_rate_percent'] ?? 25)) . '"></label></p>';
+            echo '<p><label>currency<br><input class="small-text" name="currency" value="' . esc_attr((string) ($ata['currency'] ?? 'SEK')) . '"></label></p>';
+            submit_button('Update draft', 'secondary', 'submit', false);
+            echo '</form>';
+        }
+
+        echo '<p>';
+        if ($status === 'draft') {
+            $this->renderAtaActionForm($ataId, 'issue', 'Issue');
+        }
+        if ($status === 'issued') {
+            $this->renderAtaActionForm($ataId, 'approve', 'Approve');
+            $this->renderAtaActionForm($ataId, 'reject', 'Reject');
+        }
+        if ($status !== 'archived' && current_user_can('trn_archive_records')) {
+            $this->renderAtaActionForm($ataId, 'archive', 'Archive');
+        }
+        echo '</p>';
+
+        if ($status === 'approved' && (string) ($ata['invoice_link_status'] ?? '') !== 'linked') {
+            echo '<h3>Link approved ÄTA to invoice</h3><form method="post">';
+            wp_nonce_field('trn_ata_link_invoice');
+            echo '<input type="hidden" name="trn_entity" value="ata"><input type="hidden" name="trn_action" value="link_invoice"><input type="hidden" name="id" value="' . esc_attr((string) $ataId) . '">';
+            echo '<p><label>invoice_id<br><input class="small-text" name="invoice_id" value="' . esc_attr((string) ($ata['invoice_id'] ?? '')) . '"></label></p>';
+            submit_button('Link invoice', 'secondary', 'submit', false);
+            echo '</form>';
+        }
+    }
+
+    private function renderAtaActionForm(int $ataId, string $action, string $label): void
+    {
+        echo '<form method="post" style="display:inline-block; margin-right:6px;">';
+        wp_nonce_field('trn_ata_' . $action);
+        echo '<input type="hidden" name="trn_entity" value="ata"><input type="hidden" name="trn_action" value="' . esc_attr($action) . '"><input type="hidden" name="id" value="' . esc_attr((string) $ataId) . '">';
+        if ($action === 'issue' || $action === 'approve') {
+            $tokenAction = $action === 'issue' ? 'issue_ata' : 'approve_ata';
+            $this->renderOperationTokenField($tokenAction, 'ata:' . $ataId);
+        }
         submit_button($label, 'secondary', 'submit', false);
         echo '</form>';
     }
@@ -2450,6 +2722,79 @@ final class PageController
         echo '</form>';
     }
 
+    private function renderAtaRegister(mixed $projectId, mixed $status, mixed $documentNumber): void
+    {
+        $rows = $this->factory->atas()->all();
+        $filteredRows = [];
+        $projectFilter = is_scalar($projectId) ? (int) $projectId : 0;
+        $statusFilter = is_scalar($status) ? sanitize_key((string) $status) : '';
+        $documentFilter = is_scalar($documentNumber) ? trim((string) $documentNumber) : '';
+
+        foreach ($rows as $row) {
+            $rowProjectId = (int) ($row['project_id'] ?? 0);
+            $rowStatus = sanitize_key((string) ($row['status'] ?? ''));
+            $rowDocumentNumber = (string) ($row['document_number'] ?? '');
+            if ($projectFilter > 0 && $rowProjectId !== $projectFilter) {
+                continue;
+            }
+            if ($statusFilter !== '' && $rowStatus !== $statusFilter) {
+                continue;
+            }
+            if ($documentFilter !== '' && stripos($rowDocumentNumber, $documentFilter) === false) {
+                continue;
+            }
+
+            $filteredRows[] = $row;
+        }
+
+        echo '<h2>ÄTA / Change Orders</h2>';
+        $this->renderAtaCreateForm();
+        $this->renderAtaFilterForm($projectId, $status, $documentNumber);
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>project_id</th><th>document_number</th><th>version_no</th><th>status</th><th>invoice_link_status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>approved_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($filteredRows === []) {
+            echo '<tr><td colspan="10">No ÄTA found for current filters.</td></tr>';
+        }
+        foreach ($filteredRows as $ata) {
+            $ataId = (int) ($ata['id'] ?? 0);
+            $detailUrl = admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId);
+            $pdfUrl = admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId . '&view=ata_pdf');
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($ata['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['project_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['invoice_link_status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['total_inc_vat_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['issued_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($ata['approved_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Open/View</a>';
+            echo '<a class="button" href="' . esc_url($pdfUrl) . '" style="margin-left:6px;">Generate / Download PDF</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    private function renderAtaFilterForm(mixed $projectId, mixed $status, mixed $documentNumber): void
+    {
+        $projectValue = is_scalar($projectId) ? (string) $projectId : '';
+        $statusValue = is_scalar($status) ? (string) $status : '';
+        $documentNumberValue = is_scalar($documentNumber) ? (string) $documentNumber : '';
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_offerts">';
+        echo '<label style="margin-right:8px;">ata_project_id <input type="text" name="ata_project_id" value="' . esc_attr($projectValue) . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">ata_status <select name="ata_status">';
+        echo '<option value=""></option>';
+        foreach (['draft', 'issued', 'approved', 'rejected', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected($statusValue, $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">ata_document_number <input type="text" name="ata_document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
+        submit_button('Filter ÄTA', 'secondary', 'submit', false);
+        echo '</form>';
+    }
+
     private function renderDossierFilterForm(int $projectId): void
     {
         $clearUrl = admin_url('admin.php?page=trn_dossier');
@@ -2515,6 +2860,33 @@ final class PageController
             echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert detail</a>';
             echo '<a class="button" href="' . esc_url($offertsUrl) . '" style="margin-left:6px;">Open filtered offerts list for this estimate</a>';
             echo '<a class="button" href="' . esc_url($invoicesUrl) . '" style="margin-left:6px;">Open invoices list filtered by offert/invoice context</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function renderDossierAtasTable(array $rows): void
+    {
+        echo '<h2>ÄTA linked to this project</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>project_id</th><th>document_number</th><th>version_no</th><th>status</th><th>invoice_link_status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>approved_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="10">No ÄTA linked to this project.</td></tr>';
+        }
+        foreach ($rows as $row) {
+            $ataId = (int) ($row['id'] ?? 0);
+            $ataUrl = admin_url('admin.php?page=trn_offerts&ata_id=' . $ataId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['project_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['invoice_link_status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['total_inc_vat_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['approved_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($ataUrl) . '">Open ÄTA detail</a></td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
