@@ -133,7 +133,7 @@ final class InvoicePrintViewModel
                 $header['source_estimate_id'] ?? null,
                 $sourceEstimate['id'] ?? null,
             ]),
-            'source_title' => $this->firstScalarString([
+            'source_estimate_title' => $this->firstScalarString([
                 $metadata['source_estimate_title'] ?? null,
                 $metadata['source_offert_document_number'] ?? null,
                 $header['source_estimate_title'] ?? null,
