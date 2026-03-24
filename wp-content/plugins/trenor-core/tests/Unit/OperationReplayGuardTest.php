@@ -11,16 +11,16 @@ final class OperationReplayGuardTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new class () {
+        trn_set_test_wpdb(new class() {
             public string $prefix = 'wp_';
 
             /** @var array<int, array<string, mixed>> */
             public array $insertHistory = [];
 
-            /** @var array<int, string> */
-            public array $queries = [];
+            /** @var array<int, array<string, mixed>> */
+            public array $updateHistory = [];
 
-            public int $nextQueryResult = 1;
+            public int $nextUpdateResult = 1;
 
             public function insert(string $table, array $data, array $format = []): int
             {
@@ -29,21 +29,17 @@ final class OperationReplayGuardTest extends TestCase
                 return 1;
             }
 
-            public function prepare(string $query, ...$args): string
+            public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
             {
-                $escaped = array_map(
-                    static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
-                    $args
-                );
+                $this->updateHistory[] = [
+                    'table' => $table,
+                    'data' => $data,
+                    'where' => $where,
+                    'format' => $format,
+                    'where_format' => $whereFormat,
+                ];
 
-                return vsprintf($query, $escaped);
-            }
-
-            public function query(string $query): int
-            {
-                $this->queries[] = $query;
-
-                return $this->nextQueryResult;
+                return $this->nextUpdateResult;
             }
         });
     }
@@ -63,10 +59,13 @@ final class OperationReplayGuardTest extends TestCase
         self::assertSame('offert:12', $wpdb->insertHistory[0]['data']['scope_key']);
 
         self::assertTrue($guard->consumeToken($token, 'issue_invoice', 'offert:12', 55));
-        self::assertCount(1, $wpdb->queries);
-        self::assertStringContainsString("consumed_at IS NULL", $wpdb->queries[0]);
+        self::assertCount(1, $wpdb->updateHistory);
+        self::assertSame('wp_trn_operation_tokens', $wpdb->updateHistory[0]['table']);
+        self::assertSame('issue_invoice', $wpdb->updateHistory[0]['where']['action_name']);
+        self::assertSame('offert:12', $wpdb->updateHistory[0]['where']['scope_key']);
+        self::assertNull($wpdb->updateHistory[0]['where']['consumed_at']);
 
-        $wpdb->nextQueryResult = 0;
+        $wpdb->nextUpdateResult = 0;
         self::assertFalse($guard->consumeToken($token, 'issue_invoice', 'offert:12', 55));
     }
 
@@ -79,7 +78,7 @@ final class OperationReplayGuardTest extends TestCase
         $token = $guard->issueToken('record_payment', 'invoice:77', 5);
 
         self::assertTrue($guard->consumeToken($token, 'record_payment', 'invoice:77', 5));
-        self::assertStringContainsString("action_name = 'record_payment'", $wpdb->queries[0]);
-        self::assertStringContainsString("scope_key = 'invoice:77'", $wpdb->queries[0]);
+        self::assertSame('record_payment', $wpdb->updateHistory[0]['where']['action_name']);
+        self::assertSame('invoice:77', $wpdb->updateHistory[0]['where']['scope_key']);
     }
 }
