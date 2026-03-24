@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
-final class EstimateSnapshotRepository extends BaseRepository
+class EstimateSnapshotRepository extends BaseRepository
 {
     protected function table(): string
     {
