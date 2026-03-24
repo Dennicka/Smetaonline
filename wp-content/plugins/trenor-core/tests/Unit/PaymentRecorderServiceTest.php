@@ -112,15 +112,30 @@ final class PaymentRecorderServiceTest extends TestCase
      * @param array<string, mixed> $invoice
      * @param array<int, array<string, mixed>> $payments
      */
-    private function buildServiceWithInvoice(array $invoice, array $payments): PaymentServiceHarness
+    private function buildServiceWithInvoice(array $invoice, array $payments): object
     {
-        $harness = new PaymentServiceHarness();
+        $harness = new class () {
+            public PaymentRecorderService $service;
+
+            public InvoiceStatusAccess $invoiceRepository;
+
+            public InvoicePaymentAccess $paymentRepository;
+
+            /** @var array<int, string> */
+            public array $events = [];
+
+            /** @param array<string, mixed> $payload */
+            public function record(array $payload): int
+            {
+                return $this->service->record($payload);
+            }
+        };
 
         $harness->invoiceRepository = new class ($invoice, $harness) implements InvoiceStatusAccess {
             public string $lastStatus = '';
 
             /** @param array<string, mixed> $invoice */
-            public function __construct(private array $invoice, private PaymentServiceHarness $harness)
+            public function __construct(private array $invoice, private object $harness)
             {
             }
 
@@ -144,7 +159,7 @@ final class PaymentRecorderServiceTest extends TestCase
 
         $harness->paymentRepository = new class ($payments, $harness) implements InvoicePaymentAccess {
             /** @param array<int, array<string, mixed>> $rows */
-            public function __construct(private array $rows, private PaymentServiceHarness $harness)
+            public function __construct(private array $rows, private object $harness)
             {
             }
 
@@ -174,23 +189,5 @@ final class PaymentRecorderServiceTest extends TestCase
         );
 
         return $harness;
-    }
-}
-
-final class PaymentServiceHarness
-{
-    public PaymentRecorderService $service;
-
-    public InvoiceStatusAccess $invoiceRepository;
-
-    public InvoicePaymentAccess $paymentRepository;
-
-    /** @var array<int, string> */
-    public array $events = [];
-
-    /** @param array<string, mixed> $payload */
-    public function record(array $payload): int
-    {
-        return $this->service->record($payload);
     }
 }
