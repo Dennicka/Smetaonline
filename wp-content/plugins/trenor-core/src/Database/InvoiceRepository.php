@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Trenor\Core\Database;
 
 use Trenor\Core\Domain\Service\InvoiceVersionProvider;
+use Trenor\Core\Domain\Service\InvoiceStatusAccess;
 
-final class InvoiceRepository extends BaseRepository implements InvoiceVersionProvider
+final class InvoiceRepository extends BaseRepository implements InvoiceVersionProvider, InvoiceStatusAccess
 {
     protected function table(): string
     {
@@ -80,5 +81,34 @@ final class InvoiceRepository extends BaseRepository implements InvoiceVersionPr
         $max = $wpdb->get_var($wpdb->prepare("SELECT MAX(version_no) FROM {$this->table()} WHERE offert_id = %d", $offertId));
 
         return ((int) $max) + 1;
+    }
+
+    public function transitionStatus(int $id, string $status): bool
+    {
+        global $wpdb;
+
+        $normalizedStatus = sanitize_key($status);
+        if (! in_array($normalizedStatus, ['issued', 'partially_paid', 'paid', 'archived'], true)) {
+            return false;
+        }
+
+        $updated = $wpdb->update(
+            $this->table(),
+            [
+                'status' => $normalizedStatus,
+                'updated_at' => current_time('mysql', true),
+            ],
+            ['id' => $id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        if ($updated !== false && $updated > 0) {
+            $this->auditLogger->log($this->entityType(), $id, 'transition_status', ['status' => $normalizedStatus]);
+
+            return true;
+        }
+
+        return false;
     }
 }

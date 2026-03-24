@@ -6,13 +6,16 @@ namespace Trenor\Core\Admin;
 
 use RuntimeException;
 use Trenor\Core\Database\RepositoryFactory;
+use Trenor\Core\Domain\Exception\PaymentRegistrationException;
 use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 use Trenor\Core\Domain\Exception\EstimateCalculationException;
 use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
+use Trenor\Core\Domain\Service\InvoicePaymentSummaryCalculator;
 use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
+use Trenor\Core\Domain\Service\PaymentRecorderService;
 
 final class PageController
 {
@@ -95,6 +98,10 @@ final class PageController
 
         if ($entity === 'invoice') {
             $this->handleInvoice($action, $postPayload);
+        }
+
+        if ($entity === 'invoice_payment') {
+            $this->handleInvoicePayment($action, $postPayload);
         }
     }
 
@@ -331,6 +338,45 @@ final class PageController
         }
 
         echo '</div>';
+    }
+
+    public function renderPayments(): void
+    {
+        if (! current_user_can('trn_record_payments')) {
+            wp_die('Forbidden');
+        }
+
+        $invoiceIdFilter = filter_input(INPUT_GET, 'invoice_id', FILTER_VALIDATE_INT);
+        $invoiceIdFilter = $invoiceIdFilter !== false && $invoiceIdFilter !== null ? (int) $invoiceIdFilter : 0;
+        $payments = $this->paymentRowsForList($invoiceIdFilter);
+
+        echo '<div class="wrap"><h1>Betalningar / Payments / Оплаты</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<form method="get" style="margin:12px 0;">';
+        echo '<input type="hidden" name="page" value="trn_payments">';
+        echo '<label>invoice_id <input class="regular-text" name="invoice_id" value="' . esc_attr($invoiceIdFilter > 0 ? (string) $invoiceIdFilter : '') . '"></label> ';
+        submit_button('Filter', 'secondary', 'submit', false);
+        if ($invoiceIdFilter > 0) {
+            echo ' <a class="button" href="' . esc_url(admin_url('admin.php?page=trn_payments')) . '">Reset</a>';
+        }
+        echo '</form>';
+
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>payment_date</th><th>amount_minor</th><th>currency</th><th>method</th><th>reference</th><th>created_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($payments as $payment) {
+            $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) ($payment['invoice_id'] ?? 0));
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($payment['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['invoice_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['payment_date'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['amount_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['currency'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['method'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['reference'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['created_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($invoiceUrl) . '">Open invoice</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table></div>';
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
@@ -806,6 +852,40 @@ final class PageController
         exit;
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleInvoicePayment(string $action, array $postPayload): void
+    {
+        if ($action !== 'create') {
+            return;
+        }
+
+        $invoiceId = (int) $this->postValue($postPayload, 'invoice_id');
+        $service = new PaymentRecorderService(
+            $this->factory->invoices(),
+            $this->factory->invoicePayments(),
+            new InvoicePaymentSummaryCalculator()
+        );
+
+        try {
+            $service->record([
+                'invoice_id' => $invoiceId,
+                'payment_date' => $this->postValue($postPayload, 'payment_date'),
+                'amount_minor' => (int) $this->postValue($postPayload, 'amount_minor'),
+                'currency' => $this->postValue($postPayload, 'currency'),
+                'method' => $this->postValue($postPayload, 'method'),
+                'reference' => $this->postValue($postPayload, 'reference'),
+                'note' => $this->postValue($postPayload, 'note'),
+                'actor_user_id' => get_current_user_id(),
+            ]);
+        } catch (PaymentRegistrationException $exception) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+            exit;
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&trn_result=ok&trn_msg=' . rawurlencode('Payment recorded.')));
+        exit;
+    }
+
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
     private function collectData(array $postPayload, array $fields): array
     {
@@ -877,6 +957,10 @@ final class PageController
             return 'trn_issue_invoices';
         }
 
+        if ($entity === 'invoice_payment') {
+            return 'trn_record_payments';
+        }
+
         return 'read';
     }
 
@@ -945,6 +1029,73 @@ final class PageController
 
         $snapshot = (new OffertSnapshotReader())->read($invoice);
         (new InvoiceDetailRenderer())->render($invoice, $snapshot);
+        $this->renderInvoicePaymentSection($invoice);
+    }
+
+    /** @param array<string, mixed> $invoice */
+    private function renderInvoicePaymentSection(array $invoice): void
+    {
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+        if ($invoiceId <= 0) {
+            return;
+        }
+
+        $payments = $this->factory->invoicePayments()->byInvoice($invoiceId);
+        $summary = (new InvoicePaymentSummaryCalculator())->calculate($invoice, $payments);
+
+        echo '<h2>Payment summary</h2>';
+        echo '<table class="widefat striped"><tbody>';
+        echo '<tr><th>invoice_total_minor</th><td>' . esc_html((string) $summary['invoice_total_minor']) . '</td></tr>';
+        echo '<tr><th>paid_total_minor</th><td>' . esc_html((string) $summary['paid_total_minor']) . '</td></tr>';
+        echo '<tr><th>outstanding_minor</th><td>' . esc_html((string) $summary['outstanding_minor']) . '</td></tr>';
+        echo '<tr><th>payment_count</th><td>' . esc_html((string) $summary['payment_count']) . '</td></tr>';
+        echo '<tr><th>current_status</th><td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td></tr>';
+        echo '<tr><th>computed_status</th><td>' . esc_html((string) $summary['computed_status']) . '</td></tr>';
+        echo '</tbody></table>';
+
+        echo '<h2>Payments</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>payment_date</th><th>amount_minor</th><th>currency</th><th>method</th><th>reference</th><th>note</th></tr></thead><tbody>';
+        foreach ($payments as $payment) {
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($payment['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['payment_date'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['amount_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['currency'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['method'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['reference'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($payment['note'] ?? '')) . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+
+        $status = (string) ($invoice['status'] ?? '');
+        if (! current_user_can('trn_record_payments') || ! in_array($status, ['issued', 'partially_paid'], true)) {
+            return;
+        }
+
+        echo '<h2>Record payment</h2><form method="post">';
+        wp_nonce_field('trn_invoice_payment_create');
+        echo '<input type="hidden" name="trn_entity" value="invoice_payment">';
+        echo '<input type="hidden" name="trn_action" value="create">';
+        echo '<input type="hidden" name="invoice_id" value="' . esc_attr((string) $invoiceId) . '">';
+        echo '<p><label>payment_date<br><input class="regular-text" name="payment_date" value="' . esc_attr((string) current_time('mysql', true)) . '"></label></p>';
+        echo '<p><label>amount_minor<br><input class="regular-text" name="amount_minor" value=""></label></p>';
+        echo '<p><label>currency<br><input class="regular-text" name="currency" value="' . esc_attr((string) ($invoice['currency'] ?? 'SEK')) . '"></label></p>';
+        echo '<p><label>method<br><input class="regular-text" name="method" value="manual"></label></p>';
+        echo '<p><label>reference<br><input class="regular-text" name="reference" value=""></label></p>';
+        echo '<p><label>note<br><textarea class="large-text" name="note" rows="3"></textarea></label></p>';
+        submit_button('Record payment');
+        echo '</form>';
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function paymentRowsForList(int $invoiceIdFilter): array
+    {
+        if ($invoiceIdFilter > 0) {
+            return $this->factory->invoicePayments()->byInvoice($invoiceIdFilter);
+        }
+
+        return $this->factory->invoicePayments()->all();
     }
 
     private function renderAdminNoticeFromRequest(): void
