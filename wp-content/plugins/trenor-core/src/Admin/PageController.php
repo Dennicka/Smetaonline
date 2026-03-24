@@ -318,15 +318,41 @@ final class PageController
             return;
         }
 
-        $invoices = $this->factory->invoices()->all();
+        $rawFilters = [
+            'invoice_id' => filter_input(INPUT_GET, 'invoice_id', FILTER_UNSAFE_RAW),
+            'offert_id' => filter_input(INPUT_GET, 'offert_id', FILTER_UNSAFE_RAW),
+            'estimate_id' => filter_input(INPUT_GET, 'estimate_id', FILTER_UNSAFE_RAW),
+            'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
+            'document_number' => filter_input(INPUT_GET, 'document_number', FILTER_UNSAFE_RAW),
+        ];
+        $invoiceFilter = new InvoiceListFilter();
+        $allInvoices = $this->factory->invoices()->all();
+        $invoices = $invoiceFilter->apply($allInvoices, $rawFilters);
+        $summary = (new InvoiceListSummary())->summarize($invoices);
+        $formFilters = $invoiceFilter->normalizedForForm($rawFilters);
+        $calculator = new InvoicePaymentSummaryCalculator();
+        $invoicePayments = $this->factory->invoicePayments();
 
         echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
         $this->renderAdminNoticeFromRequest();
-        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        $this->renderInvoiceFilterForm($formFilters);
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) $summary['total_rows']) . ' | ';
+        echo '<strong>Issued:</strong> ' . esc_html((string) $summary['issued']) . ' | ';
+        echo '<strong>Partially paid:</strong> ' . esc_html((string) $summary['partially_paid']) . ' | ';
+        echo '<strong>Paid:</strong> ' . esc_html((string) $summary['paid']) . ' | ';
+        echo '<strong>Archived:</strong> ' . esc_html((string) $summary['archived']) . '</p>';
+
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>computed_status</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($invoices === []) {
+            echo '<tr><td colspan="13">No invoices found for current filters.</td></tr>';
+        }
         foreach ($invoices as $invoice) {
             $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id']);
             $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id'] . '&view=print');
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $invoice['offert_id']);
+            $paymentRows = $invoicePayments->byInvoice((int) ($invoice['id'] ?? 0));
+            $paymentSummary = $calculator->calculate($invoice, $paymentRows);
+            $currency = (string) ($invoice['currency'] ?? 'SEK');
             echo '<tr>';
             echo '<td>' . esc_html((string) $invoice['id']) . '</td>';
             echo '<td>' . esc_html((string) $invoice['offert_id']) . '</td>';
@@ -334,7 +360,11 @@ final class PageController
             echo '<td>' . esc_html((string) $invoice['document_number']) . '</td>';
             echo '<td>' . esc_html((string) $invoice['version_no']) . '</td>';
             echo '<td>' . esc_html((string) $invoice['status']) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, (string) ($invoice['currency'] ?? 'SEK'))) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, $currency)) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($paymentSummary['paid_total_minor'] ?? null, $currency)) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($paymentSummary['outstanding_minor'] ?? null, $currency)) . '</td>';
+            echo '<td>' . esc_html((string) ($paymentSummary['payment_count'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($paymentSummary['computed_status'] ?? 'issued')) . '</td>';
             echo '<td>' . esc_html((string) $invoice['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
             echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
@@ -1304,6 +1334,28 @@ final class PageController
         }
         echo '</select></label>';
         echo '<label style="margin-right:8px;">document_number <input type="text" name="document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
+        submit_button('Filter', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
+        echo '</form>';
+    }
+
+    /** @param array<string, string> $filters */
+    private function renderInvoiceFilterForm(array $filters): void
+    {
+        $clearUrl = admin_url('admin.php?page=trn_invoices');
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_invoices">';
+        echo '<label style="margin-right:8px;">invoice_id <input type="text" name="invoice_id" value="' . esc_attr($filters['invoice_id'] ?? '') . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">offert_id <input type="text" name="offert_id" value="' . esc_attr($filters['offert_id'] ?? '') . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">estimate_id <input type="text" name="estimate_id" value="' . esc_attr($filters['estimate_id'] ?? '') . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">status <select name="status">';
+        echo '<option value=""></option>';
+        foreach (['issued', 'partially_paid', 'paid', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected($filters['status'] ?? '', $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">document_number <input type="text" name="document_number" value="' . esc_attr($filters['document_number'] ?? '') . '" class="regular-text"></label>';
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';
