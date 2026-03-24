@@ -6,6 +6,13 @@ namespace Trenor\Core\Admin;
 
 final class InvoicePrintViewModel
 {
+    private DocumentDateCalculator $dateCalculator;
+
+    public function __construct(?DocumentDateCalculator $dateCalculator = null)
+    {
+        $this->dateCalculator = $dateCalculator ?? new DocumentDateCalculator();
+    }
+
     /**
      * @param array<string, mixed> $invoice
      * @param array{
@@ -27,17 +34,15 @@ final class InvoicePrintViewModel
      * } $context
      * @return array{
      *     document: array<string, string>,
-     *     context: array<string, string>,
      *     recipient: array<string, string>,
      *     project_object: array<string, string>,
-     *     commercial_summary: array<string, string>,
-     *     totals: array<int, array{label: string, minor: string}>,
+     *     invoice_summary: array<string, string>,
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
      *     payment_summary: array<string, string>,
      *     payments: array<int, array{payment_date: string, amount_minor: string, currency: string, method: string, reference: string, note: string}>,
      *     issuer: array<string, string>,
-     *     commercial_terms: array<string, string>,
+     *     payment_terms: array<string, string>,
      *     currency: string
      * }
      */
@@ -61,23 +66,21 @@ final class InvoicePrintViewModel
             $sourceEstimate['currency'] ?? null,
         ]);
 
-        $document = $this->buildDocumentSection($invoice, $header, $metadata, $currency);
+        $document = $this->buildDocumentSection($invoice, $header, $metadata, $documentProfile, $currency);
         $contextSection = $this->buildContextSection($invoice, $header, $metadata, $sourceOffert, $sourceEstimate, $project, $property, $client);
         $paymentSummarySection = $this->buildPaymentSummarySection($invoice, $paymentSummary);
 
         return [
             'document' => $document,
-            'context' => $contextSection,
             'recipient' => $this->buildRecipientSection($contextSection),
             'project_object' => $this->buildProjectObjectSection($contextSection),
-            'commercial_summary' => $this->buildCommercialSummarySection($document, $contextSection, $paymentSummarySection),
-            'totals' => $this->buildTotalsSection($totals, $invoice),
+            'invoice_summary' => $this->buildInvoiceSummarySection($totals, $invoice, $paymentSummarySection),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
             'payment_summary' => $paymentSummarySection,
             'payments' => $this->buildPaymentRows($context['payments'] ?? [], $currency),
             'issuer' => $this->buildIssuerSection($documentProfile),
-            'commercial_terms' => $this->buildCommercialTermsSection($documentProfile),
+            'payment_terms' => $this->buildPaymentTermsSection($documentProfile, $document),
             'currency' => $currency,
         ];
     }
@@ -86,10 +89,24 @@ final class InvoicePrintViewModel
      * @param array<string, mixed> $invoice
      * @param array<string, mixed> $header
      * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $profile
      * @return array<string, string>
      */
-    private function buildDocumentSection(array $invoice, array $header, array $metadata, string $currency): array
-    {
+    private function buildDocumentSection(
+        array $invoice,
+        array $header,
+        array $metadata,
+        array $profile,
+        string $currency
+    ): array {
+        $issuedAt = $this->firstScalarString([
+            $invoice['issued_at'] ?? null,
+            $metadata['issued_at_utc'] ?? null,
+            $header['issued_at_utc'] ?? null,
+        ]);
+
+        $paymentTermsDays = $this->firstScalarString([$profile['payment_terms_days'] ?? null]);
+
         return [
             'document_number' => $this->firstScalarString([
                 $invoice['document_number'] ?? null,
@@ -102,11 +119,8 @@ final class InvoicePrintViewModel
                 $header['invoice_version_no'] ?? null,
             ]),
             'status' => $this->firstScalarString([$invoice['status'] ?? null]),
-            'issued_at' => $this->firstScalarString([
-                $invoice['issued_at'] ?? null,
-                $metadata['issued_at_utc'] ?? null,
-                $header['issued_at_utc'] ?? null,
-            ]),
+            'issued_at' => $issuedAt,
+            'payment_due_date' => $this->dateCalculator->addDays($issuedAt, $paymentTermsDays),
             'currency' => $currency,
             'vat_rate_percent' => $this->firstScalarString([
                 $invoice['vat_rate_percent'] ?? null,
@@ -185,6 +199,8 @@ final class InvoicePrintViewModel
     private function buildProjectObjectSection(array $contextSection): array
     {
         return [
+            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
+            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
             'project_name' => $contextSection['project_name'] ?? '',
             'project_code' => $contextSection['project_code'] ?? '',
             'property_name' => $contextSection['property_name'] ?? '',
@@ -195,53 +211,23 @@ final class InvoicePrintViewModel
     }
 
     /**
-     * @param array<string, string> $document
-     * @param array<string, string> $contextSection
+     * @param array<string, mixed> $totals
+     * @param array<string, mixed> $invoice
      * @param array<string, string> $paymentSummarySection
      * @return array<string, string>
      */
-    private function buildCommercialSummarySection(
-        array $document,
-        array $contextSection,
-        array $paymentSummarySection
-    ): array {
-        return [
-            'source_offert_id' => $contextSection['source_offert_id'] ?? '',
-            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
-            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
-            'document_number' => $document['document_number'] ?? '',
-            'version_no' => $document['version_no'] ?? '',
-            'issued_at' => $document['issued_at'] ?? '',
-            'currency' => $document['currency'] ?? '',
-            'vat_rate_percent' => $document['vat_rate_percent'] ?? '',
-            'payment_status_summary' => $paymentSummarySection['computed_status'] ?? '',
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $totals
-     * @param array<string, mixed> $invoice
-     * @return array<int, array{label: string, minor: string}>
-     */
-    private function buildTotalsSection(array $totals, array $invoice): array
+    private function buildInvoiceSummarySection(array $totals, array $invoice, array $paymentSummarySection): array
     {
-        $values = [
-            'labour_total_minor' => $totals['labour_total_minor'] ?? null,
-            'materials_total_minor' => $totals['materials_total_minor'] ?? null,
-            'subtotal_ex_vat_minor' => $totals['subtotal_ex_vat_minor'] ?? null,
-            'vat_minor' => $totals['vat_minor'] ?? null,
-            'total_inc_vat_minor' => $totals['total_inc_vat_minor'] ?? ($invoice['total_inc_vat_minor'] ?? null),
+        return [
+            'labour_total' => $this->toScalarString($totals['labour_total_minor'] ?? null),
+            'materials_total' => $this->toScalarString($totals['materials_total_minor'] ?? null),
+            'subtotal_ex_vat' => $this->toScalarString($totals['subtotal_ex_vat_minor'] ?? null),
+            'vat' => $this->toScalarString($totals['vat_minor'] ?? null),
+            'total_inc_vat' => $this->toScalarString($totals['total_inc_vat_minor'] ?? ($invoice['total_inc_vat_minor'] ?? null)),
+            'paid_total' => $this->toScalarString($paymentSummarySection['paid_total_minor'] ?? ''),
+            'outstanding' => $this->toScalarString($paymentSummarySection['outstanding_minor'] ?? ''),
+            'computed_status' => $this->toScalarString($paymentSummarySection['computed_status'] ?? ''),
         ];
-
-        $rows = [];
-        foreach ($values as $label => $value) {
-            $rows[] = [
-                'label' => $label,
-                'minor' => $this->toScalarString($value),
-            ];
-        }
-
-        return $rows;
     }
 
     /**
@@ -375,12 +361,18 @@ final class InvoicePrintViewModel
         ];
     }
 
-    /** @param array<string, mixed> $profile @return array<string, string> */
-    private function buildCommercialTermsSection(array $profile): array
+    /** @param array<string, mixed> $profile @param array<string, string> $document @return array<string, string> */
+    private function buildPaymentTermsSection(array $profile, array $document): array
     {
         return [
-            'payment_terms_days' => $this->firstScalarString([$profile['payment_terms_days'] ?? null]),
             'invoice_note' => $this->firstScalarString([$profile['invoice_note'] ?? null]),
+            'payment_terms_days' => $this->firstScalarString([$profile['payment_terms_days'] ?? null]),
+            'payment_due_date' => $document['payment_due_date'] ?? '',
+            'bankgiro' => $this->firstScalarString([$profile['bankgiro'] ?? null]),
+            'plusgiro' => $this->firstScalarString([$profile['plusgiro'] ?? null]),
+            'swish' => $this->firstScalarString([$profile['swish'] ?? null]),
+            'iban' => $this->firstScalarString([$profile['iban'] ?? null]),
+            'bic' => $this->firstScalarString([$profile['bic'] ?? null]),
         ];
     }
 

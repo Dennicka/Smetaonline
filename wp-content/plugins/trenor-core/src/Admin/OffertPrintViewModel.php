@@ -6,6 +6,13 @@ namespace Trenor\Core\Admin;
 
 final class OffertPrintViewModel
 {
+    private DocumentDateCalculator $dateCalculator;
+
+    public function __construct(?DocumentDateCalculator $dateCalculator = null)
+    {
+        $this->dateCalculator = $dateCalculator ?? new DocumentDateCalculator();
+    }
+
     /**
      * @param array<string, mixed> $offert
      * @param array{
@@ -24,15 +31,13 @@ final class OffertPrintViewModel
      * } $context
      * @return array{
      *     document: array<string, string>,
-     *     context: array<string, string>,
      *     recipient: array<string, string>,
      *     project_object: array<string, string>,
      *     commercial_summary: array<string, string>,
-     *     totals: array<int, array{label: string, minor: string}>,
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
      *     issuer: array<string, string>,
-     *     commercial_terms: array<string, string>,
+     *     terms_acceptance: array<string, string>,
      *     currency: string
      * }
      */
@@ -53,20 +58,18 @@ final class OffertPrintViewModel
             $estimate['currency'] ?? null,
         ]);
 
-        $document = $this->buildDocumentSection($offert, $header, $metadata, $currency);
+        $document = $this->buildDocumentSection($offert, $header, $metadata, $documentProfile, $currency);
         $contextSection = $this->buildContextSection($offert, $header, $metadata, $estimate, $project, $property, $client);
 
         return [
             'document' => $document,
-            'context' => $contextSection,
             'recipient' => $this->buildRecipientSection($contextSection),
             'project_object' => $this->buildProjectObjectSection($contextSection),
-            'commercial_summary' => $this->buildCommercialSummarySection($document, $contextSection),
-            'totals' => $this->buildTotalsSection($totals, $offert),
+            'commercial_summary' => $this->buildCommercialSummarySection($totals, $offert),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
             'issuer' => $this->buildIssuerSection($documentProfile),
-            'commercial_terms' => $this->buildCommercialTermsSection($documentProfile),
+            'terms_acceptance' => $this->buildTermsAcceptanceSection($documentProfile, $document),
             'currency' => $currency,
         ];
     }
@@ -75,10 +78,24 @@ final class OffertPrintViewModel
      * @param array<string, mixed> $offert
      * @param array<string, mixed> $header
      * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $profile
      * @return array<string, string>
      */
-    private function buildDocumentSection(array $offert, array $header, array $metadata, string $currency): array
-    {
+    private function buildDocumentSection(
+        array $offert,
+        array $header,
+        array $metadata,
+        array $profile,
+        string $currency
+    ): array {
+        $issuedAt = $this->firstScalarString([
+            $offert['issued_at'] ?? null,
+            $metadata['issued_at_utc'] ?? null,
+            $header['issued_at_utc'] ?? null,
+        ]);
+
+        $offertValidDays = $this->firstScalarString([$profile['offert_valid_days'] ?? null]);
+
         return [
             'document_number' => $this->firstScalarString([
                 $offert['document_number'] ?? null,
@@ -91,11 +108,8 @@ final class OffertPrintViewModel
                 $header['offert_version_no'] ?? null,
             ]),
             'status' => $this->firstScalarString([$offert['status'] ?? null]),
-            'issued_at' => $this->firstScalarString([
-                $offert['issued_at'] ?? null,
-                $metadata['issued_at_utc'] ?? null,
-                $header['issued_at_utc'] ?? null,
-            ]),
+            'issued_at' => $issuedAt,
+            'offert_valid_until' => $this->dateCalculator->addDays($issuedAt, $offertValidDays),
             'currency' => $currency,
             'vat_rate_percent' => $this->firstScalarString([
                 $offert['vat_rate_percent'] ?? null,
@@ -164,6 +178,8 @@ final class OffertPrintViewModel
     private function buildProjectObjectSection(array $contextSection): array
     {
         return [
+            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
+            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
             'project_name' => $contextSection['project_name'] ?? '',
             'project_code' => $contextSection['project_code'] ?? '',
             'property_name' => $contextSection['property_name'] ?? '',
@@ -174,47 +190,19 @@ final class OffertPrintViewModel
     }
 
     /**
-     * @param array<string, string> $document
-     * @param array<string, string> $contextSection
-     * @return array<string, string>
-     */
-    private function buildCommercialSummarySection(array $document, array $contextSection): array
-    {
-        return [
-            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
-            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
-            'document_number' => $document['document_number'] ?? '',
-            'version_no' => $document['version_no'] ?? '',
-            'issued_at' => $document['issued_at'] ?? '',
-            'currency' => $document['currency'] ?? '',
-            'vat_rate_percent' => $document['vat_rate_percent'] ?? '',
-        ];
-    }
-
-    /**
      * @param array<string, mixed> $totals
      * @param array<string, mixed> $offert
-     * @return array<int, array{label: string, minor: string}>
+     * @return array<string, string>
      */
-    private function buildTotalsSection(array $totals, array $offert): array
+    private function buildCommercialSummarySection(array $totals, array $offert): array
     {
-        $values = [
-            'labour_total_minor' => $totals['labour_total_minor'] ?? null,
-            'materials_total_minor' => $totals['materials_total_minor'] ?? null,
-            'subtotal_ex_vat_minor' => $totals['subtotal_ex_vat_minor'] ?? null,
-            'vat_minor' => $totals['vat_minor'] ?? null,
-            'total_inc_vat_minor' => $totals['total_inc_vat_minor'] ?? ($offert['total_inc_vat_minor'] ?? null),
+        return [
+            'labour_total' => $this->toScalarString($totals['labour_total_minor'] ?? null),
+            'materials_total' => $this->toScalarString($totals['materials_total_minor'] ?? null),
+            'subtotal_ex_vat' => $this->toScalarString($totals['subtotal_ex_vat_minor'] ?? null),
+            'vat' => $this->toScalarString($totals['vat_minor'] ?? null),
+            'total_inc_vat' => $this->toScalarString($totals['total_inc_vat_minor'] ?? ($offert['total_inc_vat_minor'] ?? null)),
         ];
-
-        $rows = [];
-        foreach ($values as $label => $value) {
-            $rows[] = [
-                'label' => $label,
-                'minor' => $this->toScalarString($value),
-            ];
-        }
-
-        return $rows;
     }
 
     /**
@@ -278,7 +266,6 @@ final class OffertPrintViewModel
         return $rows;
     }
 
-
     /** @param array<string, mixed> $profile @return array<string, string> */
     private function buildIssuerSection(array $profile): array
     {
@@ -301,12 +288,16 @@ final class OffertPrintViewModel
         ];
     }
 
-    /** @param array<string, mixed> $profile @return array<string, string> */
-    private function buildCommercialTermsSection(array $profile): array
+    /** @param array<string, mixed> $profile @param array<string, string> $document @return array<string, string> */
+    private function buildTermsAcceptanceSection(array $profile, array $document): array
     {
         return [
-            'offert_valid_days' => $this->firstScalarString([$profile['offert_valid_days'] ?? null]),
             'offert_note' => $this->firstScalarString([$profile['offert_note'] ?? null]),
+            'offert_valid_days' => $this->firstScalarString([$profile['offert_valid_days'] ?? null]),
+            'offert_valid_until' => $document['offert_valid_until'] ?? '',
+            'accepted_by' => '',
+            'accepted_at' => '',
+            'signature' => '',
         ];
     }
 

@@ -42,8 +42,9 @@ final class OffertPrintRenderer
 
         echo '<style>
         .trn-print-toolbar { margin: 12px 0 20px; display:flex; gap:8px; flex-wrap:wrap; }
+        .trn-print-doc { max-width: 960px; }
         .trn-print-doc h2 { margin-top: 0; }
-        .trn-print-doc h3 { margin: 20px 0 8px; }
+        .trn-print-doc h3 { margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
         .trn-print-doc table { width:100%; border-collapse: collapse; margin-bottom: 14px; }
         .trn-print-doc th, .trn-print-doc td { border:1px solid #ddd; padding:7px 8px; text-align:left; vertical-align:top; }
         .trn-print-doc th { background:#f6f7f7; width:220px; }
@@ -62,35 +63,74 @@ final class OffertPrintRenderer
         echo '</div>';
 
         echo '<div class="trn-print-doc">';
-        echo '<h2>Printable offert document</h2>';
-        echo '<h3>Commercial summary</h3>';
-        $this->renderKeyValueTable($view['commercial_summary']);
+        echo '<h2>Offert</h2>';
 
-        echo '<h3>Recipient / Customer</h3>';
-        $this->renderKeyValueTable($view['recipient']);
+        echo '<h3>1. Document header</h3>';
+        $this->renderKeyValueTable($view['document'], [
+            'document_number' => 'Document number',
+            'version_no' => 'Version',
+            'status' => 'Status',
+            'issued_at' => 'Issued at',
+            'offert_valid_until' => 'Offert valid until',
+            'currency' => 'Currency',
+            'vat_rate_percent' => 'VAT rate (%)',
+        ]);
 
-        echo '<h3>Project / Object</h3>';
-        $this->renderKeyValueTable($view['project_object']);
+        echo '<h3>2. Issuer block</h3>';
+        $this->renderKeyValueTable($view['issuer'], [
+            'company_name' => 'Company name',
+            'org_number' => 'Org number',
+            'vat_number' => 'VAT number',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'website' => 'Website',
+            'address_line' => 'Address',
+            'postal_code' => 'Postal code',
+            'city' => 'City',
+            'country' => 'Country',
+            'bankgiro' => 'Bankgiro',
+            'plusgiro' => 'Plusgiro',
+            'swish' => 'Swish',
+            'iban' => 'IBAN',
+            'bic' => 'BIC',
+        ]);
 
-        echo '<h3>Totals</h3>';
-        $this->renderTotalsTable($view['totals'], $view['currency']);
+        echo '<h3>3. Recipient block</h3>';
+        $this->renderKeyValueTable($view['recipient'], [
+            'client_name' => 'Client name',
+            'client_org_number' => 'Client org number',
+            'client_email' => 'Client email',
+            'client_phone' => 'Client phone',
+        ]);
 
-        echo '<h3>Labour lines</h3>';
+        echo '<h3>4. Project/property block</h3>';
+        $this->renderKeyValueTable($view['project_object'], [
+            'source_estimate_id' => 'Source estimate ID',
+            'source_estimate_title' => 'Source estimate title',
+            'project_name' => 'Project name',
+            'project_code' => 'Project code',
+            'property_name' => 'Property name',
+            'property_address' => 'Property address',
+            'property_city' => 'Property city',
+            'property_postal_code' => 'Property postal code',
+        ]);
+
+        echo '<h3>5. Commercial summary</h3>';
+        $this->renderCommercialSummaryTable($view['commercial_summary'], $view['currency']);
+
+        echo '<h3>6. Labour lines</h3>';
         $this->renderLabourLinesTable($view['labour_lines'], $view['currency']);
 
-        echo '<h3>Material lines</h3>';
+        echo '<h3>7. Material lines</h3>';
         $this->renderMaterialLinesTable($view['material_lines'], $view['currency']);
 
-        echo '<h3>Issuer / Company</h3>';
-        $this->renderKeyValueTable($view['issuer']);
-
-        echo '<h3>Commercial terms</h3>';
-        $this->renderKeyValueTable($view['commercial_terms']);
+        echo '<h3>8. Terms and acceptance block</h3>';
+        $this->renderTermsAcceptanceTable($view['terms_acceptance']);
         echo '</div>';
     }
 
-    /** @param array<string, string> $rows */
-    private function renderKeyValueTable(array $rows): void
+    /** @param array<string, string> $rows @param array<string, string> $labels */
+    private function renderKeyValueTable(array $rows, array $labels = []): void
     {
         $hasValues = false;
         foreach ($rows as $value) {
@@ -107,30 +147,34 @@ final class OffertPrintRenderer
         }
 
         echo '<table><tbody>';
-        foreach ($rows as $label => $value) {
+        foreach ($rows as $key => $value) {
             if ($value === '') {
                 continue;
             }
 
+            $label = $labels[$key] ?? $key;
             echo '<tr><th>' . esc_html($label) . '</th><td>' . esc_html($value) . '</td></tr>';
         }
         echo '</tbody></table>';
     }
 
-    /**
-     * @param array<int, array{label: string, minor: string}> $rows
-     */
-    private function renderTotalsTable(array $rows, string $currency): void
+    /** @param array<string, string> $rows */
+    private function renderCommercialSummaryTable(array $rows, string $currency): void
     {
-        echo '<table><thead><tr><th>Field</th><th>Amount</th><th>Minor</th></tr></thead><tbody>';
-        foreach ($rows as $row) {
-            $minor = $row['minor'];
-            echo '<tr>';
-            echo '<td>' . esc_html($row['label']) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($minor, $currency)) . '</td>';
-            echo '<td>' . esc_html($minor !== '' ? $minor : '—') . '</td>';
-            echo '</tr>';
+        echo '<table><tbody>';
+        $labels = [
+            'labour_total' => 'Labour total',
+            'materials_total' => 'Materials total',
+            'subtotal_ex_vat' => 'Subtotal (ex VAT)',
+            'vat' => 'VAT',
+            'total_inc_vat' => 'Total (inc VAT)',
+        ];
+
+        foreach ($labels as $key => $label) {
+            $minor = $rows[$key] ?? '';
+            echo '<tr><th>' . esc_html($label) . '</th><td>' . esc_html($this->formatMinorMoney($minor, $currency)) . '</td></tr>';
         }
+
         echo '</tbody></table>';
     }
 
@@ -145,7 +189,7 @@ final class OffertPrintRenderer
             return;
         }
 
-        echo '<table><thead><tr><th>title</th><th>unit</th><th>quantity</th><th>hours</th><th>labour subtotal</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Title</th><th>Unit</th><th>Quantity</th><th>Hours</th><th>Subtotal</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html($row['title']) . '</td>';
@@ -169,7 +213,7 @@ final class OffertPrintRenderer
             return;
         }
 
-        echo '<table><thead><tr><th>name</th><th>unit</th><th>quantity</th><th>subtotal</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Name</th><th>Unit</th><th>Quantity</th><th>Subtotal</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html($row['name']) . '</td>';
@@ -178,6 +222,19 @@ final class OffertPrintRenderer
             echo '<td>' . esc_html($this->formatMinorMoney($row['subtotal_minor'], $currency)) . '</td>';
             echo '</tr>';
         }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, string> $rows */
+    private function renderTermsAcceptanceTable(array $rows): void
+    {
+        echo '<table><tbody>';
+        echo '<tr><th>Offert note</th><td>' . esc_html($rows['offert_note'] !== '' ? $rows['offert_note'] : '—') . '</td></tr>';
+        echo '<tr><th>Offert valid days</th><td>' . esc_html($rows['offert_valid_days'] !== '' ? $rows['offert_valid_days'] : '—') . '</td></tr>';
+        echo '<tr><th>Offert valid until</th><td>' . esc_html($rows['offert_valid_until'] !== '' ? $rows['offert_valid_until'] : '—') . '</td></tr>';
+        echo '<tr><th>Accepted by</th><td>__________________________________</td></tr>';
+        echo '<tr><th>Accepted at</th><td>__________________________________</td></tr>';
+        echo '<tr><th>Signature</th><td>__________________________________</td></tr>';
         echo '</tbody></table>';
     }
 
