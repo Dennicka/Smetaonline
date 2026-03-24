@@ -87,6 +87,11 @@ final class RepositoryFactory
         return new CreditNoteRepository();
     }
 
+    public function documentArtifacts(): DocumentArtifactRepository
+    {
+        return new DocumentArtifactRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {
@@ -94,7 +99,10 @@ final class RepositoryFactory
 
         $table = $wpdb->prefix . 'trn_audit_log';
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed from $wpdb->prefix and plugin constant suffix.
-        return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", $limit), ARRAY_A) ?: [];
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internal and prefixed.
+        return $wpdb->get_results(
+            $wpdb->prepare("SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", $limit),
+            ARRAY_A
+        ) ?: [];
     }
 }

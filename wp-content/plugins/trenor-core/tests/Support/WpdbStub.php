@@ -27,6 +27,9 @@ final class WpdbStub
     /** @var array<int, array<string, mixed>> */
     public array $receipts = [];
 
+    /** @var array<int, array<string, mixed>> */
+    public array $documentArtifacts = [];
+
     public int $maxVersion = 0;
 
     /** @var array<int, int> */
@@ -54,14 +57,21 @@ final class WpdbStub
     public function prepare(string $query, ...$args): string
     {
         $escaped = array_map(
-            static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
+            static fn ($value): string => is_numeric($value)
+                ? (string) $value
+                : "'" . addslashes((string) $value) . "'",
             $args
         );
 
         return vsprintf($query, $escaped);
     }
 
-    /** @param array<string, mixed> $data @param array<string, mixed> $where @param array<int, string> $format @param array<int, string> $whereFormat */
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $where
+     * @param array<int, string> $format
+     * @param array<int, string> $whereFormat
+     */
     public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
     {
         $this->updatedRows[] = [
@@ -108,6 +118,11 @@ final class WpdbStub
             $this->receipts[] = $data;
         }
 
+        if ($table === $this->prefix . 'trn_document_artifacts') {
+            $data['id'] = $assignedInsertId;
+            $this->documentArtifacts[] = $data;
+        }
+
         if ($this->next_insert_id !== null) {
             $this->next_insert_id = $assignedInsertId + 1;
         }
@@ -138,7 +153,10 @@ final class WpdbStub
         if ($name === 'get_var') {
             $query = (string) ($arguments[0] ?? '');
 
-            if (str_contains($query, 'SUM(amount_minor)') && preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
+            if (
+                str_contains($query, 'SUM(amount_minor)')
+                && preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1
+            ) {
                 return $this->sumByInvoice[(int) $matches[1]] ?? 0;
             }
 
@@ -158,6 +176,29 @@ final class WpdbStub
 
         if ($name === 'get_row') {
             $query = (string) ($arguments[0] ?? '');
+
+            if (str_contains($query, $this->prefix . 'trn_document_artifacts')) {
+                if (
+                    preg_match("/document_type\\s*=\\s*'([^']+)'/", $query, $typeMatch) === 1
+                    && preg_match('/document_id\\s*=\\s*(\\d+)/', $query, $idMatch) === 1
+                    && preg_match('/version_no\\s*=\\s*(\\d+)/', $query, $versionMatch) === 1
+                    && preg_match("/artifact_type\\s*=\\s*'([^']+)'/", $query, $artifactTypeMatch) === 1
+                ) {
+                    foreach ($this->documentArtifacts as $artifact) {
+                        if (
+                            (string) ($artifact['document_type'] ?? '') === $typeMatch[1]
+                            && (int) ($artifact['document_id'] ?? 0) === (int) $idMatch[1]
+                            && (int) ($artifact['version_no'] ?? 0) === (int) $versionMatch[1]
+                            && (string) ($artifact['artifact_type'] ?? '') === $artifactTypeMatch[1]
+                        ) {
+                            return $artifact;
+                        }
+                    }
+                }
+
+                return null;
+            }
+
             if (preg_match('/id\s*=\s*(\d+)/', $query, $matches) === 1) {
                 $id = (int) $matches[1];
                 if (isset($this->rowsById[$id])) {

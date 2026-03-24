@@ -19,5 +19,5 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: composer validate --strict
       - run: composer run lint
-      - run: composer run phpcs
+      - run: PHPCS_BASE_REF="${{ github.base_ref != '' && format('origin/{0}', github.base_ref) || 'origin/main' }}" composer run phpcs
       - run: composer run test

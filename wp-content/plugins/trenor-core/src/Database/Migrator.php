@@ -52,6 +52,11 @@ final class Migrator
             $this->runQueries($this->businessEffectReceiptQueries($charsetCollate));
             $this->markMigration('008_business_effect_receipts');
         }
+
+        if (! $this->hasMigration('009_document_pdf_artifacts')) {
+            $this->runQueries($this->documentPdfArtifactQueries($charsetCollate));
+            $this->markMigration('009_document_pdf_artifacts');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -550,6 +555,30 @@ final class Migrator
                 UNIQUE KEY uniq_effect (action_name, scope_key, effect_hash),
                 KEY status (status),
                 KEY result_entity (result_entity_type, result_entity_id)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function documentPdfArtifactQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_document_artifacts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                document_type VARCHAR(64) NOT NULL,
+                document_id BIGINT UNSIGNED NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                artifact_type VARCHAR(32) NOT NULL DEFAULT 'pdf',
+                storage_path TEXT NOT NULL,
+                mime_type VARCHAR(127) NOT NULL DEFAULT 'application/pdf',
+                checksum_sha256 CHAR(64) NOT NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY unique_document_artifact (document_type, document_id, version_no, artifact_type),
+                KEY document_lookup (document_type, document_id, version_no),
+                KEY created_at (created_at)
             ) {$charsetCollate};",
         ];
     }
