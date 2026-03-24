@@ -20,6 +20,8 @@ final class WpdbStub
 
     public int $insert_id = 1;
 
+    public ?int $next_insert_id = null;
+
     public bool $failReceiptInsert = false;
 
     /** @var array<int, array<string, mixed>> */
@@ -86,20 +88,24 @@ final class WpdbStub
             'format' => $format,
         ];
 
+        $assignedInsertId = $this->next_insert_id ?? $this->insert_id;
+        if ($assignedInsertId <= 0) {
+            $assignedInsertId = 1;
+        }
+        $this->insert_id = $assignedInsertId;
+
         if ($table === $this->prefix . 'trn_operation_receipts') {
             if ($this->failReceiptInsert) {
                 return false;
             }
 
-            $data['id'] = $this->insert_id;
+            $data['id'] = $assignedInsertId;
             $this->receipts[] = $data;
         }
 
-        if ($this->insert_id <= 0) {
-            $this->insert_id = 1;
+        if ($this->next_insert_id !== null) {
+            $this->next_insert_id = $assignedInsertId + 1;
         }
-
-        $this->insert_id++;
 
         return 1;
     }
