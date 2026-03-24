@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace Trenor\Core\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Trenor\Core\Database\InvoicePaymentRepository;
-use Trenor\Core\Database\InvoiceRepository;
 use Trenor\Core\Domain\Exception\PaymentRegistrationException;
+use Trenor\Core\Domain\Service\InvoicePaymentAccess;
 use Trenor\Core\Domain\Service\InvoicePaymentSummaryCalculator;
+use Trenor\Core\Domain\Service\InvoiceStatusAccess;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
 
 final class PaymentRecorderServiceTest extends TestCase
 {
     public function testValidPaymentOnIssuedInvoiceSetsPartiallyPaidOrPaid(): void
     {
-        $invoiceRepository = new class () extends InvoiceRepository {
+        $invoiceRepository = new class () implements InvoiceStatusAccess {
             public array $invoice = ['id' => 14, 'status' => 'issued', 'currency' => 'SEK', 'total_inc_vat_minor' => 10000];
             public string $lastStatus = '';
 
@@ -32,7 +32,7 @@ final class PaymentRecorderServiceTest extends TestCase
             }
         };
 
-        $paymentRepository = new class () extends InvoicePaymentRepository {
+        $paymentRepository = new class () implements InvoicePaymentAccess {
             /** @var array<int, array<string, mixed>> */
             public array $rows = [];
 
@@ -124,11 +124,10 @@ final class PaymentRecorderServiceTest extends TestCase
      */
     private function buildServiceWithInvoice(array $invoice, array $payments = []): PaymentRecorderService
     {
-        $invoiceRepository = new class ($invoice) extends InvoiceRepository {
+        $invoiceRepository = new class ($invoice) implements InvoiceStatusAccess {
             /** @param array<string, mixed> $invoice */
             public function __construct(private array $invoice)
             {
-                parent::__construct();
             }
 
             public function find(int $id): ?array
@@ -146,11 +145,10 @@ final class PaymentRecorderServiceTest extends TestCase
             }
         };
 
-        $paymentRepository = new class ($payments) extends InvoicePaymentRepository {
+        $paymentRepository = new class ($payments) implements InvoicePaymentAccess {
             /** @param array<int, array<string, mixed>> $rows */
             public function __construct(private array $rows)
             {
-                parent::__construct();
             }
 
             public function byInvoice(int $invoiceId): array

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
-final class InvoicePaymentRepository extends BaseRepository
+use Trenor\Core\Domain\Service\InvoicePaymentAccess;
+
+final class InvoicePaymentRepository extends BaseRepository implements InvoicePaymentAccess
 {
     protected function table(): string
     {

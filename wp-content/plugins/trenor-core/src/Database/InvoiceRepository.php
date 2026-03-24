@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Trenor\Core\Database;
 
 use Trenor\Core\Domain\Service\InvoiceVersionProvider;
+use Trenor\Core\Domain\Service\InvoiceStatusAccess;
 
-final class InvoiceRepository extends BaseRepository implements InvoiceVersionProvider
+final class InvoiceRepository extends BaseRepository implements InvoiceVersionProvider, InvoiceStatusAccess
 {
     protected function table(): string
     {

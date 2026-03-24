@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Domain\Service;
 
-use Trenor\Core\Database\InvoicePaymentRepository;
-use Trenor\Core\Database\InvoiceRepository;
 use Trenor\Core\Domain\Exception\PaymentRegistrationException;
 
 final class PaymentRecorderService
 {
-    private InvoiceRepository $invoiceRepository;
+    private InvoiceStatusAccess $invoiceRepository;
 
-    private InvoicePaymentRepository $paymentRepository;
+    private InvoicePaymentAccess $paymentRepository;
 
     private InvoicePaymentSummaryCalculator $summaryCalculator;
 
     public function __construct(
-        InvoiceRepository $invoiceRepository,
-        InvoicePaymentRepository $paymentRepository,
+        InvoiceStatusAccess $invoiceRepository,
+        InvoicePaymentAccess $paymentRepository,
         InvoicePaymentSummaryCalculator $summaryCalculator
     ) {
         $this->invoiceRepository = $invoiceRepository;
