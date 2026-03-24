@@ -22,7 +22,7 @@ final class EstimateMaterialLineRepository extends BaseRepository
     {
         global $wpdb;
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name internal.
-        return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$this->table()} WHERE estimate_id = %d ORDER BY sort_order, id", $estimateId), ARRAY_A) ?: [];
+        return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$this->table()} WHERE estimate_id = %d AND status = %s ORDER BY sort_order, id", $estimateId, 'active'), ARRAY_A) ?: [];
     }
 
     public function create(array $data): ?int
@@ -41,6 +41,8 @@ final class EstimateMaterialLineRepository extends BaseRepository
             'buy_price_minor_snapshot' => (int) ($data['buy_price_minor_snapshot'] ?? 0),
             'sell_price_minor_snapshot' => (int) ($data['sell_price_minor_snapshot'] ?? 0),
             'subtotal_minor' => (int) ($data['subtotal_minor'] ?? 0),
+            'status' => 'active',
+            'archived_at' => null,
             'sort_order' => (int) ($data['sort_order'] ?? 100),
             'created_at' => $now,
             'updated_at' => $now,
@@ -74,11 +76,25 @@ final class EstimateMaterialLineRepository extends BaseRepository
     public function archive(int $id): bool
     {
         global $wpdb;
-        $deleted = $wpdb->delete($this->table(), ['id' => $id], ['%d']);
-        if ($deleted === false || $deleted === 0) {
+        $archivedAt = current_time('mysql', true);
+        $updated = $wpdb->update(
+            $this->table(),
+            [
+                'status' => 'archived',
+                'archived_at' => $archivedAt,
+                'updated_at' => $archivedAt,
+            ],
+            [
+                'id' => $id,
+                'status' => 'active',
+            ],
+            ['%s', '%s', '%s'],
+            ['%d', '%s']
+        );
+        if ($updated === false || $updated === 0) {
             return false;
         }
-        $this->auditLogger->log($this->entityType(), $id, 'archive', []);
+        $this->auditLogger->log($this->entityType(), $id, 'archive', ['status' => 'archived', 'archived_at' => $archivedAt]);
         return true;
     }
 }
