@@ -558,6 +558,7 @@ final class Migrator
             ) {$charsetCollate};",
         ];
     }
+
     /** @return array<int, string> */
     private function documentPdfArtifactQueries(string $charsetCollate): array
     {
@@ -581,5 +582,4 @@ final class Migrator
             ) {$charsetCollate};",
         ];
     }
-
 }
