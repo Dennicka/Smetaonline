@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Admin;
 
-use Trenor\Core\Domain\Service\DocumentSettings;
-
 final class InvoicePrintRenderer
 {
     private InvoicePrintViewModel $viewModel;
-    private DocumentSettings $documentSettings;
 
-    public function __construct(?InvoicePrintViewModel $viewModel = null, ?DocumentSettings $documentSettings = null)
+    public function __construct(?InvoicePrintViewModel $viewModel = null)
     {
         $this->viewModel = $viewModel ?? new InvoicePrintViewModel();
-        $this->documentSettings = $documentSettings ?? new DocumentSettings();
     }
 
     /**
@@ -33,12 +29,12 @@ final class InvoicePrintRenderer
      *     property?: array<string, mixed>,
      *     client?: array<string, mixed>,
      *     payments?: array<int, mixed>,
-     *     payment_summary?: array<string, mixed>
+     *     payment_summary?: array<string, mixed>,
+     *     document_profile?: array<string, mixed>
      * } $context
      */
     public function render(array $invoice, array $snapshot, array $context = []): void
     {
-        $context['document_settings'] = $this->documentSettings->get();
         $view = $this->viewModel->build($invoice, $snapshot, $context);
         $invoiceId = (int) ($invoice['id'] ?? 0);
         $detailUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
@@ -88,11 +84,8 @@ final class InvoicePrintRenderer
         echo '<h3>Issuer / Company</h3>';
         $this->renderKeyValueTable($view['issuer']);
 
-        echo '<h3>Contact / Payment details</h3>';
-        $this->renderKeyValueTable($view['payment_details']);
-
-        echo '<h3>Terms / Notes</h3>';
-        $this->renderKeyValueTable($view['terms_notes']);
+        echo '<h3>Commercial terms</h3>';
+        $this->renderKeyValueTable($view['commercial_terms']);
 
         echo '<h3>Payment summary</h3>';
         $this->renderPaymentSummaryTable($view['payment_summary']);
