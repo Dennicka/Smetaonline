@@ -6,15 +6,14 @@ namespace Trenor\Core\Domain\Service;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Trenor\Core\Database\OffertRepository;
 use Trenor\Core\Support\Snapshot;
 
 final class OffertFromEstimateService
 {
-    private OffertRepository $offertRepository;
-    private DocumentSequenceGenerator $documentSequenceGenerator;
+    private OffertVersionProvider $offertRepository;
+    private DocumentNumberGenerator $documentSequenceGenerator;
 
-    public function __construct(OffertRepository $offertRepository, DocumentSequenceGenerator $documentSequenceGenerator)
+    public function __construct(OffertVersionProvider $offertRepository, DocumentNumberGenerator $documentSequenceGenerator)
     {
         $this->offertRepository = $offertRepository;
         $this->documentSequenceGenerator = $documentSequenceGenerator;

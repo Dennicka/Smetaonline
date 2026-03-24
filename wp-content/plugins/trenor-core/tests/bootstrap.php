@@ -42,3 +42,11 @@ if (! function_exists('get_current_user_id')) {
         return 0;
     }
 }
+
+if (! function_exists('trn_set_test_wpdb')) {
+    function trn_set_test_wpdb(object $wpdb): void
+    {
+        // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Centralized test-only wpdb injection helper.
+        $GLOBALS['wpdb'] = $wpdb;
+    }
+}

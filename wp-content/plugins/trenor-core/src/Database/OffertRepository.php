@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
-final class OffertRepository extends BaseRepository
+use Trenor\Core\Domain\Service\OffertVersionProvider;
+
+final class OffertRepository extends BaseRepository implements OffertVersionProvider
 {
     protected function table(): string
     {

@@ -6,57 +6,29 @@ namespace Trenor\Core\Tests\Unit;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
-use Trenor\Core\Database\OffertRepository;
-use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
+use Trenor\Core\Domain\Service\DocumentNumberGenerator;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
+use Trenor\Core\Domain\Service\OffertVersionProvider;
 
 final class OffertFromEstimateServiceTest extends TestCase
 {
     public function testBuildPayloadCreatesImmutableSnapshot(): void
     {
-        $GLOBALS['wpdb'] = new class {
-            public string $prefix = 'wp_';
-            private int $sequence = 0;
-
-            public function prepare(string $query, ...$args): string
+        $versionProvider = new class implements OffertVersionProvider {
+            public function nextVersionNo(int $estimateId): int
             {
-                $escaped = array_map(static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'", $args);
-                return vsprintf($query, $escaped);
-            }
-
-            public function get_var(string $query)
-            {
-                if ($query === 'SELECT LAST_INSERT_ID()') {
-                    return $this->sequence;
-                }
-
-                if (str_contains($query, 'MAX(version_no)')) {
-                    return '1';
-                }
-
-                return null;
-            }
-
-            public function query(string $query)
-            {
-                if (str_starts_with($query, 'START TRANSACTION') || str_starts_with($query, 'COMMIT') || str_starts_with($query, 'ROLLBACK')) {
-                    return 1;
-                }
-
-                if (str_contains($query, 'INSERT INTO')) {
-                    return 1;
-                }
-
-                if (str_contains($query, 'UPDATE')) {
-                    $this->sequence++;
-                    return 1;
-                }
-
-                return false;
+                return 2;
             }
         };
 
-        $service = new OffertFromEstimateService(new OffertRepository(), new DocumentSequenceGenerator($GLOBALS['wpdb']));
+        $documentNumbers = new class implements DocumentNumberGenerator {
+            public function next(string $docType, ?DateTimeImmutable $date = null): string
+            {
+                return 'OFF-202603-00077';
+            }
+        };
+
+        $service = new OffertFromEstimateService($versionProvider, $documentNumbers);
 
         $header = ['id' => 44, 'title' => 'Kitchen refresh', 'currency' => 'SEK', 'vat_rate_percent' => 25.0];
         $lines = [['id' => 1, 'quantity' => 1.5, 'labour_subtotal_minor' => 90000]];
