@@ -77,6 +77,11 @@ final class RepositoryFactory
         return new InvoiceRepository();
     }
 
+    public function invoicePayments(): InvoicePaymentRepository
+    {
+        return new InvoicePaymentRepository();
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function auditLogs(int $limit = 100): array
     {

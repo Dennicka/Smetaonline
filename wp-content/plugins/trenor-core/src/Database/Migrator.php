@@ -32,6 +32,11 @@ final class Migrator
             $this->runQueries($this->invoiceCoreQueries($charsetCollate));
             $this->markMigration('004_invoice_core');
         }
+
+        if (! $this->hasMigration('005_payment_register_core')) {
+            $this->runQueries($this->paymentRegisterCoreQueries($charsetCollate));
+            $this->markMigration('005_payment_register_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -363,6 +368,32 @@ final class Migrator
                 KEY offert_id (offert_id),
                 KEY estimate_id (estimate_id),
                 KEY status (status)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function paymentRegisterCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_invoice_payments (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                invoice_id BIGINT UNSIGNED NOT NULL,
+                payment_date DATETIME NOT NULL,
+                amount_minor BIGINT NOT NULL DEFAULT 0,
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                method VARCHAR(64) NOT NULL DEFAULT 'manual',
+                reference VARCHAR(191) NULL,
+                note TEXT NULL,
+                actor_user_id BIGINT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY invoice_id (invoice_id),
+                KEY payment_date (payment_date),
+                KEY created_at (created_at)
             ) {$charsetCollate};",
         ];
     }
