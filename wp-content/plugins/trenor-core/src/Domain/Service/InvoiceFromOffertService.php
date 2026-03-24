@@ -28,7 +28,7 @@ final class InvoiceFromOffertService
     public function buildPayload(array $offertRow, array $offertSnapshot, ?DateTimeImmutable $issuedAtUtc = null): array
     {
         $status = sanitize_key((string) ($offertRow['status'] ?? ''));
-        if ($status !== 'accepted') {
+        if (! (new InvoiceIssuePolicy())->canIssueFromOffertStatus($status)) {
             throw new RuntimeException('Invoice can be issued only from accepted offert.');
         }
 
