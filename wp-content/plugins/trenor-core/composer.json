@@ -24,7 +24,8 @@
   },
   "scripts": {
     "lint": "php -l trenor-core.php && find src tests -name '*.php' -print0 | xargs -0 -n1 php -l",
-    "phpcs": "phpcs --runtime-set ignore_warnings_on_exit 1",
+    "phpcs": "bash scripts/phpcs-changed.sh",
+    "phpcs:full": "phpcs",
     "test": "phpunit"
   },
   "config": {
