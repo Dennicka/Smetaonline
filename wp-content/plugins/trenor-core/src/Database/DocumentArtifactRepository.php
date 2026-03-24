@@ -20,15 +20,25 @@ final class DocumentArtifactRepository
         return $wpdb->prefix . 'trn_document_artifacts';
     }
 
-    public function findByDocumentVersion(string $documentType, int $documentId, int $versionNo, string $artifactType = 'pdf'): ?array
+    public function findByDocumentVersion(
+        string $documentType,
+        int $documentId,
+        int $versionNo,
+        string $artifactType = 'pdf'
+    ): ?array
     {
         global $wpdb;
 
         $table = $this->table();
         $row = $wpdb->get_row(
-            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed with WP prefix.
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Internal prefixed table name.
             $wpdb->prepare(
-                "SELECT * FROM {$table} WHERE document_type = %s AND document_id = %d AND version_no = %d AND artifact_type = %s LIMIT 1",
+                "SELECT * FROM {$table} "
+                . 'WHERE document_type = %s '
+                . 'AND document_id = %d '
+                . 'AND version_no = %d '
+                . 'AND artifact_type = %s '
+                . 'LIMIT 1',
                 sanitize_key($documentType),
                 $documentId,
                 $versionNo,

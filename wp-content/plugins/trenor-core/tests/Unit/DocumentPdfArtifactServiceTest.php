@@ -39,7 +39,10 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertSame('application/pdf', $artifact['mime_type']);
         self::assertFileExists((string) $artifact['storage_path']);
         self::assertStringContainsString('OFF-2026-001-id101-v3.pdf', (string) $artifact['storage_path']);
-        self::assertSame(hash_file('sha256', (string) $artifact['storage_path']), (string) $artifact['checksum_sha256']);
+        self::assertSame(
+            hash_file('sha256', (string) $artifact['storage_path']),
+            (string) $artifact['checksum_sha256']
+        );
     }
 
     public function testCreatesInvoicePdfArtifactMetadata(): void

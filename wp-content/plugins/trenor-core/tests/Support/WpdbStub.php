@@ -57,14 +57,21 @@ final class WpdbStub
     public function prepare(string $query, ...$args): string
     {
         $escaped = array_map(
-            static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
+            static fn ($value): string => is_numeric($value)
+                ? (string) $value
+                : "'" . addslashes((string) $value) . "'",
             $args
         );
 
         return vsprintf($query, $escaped);
     }
 
-    /** @param array<string, mixed> $data @param array<string, mixed> $where @param array<int, string> $format @param array<int, string> $whereFormat */
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $where
+     * @param array<int, string> $format
+     * @param array<int, string> $whereFormat
+     */
     public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
     {
         $this->updatedRows[] = [
@@ -146,7 +153,10 @@ final class WpdbStub
         if ($name === 'get_var') {
             $query = (string) ($arguments[0] ?? '');
 
-            if (str_contains($query, 'SUM(amount_minor)') && preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
+            if (
+                str_contains($query, 'SUM(amount_minor)')
+                && preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1
+            ) {
                 return $this->sumByInvoice[(int) $matches[1]] ?? 0;
             }
 

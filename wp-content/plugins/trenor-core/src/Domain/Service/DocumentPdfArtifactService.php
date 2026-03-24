@@ -113,7 +113,12 @@ final class DocumentPdfArtifactService
     {
         if (function_exists('wp_upload_dir')) {
             $uploadDir = wp_upload_dir();
-            if (is_array($uploadDir) && isset($uploadDir['basedir']) && is_string($uploadDir['basedir']) && $uploadDir['basedir'] !== '') {
+            if (
+                is_array($uploadDir)
+                && isset($uploadDir['basedir'])
+                && is_string($uploadDir['basedir'])
+                && $uploadDir['basedir'] !== ''
+            ) {
                 return $uploadDir['basedir'];
             }
         }
