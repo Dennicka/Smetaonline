@@ -36,11 +36,39 @@ final class RepositorySmokeTest extends TestCase
 
     public function testStatusTransitionsAcceptOnlyAllowedStatuses(): void
     {
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
         $offert = new OffertRepository();
         $invoice = new InvoiceRepository();
 
-        self::assertTrue($offert->transitionStatus(11, 'issued'));
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'issued'];
         self::assertTrue($offert->transitionStatus(11, 'accepted'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'issued'];
+        self::assertTrue($offert->transitionStatus(11, 'rejected'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'issued'];
+        self::assertTrue($offert->transitionStatus(11, 'archived'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'accepted'];
+        self::assertTrue($offert->transitionStatus(11, 'archived'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'rejected'];
+        self::assertTrue($offert->transitionStatus(11, 'archived'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'accepted'];
+        self::assertFalse($offert->transitionStatus(11, 'rejected'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'rejected'];
+        self::assertFalse($offert->transitionStatus(11, 'accepted'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'archived'];
+        self::assertFalse($offert->transitionStatus(11, 'accepted'));
+        self::assertFalse($offert->transitionStatus(11, 'rejected'));
+        self::assertFalse($offert->transitionStatus(11, 'issued'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'unknown'];
+        self::assertFalse($offert->transitionStatus(11, 'accepted'));
         self::assertFalse($offert->transitionStatus(11, 'cancelled'));
 
         self::assertTrue($invoice->transitionStatus(12, 'issued'));
