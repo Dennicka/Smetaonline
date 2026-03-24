@@ -54,6 +54,24 @@ final class BusinessEffectFingerprint
         ]);
     }
 
+
+    /** @param array<string, mixed> $offert @param array<string, mixed> $snapshot */
+    public function avtalForOffert(array $offert, array $snapshot): string
+    {
+        return $this->hash([
+            'offert' => [
+                'id' => (int) ($offert['id'] ?? 0),
+                'status' => (string) ($offert['status'] ?? ''),
+                'currency' => strtoupper((string) ($offert['currency'] ?? 'SEK')),
+                'vat_rate_percent' => (string) ($offert['vat_rate_percent'] ?? ''),
+                'total_inc_vat_minor' => (int) ($offert['total_inc_vat_minor'] ?? 0),
+                'snapshot_json' => (string) ($offert['snapshot_json'] ?? ''),
+            ],
+            'snapshot' => $snapshot,
+            'type' => 'avtal',
+        ]);
+    }
+
     /** @param array<string, mixed> $invoice */
     public function creditNoteForInvoice(array $invoice): string
     {

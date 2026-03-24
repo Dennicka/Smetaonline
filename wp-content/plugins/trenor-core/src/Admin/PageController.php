@@ -22,6 +22,7 @@ use Trenor\Core\Domain\Service\DocumentSettings;
 use Trenor\Core\Domain\Service\OperationReplayGuard;
 use Trenor\Core\Domain\Service\BusinessEffectFingerprint;
 use Trenor\Core\Domain\Service\DocumentPdfArtifactService;
+use Trenor\Core\Domain\Service\AvtalFromOffertService;
 
 final class PageController
 {
@@ -116,6 +117,10 @@ final class PageController
 
         if ($entity === 'credit_note') {
             $this->handleCreditNote($action, $postPayload);
+        }
+
+        if ($entity === 'avtal') {
+            $this->handleAvtal($action, $postPayload);
         }
 
         if ($entity === 'document_settings' && $action === 'save') {
@@ -354,6 +359,14 @@ final class PageController
             return;
         }
 
+        $avtalId = filter_input(INPUT_GET, 'avtal_id', FILTER_VALIDATE_INT);
+        $avtalId = $avtalId !== false && $avtalId !== null ? (int) $avtalId : 0;
+        if ($view === 'avtal_pdf' && $avtalId > 0) {
+            $this->renderPdfDownload('avtal', $avtalId, 'trn_issue_offerts');
+
+            return;
+        }
+
         $filter = new OffertListFilter();
         $allOfferts = $this->factory->offerts()->all();
         $offerts = $filter->apply($allOfferts, $estimateFilter, $statusFilter, $documentNumberFilter);
@@ -396,8 +409,18 @@ final class PageController
         }
         echo '</tbody></table>';
 
+        $this->renderAvtalRegister(
+            filter_input(INPUT_GET, 'avtal_offert_id', FILTER_UNSAFE_RAW),
+            filter_input(INPUT_GET, 'avtal_status', FILTER_UNSAFE_RAW),
+            filter_input(INPUT_GET, 'avtal_document_number', FILTER_UNSAFE_RAW)
+        );
+
         if ($offertId > 0) {
             $this->renderOffertDetail($offertId);
+        }
+
+        if ($avtalId > 0) {
+            $this->renderAvtalDetail($avtalId);
         }
         echo '</div>';
     }
@@ -1510,6 +1533,63 @@ final class PageController
         }
     }
 
+    /** @param array<string, mixed> $postPayload */
+    private function handleAvtal(string $action, array $postPayload): void
+    {
+        $repo = $this->factory->avtals();
+
+        if ($action === 'issue') {
+            $offertId = (int) $this->postValue($postPayload, 'offert_id');
+            if (! $this->consumeOperationToken($postPayload, 'issue_avtal', $this->issueAvtalScope($offertId), 'admin.php?page=trn_offerts&offert_id=' . $offertId)) {
+                exit;
+            }
+
+            $offert = $this->factory->offerts()->find($offertId);
+            if ($offert === null) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
+                exit;
+            }
+
+            $snapshot = (new OffertSnapshotReader())->read($offert);
+            $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
+                'issue_avtal',
+                $this->issueAvtalScope($offertId),
+                $this->businessEffectFingerprint->avtalForOffert($offert, $snapshot)
+            );
+            if (! $this->handleDuplicateBusinessEffect($businessEffect, 'avtal', 'admin.php?page=trn_offerts&offert_id=' . $offertId, 'admin.php?page=trn_offerts&avtal_id=')) {
+                exit;
+            }
+
+            $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
+            $service = new AvtalFromOffertService($repo, new DocumentSequenceGenerator());
+            try {
+                $payload = $service->buildPayload($offert, $snapshot);
+            } catch (RuntimeException $exception) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
+
+            $avtalId = $repo->create($payload);
+            if ($avtalId === null) {
+                $this->operationReplayGuard->abandonBusinessEffect($receiptId);
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Avtal issue failed.')));
+                exit;
+            }
+
+            $this->operationReplayGuard->completeBusinessEffect($receiptId, 'avtal', $avtalId);
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&avtal_id=' . $avtalId . '&trn_result=ok'));
+            exit;
+        }
+
+        if ($action === 'archive') {
+            $avtalId = (int) $this->postValue($postPayload, 'id');
+            $isSuccess = $repo->transitionStatus($avtalId, 'archived');
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=' . ($isSuccess ? 'ok' : 'error')));
+            exit;
+        }
+    }
+
     /** @param array<int, string> $fields @param array<string, mixed> $postPayload @return array<string, mixed> */
     private function collectData(array $postPayload, array $fields): array
     {
@@ -1589,6 +1669,10 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_credit_notes';
         }
 
+        if ($entity === 'avtal') {
+            return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_offerts';
+        }
+
         if ($entity === 'document_settings' || $entity === 'document_profile_settings') {
             return 'trn_manage_templates';
         }
@@ -1634,6 +1718,15 @@ final class PageController
             echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue_invoice"><input type="hidden" name="offert_id" value="' . esc_attr((string) $offertId) . '">';
             $this->renderOperationTokenField('issue_invoice', $this->issueInvoiceScope($offertId));
             submit_button('Issue Invoice', 'primary', 'submit', false);
+            echo '</form>';
+        }
+
+        if ((string) ($offert['status'] ?? '') === 'accepted' && current_user_can('trn_issue_offerts')) {
+            echo '<form method="post" style="margin:10px 0;">';
+            wp_nonce_field('trn_avtal_issue');
+            echo '<input type="hidden" name="trn_entity" value="avtal"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="offert_id" value="' . esc_attr((string) $offertId) . '">';
+            $this->renderOperationTokenField('issue_avtal', $this->issueAvtalScope($offertId));
+            submit_button('Issue Avtal', 'secondary', 'submit', false);
             echo '</form>';
         }
 
@@ -1869,6 +1962,11 @@ final class PageController
         return 'invoice:' . $invoiceId;
     }
 
+    private function issueAvtalScope(int $offertId): string
+    {
+        return 'offert:' . $offertId;
+    }
+
     private function recordPaymentScope(int $invoiceId): string
     {
         return 'invoice:' . $invoiceId;
@@ -2064,6 +2162,112 @@ final class PageController
         echo '<label style="margin-right:8px;">document_number <input type="text" name="document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
+        echo '</form>';
+    }
+
+    private function renderAvtalRegister(mixed $offertId, mixed $status, mixed $documentNumber): void
+    {
+        $filter = new AvtalListFilter();
+        $rows = $filter->apply($this->factory->avtals()->all(), $offertId, $status, $documentNumber);
+
+        echo '<h2>Avtal / Agreements</h2>';
+        $this->renderAvtalFilterForm($offertId, $status, $documentNumber);
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="8">No avtals found for current filters.</td></tr>';
+        }
+
+        foreach ($rows as $avtal) {
+            $avtalId = (int) ($avtal['id'] ?? 0);
+            $sourceOffertId = (int) ($avtal['offert_id'] ?? 0);
+            $detailUrl = admin_url('admin.php?page=trn_offerts&avtal_id=' . $avtalId);
+            $pdfUrl = admin_url('admin.php?page=trn_offerts&avtal_id=' . $avtalId . '&view=avtal_pdf');
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $sourceOffertId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($avtal['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['offert_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['estimate_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($avtal['issued_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Open/View</a>';
+            echo '<a class="button" href="' . esc_url($pdfUrl) . '" style="margin-left:6px;">Generate / Download PDF</a>';
+            if ($sourceOffertId > 0) {
+                echo '<a class="button" href="' . esc_url($offertUrl) . '" style="margin-left:6px;">Open source offert</a>';
+            }
+            if (current_user_can('trn_archive_records') && (string) ($avtal['status'] ?? '') !== 'archived') {
+                echo '<form method="post" style="display:inline-block; margin-left:6px;">';
+                wp_nonce_field('trn_avtal_archive');
+                echo '<input type="hidden" name="trn_entity" value="avtal"><input type="hidden" name="trn_action" value="archive"><input type="hidden" name="id" value="' . esc_attr((string) $avtalId) . '">';
+                submit_button('Archive', 'secondary', 'submit', false);
+                echo '</form>';
+            }
+            echo '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    private function renderAvtalDetail(int $avtalId): void
+    {
+        $avtal = $this->factory->avtals()->find($avtalId);
+        if ($avtal === null) {
+            echo '<h2>Avtal detail</h2><p>Avtal not found.</p>';
+
+            return;
+        }
+
+        $listUrl = admin_url('admin.php?page=trn_offerts');
+        $sourceOffertId = (int) ($avtal['offert_id'] ?? 0);
+        $pdfUrl = admin_url('admin.php?page=trn_offerts&avtal_id=' . $avtalId . '&view=avtal_pdf');
+        echo '<h2>Avtal detail</h2><p><a href="' . esc_url($listUrl) . '">Back to offerts + avtals register</a>';
+        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        if ($sourceOffertId > 0) {
+            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $sourceOffertId)) . '">Open source offert</a>';
+        }
+        echo '</p>';
+
+        $snapshot = (new OffertSnapshotReader())->read($avtal);
+        $this->renderKeyValueTable([
+            'id' => $avtal['id'] ?? '',
+            'offert_id' => $avtal['offert_id'] ?? '',
+            'estimate_id' => $avtal['estimate_id'] ?? '',
+            'project_id' => $avtal['project_id'] ?? '',
+            'client_id' => $avtal['client_id'] ?? '',
+            'document_number' => $avtal['document_number'] ?? '',
+            'version_no' => $avtal['version_no'] ?? '',
+            'status' => $avtal['status'] ?? '',
+            'title' => $avtal['title'] ?? '',
+            'issued_at' => $avtal['issued_at'] ?? '',
+            'actor_user_id' => $avtal['actor_user_id'] ?? '',
+            'total_inc_vat_minor' => $avtal['total_inc_vat_minor'] ?? 0,
+        ]);
+
+        $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
+        $this->renderKeyValueTable([
+            'snapshot_total_inc_vat_minor' => (string) ((int) ($totals['total_inc_vat_minor'] ?? 0)),
+            'snapshot_lines_count' => (string) count(is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : []),
+            'snapshot_material_lines_count' => (string) count(is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : []),
+        ]);
+    }
+
+    private function renderAvtalFilterForm(mixed $offertId, mixed $status, mixed $documentNumber): void
+    {
+        $offertValue = is_scalar($offertId) ? (string) $offertId : '';
+        $statusValue = is_scalar($status) ? (string) $status : '';
+        $documentNumberValue = is_scalar($documentNumber) ? (string) $documentNumber : '';
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_offerts">';
+        echo '<label style="margin-right:8px;">avtal_offert_id <input type="text" name="avtal_offert_id" value="' . esc_attr($offertValue) . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">avtal_status <select name="avtal_status">';
+        echo '<option value=""></option>';
+        foreach (['issued', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected($statusValue, $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">avtal_document_number <input type="text" name="avtal_document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
+        submit_button('Filter avtals', 'secondary', 'submit', false);
         echo '</form>';
     }
 

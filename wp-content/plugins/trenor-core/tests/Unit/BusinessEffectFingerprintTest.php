@@ -70,4 +70,15 @@ final class BusinessEffectFingerprintTest extends TestCase
 
         self::assertNotSame($hashA, $service->creditNoteForInvoice($invoice));
     }
+
+    public function testAvtalFingerprintChangesWhenOffertSnapshotChanges(): void
+    {
+        $service = new BusinessEffectFingerprint();
+        $offert = ['id' => 4, 'status' => 'accepted', 'currency' => 'SEK', 'snapshot_json' => '{"x":1}', 'total_inc_vat_minor' => 1000];
+
+        $hashA = $service->avtalForOffert($offert, ['totals' => ['total_inc_vat_minor' => 1000]]);
+        $hashB = $service->avtalForOffert($offert, ['totals' => ['total_inc_vat_minor' => 1100]]);
+
+        self::assertNotSame($hashA, $hashB);
+    }
 }

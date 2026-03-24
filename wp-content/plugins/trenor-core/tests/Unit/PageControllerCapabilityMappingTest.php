@@ -46,6 +46,9 @@ final class PageControllerCapabilityMappingTest extends TestCase
             'credit note issue' => [['credit_note', 'issue'], 'trn_issue_credit_notes'],
             'credit note pdf download' => [['credit_note', 'download_pdf'], 'trn_issue_credit_notes'],
             'credit note archive' => [['credit_note', 'archive'], 'trn_archive_records'],
+            'avtal issue' => [['avtal', 'issue'], 'trn_issue_offerts'],
+            'avtal pdf download' => [['avtal', 'download_pdf'], 'trn_issue_offerts'],
+            'avtal archive' => [['avtal', 'archive'], 'trn_archive_records'],
             'document settings save' => [['document_settings', 'save'], 'trn_manage_templates'],
             'document profile save' => [['document_profile_settings', 'save'], 'trn_manage_templates'],
         ];
