@@ -94,7 +94,9 @@ final class PageController
 
     public function renderDashboard(): void
     {
-        echo '<div class="wrap"><h1>Smeta / Dashboard</h1><p>Core plugin active.</p></div>';
+        echo '<div class="wrap"><h1>Smeta / Dashboard</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<p>Core plugin active.</p></div>';
     }
 
     public function renderClients(): void
@@ -197,7 +199,9 @@ final class PageController
 
     public function renderSettings(): void
     {
-        echo '<div class="wrap"><h1>Настройки</h1><p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p></div>';
+        echo '<div class="wrap"><h1>Настройки</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p></div>';
     }
 
     public function renderOfferts(): void
@@ -222,7 +226,7 @@ final class PageController
             echo '<td>' . esc_html((string) $offert['document_number']) . '</td>';
             echo '<td>' . esc_html((string) $offert['version_no']) . '</td>';
             echo '<td>' . esc_html((string) $offert['status']) . '</td>';
-            echo '<td>' . esc_html((string) $offert['total_inc_vat_minor']) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a> ';
             echo '<a class="button" href="' . esc_url($estimateUrl) . '" style="margin-left:6px;">Open estimate</a> ';
@@ -244,7 +248,9 @@ final class PageController
     public function renderAuditLog(): void
     {
         $rows = $this->factory->auditLogs();
-        echo '<div class="wrap"><h1>Журнал</h1><table class="widefat striped"><thead><tr>';
+        echo '<div class="wrap"><h1>Журнал</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<table class="widefat striped"><thead><tr>';
         echo '<th>ID</th><th>Entity</th><th>Entity ID</th><th>Action</th><th>Actor</th><th>At</th><th>Changes</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $row) {
@@ -256,7 +262,9 @@ final class PageController
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
     private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status'): void
     {
-        echo '<div class="wrap"><h1>' . esc_html($title) . '</h1><h2>Создать</h2><form method="post">';
+        echo '<div class="wrap"><h1>' . esc_html($title) . '</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<h2>Создать</h2><form method="post">';
         wp_nonce_field('trn_' . $entity . '_create');
         echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="create">';
         foreach ($fields as $field) {
@@ -321,6 +329,75 @@ final class PageController
 
         echo '<h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
         echo '<p><strong>title:</strong> ' . esc_html((string) $estimate['title']) . ' | <strong>labour_rate_minor:</strong> ' . esc_html((string) $estimate['labour_rate_minor']) . ' | <strong>vat_rate_percent:</strong> ' . esc_html((string) $estimate['vat_rate_percent']) . '</p>';
+
+        $project = null;
+        $property = null;
+        $client = null;
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId > 0) {
+            $project = $this->factory->projects()->find($projectId);
+        }
+        if (is_array($project)) {
+            $propertyId = (int) ($project['property_id'] ?? 0);
+            if ($propertyId > 0) {
+                $property = $this->factory->properties()->find($propertyId);
+            }
+        }
+        if (is_array($property)) {
+            $clientId = (int) ($property['client_id'] ?? 0);
+            if ($clientId > 0) {
+                $client = $this->factory->clients()->find($clientId);
+            }
+        }
+
+        echo '<h3>Project context</h3>';
+        if (! is_array($project)) {
+            echo '<p><em>Project not found.</em></p>';
+        } else {
+            echo '<h4>Project</h4>';
+            $this->renderKeyValueTable([
+                'id' => $project['id'] ?? '',
+                'name' => $project['name'] ?? '',
+                'code' => $project['code'] ?? '',
+            ]);
+        }
+
+        if (! is_array($property)) {
+            echo '<p><em>Property not found.</em></p>';
+        } else {
+            echo '<h4>Property</h4>';
+            $this->renderKeyValueTable([
+                'id' => $property['id'] ?? '',
+                'name' => $property['name'] ?? '',
+                'address_line' => $property['address_line'] ?? '',
+                'city' => $property['city'] ?? '',
+                'postal_code' => $property['postal_code'] ?? '',
+            ]);
+        }
+
+        if (! is_array($client)) {
+            echo '<p><em>Client not found.</em></p>';
+        } else {
+            echo '<h4>Client</h4>';
+            $this->renderKeyValueTable([
+                'id' => $client['id'] ?? '',
+                'name' => $client['name'] ?? '',
+                'org_number' => $client['org_number'] ?? '',
+                'email' => $client['email'] ?? '',
+                'phone' => $client['phone'] ?? '',
+            ]);
+        }
+
+        echo '<h3>Commercial summary</h3>';
+        $this->renderKeyValueTable([
+            'work_lines_count' => (int) count($lines),
+            'material_lines_count' => (int) count($materialLines),
+            'labour_total' => $this->formatMinorMoney($totals['labour_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'materials_total' => $this->formatMinorMoney($totals['materials_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'subtotal_ex_vat' => $this->formatMinorMoney($totals['subtotal_ex_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'vat' => $this->formatMinorMoney($totals['vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+        ]);
 
         echo '<h3>Добавить work line</h3><form method="post">';
         wp_nonce_field('trn_estimate_line_create');
@@ -697,8 +774,95 @@ final class PageController
         $materialLines = is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [];
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
         $sourceEstimate = $estimateId > 0 ? $this->factory->estimates()->find($estimateId) : null;
+        $project = null;
+        $property = null;
+        $client = null;
+        if (is_array($sourceEstimate)) {
+            $projectId = (int) ($sourceEstimate['project_id'] ?? 0);
+            if ($projectId > 0) {
+                $project = $this->factory->projects()->find($projectId);
+            }
+        }
+        if (is_array($project)) {
+            $propertyId = (int) ($project['property_id'] ?? 0);
+            if ($propertyId > 0) {
+                $property = $this->factory->properties()->find($propertyId);
+            }
+        }
+        if (is_array($property)) {
+            $clientId = (int) ($property['client_id'] ?? 0);
+            if ($clientId > 0) {
+                $client = $this->factory->clients()->find($clientId);
+            }
+        }
 
         echo '<h2>Offert #' . esc_html((string) $offertId) . ' (read-only)</h2>';
+        echo '<h3>Offert summary</h3>';
+        $this->renderKeyValueTable([
+            'document_number' => $offert['document_number'] ?? '',
+            'version_no' => $offert['version_no'] ?? '',
+            'status' => $offert['status'] ?? '',
+            'currency' => $offert['currency'] ?? ($header['currency'] ?? 'SEK'),
+            'vat_rate_percent' => $offert['vat_rate_percent'] ?? ($header['vat_rate_percent'] ?? ''),
+            'labour_total' => $this->formatMinorMoney($offert['labour_total_minor'] ?? null, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK'))),
+            'materials_total' => $this->formatMinorMoney($offert['materials_total_minor'] ?? null, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK'))),
+            'subtotal_ex_vat' => $this->formatMinorMoney($offert['subtotal_ex_vat_minor'] ?? null, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK'))),
+            'vat' => $this->formatMinorMoney($offert['vat_minor'] ?? null, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK'))),
+            'total_inc_vat' => $this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK'))),
+            'issued_at' => $offert['issued_at'] ?? '',
+        ]);
+
+        echo '<h3>Commercial context</h3>';
+        if ($sourceEstimate === null) {
+            echo '<p><em>Estimate not found.</em></p>';
+        } else {
+            echo '<h4>Estimate</h4>';
+            $this->renderKeyValueTable([
+                'id' => $sourceEstimate['id'] ?? '',
+                'title' => $sourceEstimate['title'] ?? '',
+                'status' => $sourceEstimate['status'] ?? '',
+                'currency' => $sourceEstimate['currency'] ?? '',
+                'vat_rate_percent' => $sourceEstimate['vat_rate_percent'] ?? '',
+            ]);
+        }
+
+        if (! is_array($project)) {
+            echo '<p><em>Project not found.</em></p>';
+        } else {
+            echo '<h4>Project</h4>';
+            $this->renderKeyValueTable([
+                'id' => $project['id'] ?? '',
+                'name' => $project['name'] ?? '',
+                'code' => $project['code'] ?? '',
+            ]);
+        }
+
+        if (! is_array($property)) {
+            echo '<p><em>Property not found.</em></p>';
+        } else {
+            echo '<h4>Property</h4>';
+            $this->renderKeyValueTable([
+                'id' => $property['id'] ?? '',
+                'name' => $property['name'] ?? '',
+                'address_line' => $property['address_line'] ?? '',
+                'city' => $property['city'] ?? '',
+                'postal_code' => $property['postal_code'] ?? '',
+            ]);
+        }
+
+        if (! is_array($client)) {
+            echo '<p><em>Client not found.</em></p>';
+        } else {
+            echo '<h4>Client</h4>';
+            $this->renderKeyValueTable([
+                'id' => $client['id'] ?? '',
+                'name' => $client['name'] ?? '',
+                'org_number' => $client['org_number'] ?? '',
+                'email' => $client['email'] ?? '',
+                'phone' => $client['phone'] ?? '',
+            ]);
+        }
+
         echo '<h3>Source estimate</h3>';
         if ($sourceEstimate === null) {
             $this->renderAdminNotice('Source estimate not found.', 'warning');
@@ -818,12 +982,19 @@ final class PageController
     {
         $result = filter_input(INPUT_GET, 'trn_result', FILTER_UNSAFE_RAW);
         $message = filter_input(INPUT_GET, 'trn_msg', FILTER_UNSAFE_RAW);
-        if (! is_string($result) || ($result !== 'ok' && $result !== 'error')) {
+        if (! is_string($result) || $result === '') {
             return;
         }
 
-        $className = $result === 'ok' ? 'notice-success' : 'notice-error';
-        $defaultMessage = $result === 'ok' ? 'Operation completed successfully.' : 'Operation failed.';
+        $className = 'notice-info';
+        $defaultMessage = 'Operation result was returned.';
+        if ($result === 'ok') {
+            $className = 'notice-success';
+            $defaultMessage = 'Operation completed successfully.';
+        } elseif ($result === 'error') {
+            $className = 'notice-error';
+            $defaultMessage = 'Operation failed.';
+        }
         $text = is_string($message) && $message !== '' ? $message : $defaultMessage;
 
         echo '<div class="notice ' . esc_attr($className) . ' is-dismissible"><p>' . esc_html($text) . '</p></div>';
@@ -966,7 +1137,7 @@ final class PageController
             echo '<td>' . esc_html((string) ($offert['document_number'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['version_no'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['status'] ?? '')) . '</td>';
-            echo '<td>' . esc_html((string) ($offert['total_inc_vat_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) ($offert['issued_at'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert</a></td>';
             echo '</tr>';
@@ -997,6 +1168,19 @@ final class PageController
     /** @param mixed $value */
     private function formatMinorValue($value): string
     {
-        return (string) ((int) $value) . ' (minor)';
+        return $this->formatMinorMoney($value, 'SEK');
+    }
+
+    /**
+     * @param int|float|string|null $minor
+     */
+    private function formatMinorMoney($minor, string $currency = 'SEK'): string
+    {
+        if (! is_numeric($minor)) {
+            return '—';
+        }
+
+        $major = ((float) $minor) / 100;
+        return number_format($major, 2, '.', ',') . ' ' . strtoupper($currency);
     }
 }
