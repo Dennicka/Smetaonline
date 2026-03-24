@@ -740,6 +740,33 @@ final class PageController
         ]);
 
         $offerts = $this->factory->offerts()->byEstimate($estimateId);
+        $timelineBuilder = new EstimateDocumentTimelineBuilder();
+        $invoicesByOffertId = [];
+        $paymentsByInvoiceId = [];
+        foreach ($offerts as $offert) {
+            $offertId = (int) ($offert['id'] ?? 0);
+            if ($offertId <= 0) {
+                continue;
+            }
+
+            $offertInvoices = $this->factory->invoices()->byOffert($offertId);
+            $invoicesByOffertId[$offertId] = $offertInvoices;
+            foreach ($offertInvoices as $invoice) {
+                $invoiceId = (int) ($invoice['id'] ?? 0);
+                if ($invoiceId <= 0) {
+                    continue;
+                }
+
+                $paymentsByInvoiceId[$invoiceId] = $this->factory->invoicePayments()->byInvoice($invoiceId);
+            }
+        }
+        $snapshots = $this->factory->estimateSnapshots()->byEstimate($estimateId);
+        $timeline = $timelineBuilder->build($estimateId, $snapshots, $offerts, $invoicesByOffertId, $paymentsByInvoiceId);
+        echo '<h3>Document summary</h3>';
+        $this->renderEstimateDocumentSummary($timeline['summary']);
+        echo '<h3>Document timeline</h3>';
+        $this->renderEstimateDocumentTimeline($timeline['rows']);
+
         echo '<h3>Issued offerts for this estimate</h3>';
         if ($offerts === []) {
             $this->renderEmptyState('No offerts yet.');
@@ -789,7 +816,6 @@ final class PageController
         }
         echo '</ul>';
 
-        $snapshots = $this->factory->estimateSnapshots()->byEstimate($estimateId);
         echo '<h3>Recalculation snapshots</h3>';
         if ($snapshots === []) {
             $this->renderEmptyState('No snapshots yet.');
@@ -810,6 +836,57 @@ final class PageController
             }
             echo '</tbody></table>';
         }
+    }
+
+    /** @param array<string, int> $summary */
+    private function renderEstimateDocumentSummary(array $summary): void
+    {
+        echo '<table class="widefat striped"><tbody>';
+        $fields = [
+            'snapshots_count',
+            'offerts_count',
+            'invoices_count',
+            'payments_count',
+            'invoiced_total_minor',
+            'paid_total_minor',
+            'outstanding_minor',
+        ];
+        foreach ($fields as $field) {
+            echo '<tr><th>' . esc_html($field) . '</th><td>' . esc_html((string) ($summary[$field] ?? 0)) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, string|int>> $rows */
+    private function renderEstimateDocumentTimeline(array $rows): void
+    {
+        if ($rows === []) {
+            $this->renderEmptyState('No related documents found.');
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>type</th><th>source_id</th><th>document/reference</th><th>status</th><th>event_at</th><th>amount_minor</th><th>currency</th><th>actions</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['source_type'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['source_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['document_number_or_reference'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['event_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['amount_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['currency'] ?? '')) . '</td>';
+
+            $actionTarget = (string) ($row['action_target'] ?? '');
+            echo '<td>';
+            if ($actionTarget !== '') {
+                echo '<a class="button" href="' . esc_url(admin_url($actionTarget)) . '">Open</a>';
+            } else {
+                echo esc_html__('Unavailable', 'trenor-core');
+            }
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
     }
 
     /** @param array<int, array<string, mixed>> $rows */
