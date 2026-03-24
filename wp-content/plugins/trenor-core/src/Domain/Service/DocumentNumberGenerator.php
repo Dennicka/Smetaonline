@@ -10,4 +10,3 @@ interface DocumentNumberGenerator
 {
     public function next(string $docType, ?DateTimeImmutable $date = null): string;
 }
-

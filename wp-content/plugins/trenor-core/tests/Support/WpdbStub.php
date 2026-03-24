@@ -60,4 +60,3 @@ final class WpdbStub
         return null;
     }
 }
-

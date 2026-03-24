@@ -8,4 +8,3 @@ interface OffertVersionProvider
 {
     public function nextVersionNo(int $estimateId): int;
 }
-
