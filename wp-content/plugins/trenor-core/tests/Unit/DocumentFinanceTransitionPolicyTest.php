@@ -38,6 +38,11 @@ final class DocumentFinanceTransitionPolicyTest extends TestCase
         self::assertTrue($policy->canIssueCreditNoteFromInvoiceStatus('partially_paid'));
         self::assertTrue($policy->canIssueCreditNoteFromInvoiceStatus('paid'));
         self::assertFalse($policy->canIssueCreditNoteFromInvoiceStatus('archived'));
+
+        self::assertTrue($policy->canIssueReminderFromInvoiceStatus('issued'));
+        self::assertTrue($policy->canIssueReminderFromInvoiceStatus('partially_paid'));
+        self::assertFalse($policy->canIssueReminderFromInvoiceStatus('paid'));
+        self::assertFalse($policy->canIssueReminderFromInvoiceStatus('archived'));
     }
 
     public function testCreditNoteTransitionsAllowArchiveOnlyOnce(): void
@@ -47,5 +52,14 @@ final class DocumentFinanceTransitionPolicyTest extends TestCase
         self::assertTrue($policy->canTransitionCreditNoteStatus('issued', 'archived'));
         self::assertFalse($policy->canTransitionCreditNoteStatus('archived', 'archived'));
         self::assertFalse($policy->canTransitionCreditNoteStatus('archived', 'issued'));
+    }
+
+    public function testReminderTransitionsAllowArchiveOnlyOnce(): void
+    {
+        $policy = new DocumentFinanceTransitionPolicy();
+
+        self::assertTrue($policy->canTransitionReminderStatus('issued', 'archived'));
+        self::assertFalse($policy->canTransitionReminderStatus('archived', 'archived'));
+        self::assertFalse($policy->canTransitionReminderStatus('archived', 'issued'));
     }
 }

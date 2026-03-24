@@ -33,6 +33,7 @@ final class Menu
         add_submenu_page('trn_dashboard', 'Offerter / Offerts / Оферты', 'Offerter / Offerts / Оферты', 'trn_issue_offerts', 'trn_offerts', [$this->controller, 'renderOfferts']);
         add_submenu_page('trn_dashboard', 'Fakturor / Invoices / Фактуры', 'Fakturor / Invoices / Фактуры', 'trn_issue_invoices', 'trn_invoices', [$this->controller, 'renderInvoices']);
         add_submenu_page('trn_dashboard', 'Kreditnotor / Credit Notes / Кредит-ноты', 'Kreditnotor / Credit Notes / Кредит-ноты', 'trn_issue_credit_notes', 'trn_credit_notes', [$this->controller, 'renderCreditNotes']);
+        add_submenu_page('trn_dashboard', 'Påminnelser / Reminders / Напоминания', 'Påminnelser / Reminders / Напоминания', 'trn_issue_reminders', 'trn_reminders', [$this->controller, 'renderReminders']);
         add_submenu_page('trn_dashboard', 'Betalningar / Payments / Оплаты', 'Betalningar / Payments / Оплаты', 'trn_record_payments', 'trn_payments', [$this->controller, 'renderPayments']);
         add_submenu_page('trn_dashboard', 'Dossier / Timeline / Досье', 'Dossier / Timeline / Досье', 'read', 'trn_dossier', [$this->controller, 'renderDossier']);
         add_submenu_page('trn_dashboard', 'Настройки', 'Настройки', 'trn_manage_templates', 'trn_settings', [$this->controller, 'renderSettings']);

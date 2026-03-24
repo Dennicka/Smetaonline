@@ -87,6 +87,11 @@ final class RepositoryFactory
         return new CreditNoteRepository();
     }
 
+    public function reminders(): ReminderRepository
+    {
+        return new ReminderRepository();
+    }
+
 
     public function avtals(): AvtalRepository
     {
