@@ -56,13 +56,15 @@ final class CreditNoteFromInvoiceService
         $documentNumber = $this->documentNumberGenerator->next('crn', $issuedAtUtc);
 
         $metadata = is_array($snapshot['metadata'] ?? null) ? $snapshot['metadata'] : [];
-        $header = is_array($snapshot['header'] ?? null) ? $snapshot['header'] : [];
+        $header = $this->normalizeHeader(is_array($snapshot['header'] ?? null) ? $snapshot['header'] : []);
         $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
+        $lines = $this->normalizeLineList(is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : []);
+        $materialLines = $this->normalizeLineList(is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : []);
         $snapshotPayload = Snapshot::freeze([
             'header' => $header,
             'totals' => $totals,
-            'lines' => is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : [],
-            'material_lines' => is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [],
+            'lines' => $lines,
+            'material_lines' => $materialLines,
             'metadata' => [
                 'source_invoice_id' => $invoiceId,
                 'source_invoice_document_number' => (string) ($invoiceRow['document_number'] ?? ''),
@@ -92,5 +94,49 @@ final class CreditNoteFromInvoiceService
             'snapshot_json' => (string) wp_json_encode($snapshotPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
             'issued_at' => $issuedAtUtc->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /** @param array<string, mixed> $header @return array<string, mixed> */
+    private function normalizeHeader(array $header): array
+    {
+        if (isset($header['vat_rate_percent']) && is_numeric($header['vat_rate_percent'])) {
+            $header['vat_rate_percent'] = (float) $header['vat_rate_percent'];
+        }
+
+        return $header;
+    }
+
+    /** @param array<int, mixed> $lines @return array<int, mixed> */
+    private function normalizeLineList(array $lines): array
+    {
+        $decimalKeys = [
+            'quantity',
+            'hours',
+            'calculated_hours',
+            'coverage_snapshot',
+            'norm_per_hour_snapshot',
+            'manual_hours_delta',
+            'complexity_coeff',
+            'surface_coeff',
+            'access_coeff',
+            'urgency_coeff',
+            'vat_rate_percent',
+        ];
+
+        foreach ($lines as $index => $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            foreach ($decimalKeys as $key) {
+                if (isset($line[$key]) && is_numeric($line[$key])) {
+                    $line[$key] = (float) $line[$key];
+                }
+            }
+
+            $lines[$index] = $line;
+        }
+
+        return $lines;
     }
 }
