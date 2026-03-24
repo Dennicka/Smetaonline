@@ -18,6 +18,9 @@ final class EstimateArchiveRepositoryTest extends TestCase
             /** @var array<int, array<string, mixed>> */
             public array $updatedRows = [];
 
+            /** @var array<int, array<string, mixed>> */
+            public array $insertHistory = [];
+
             public int $updateResult = 1;
 
             /** @var array<int, string> */
@@ -46,6 +49,17 @@ final class EstimateArchiveRepositoryTest extends TestCase
                 ];
 
                 return $this->updateResult;
+            }
+
+            public function insert(string $table, array $data, array $format = []): int
+            {
+                $this->insertHistory[] = [
+                    'table' => $table,
+                    'data' => $data,
+                    'format' => $format,
+                ];
+
+                return 1;
             }
 
             public function delete(string $table, array $where, array $format = []): int
