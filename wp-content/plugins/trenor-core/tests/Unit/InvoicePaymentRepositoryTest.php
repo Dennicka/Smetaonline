@@ -7,12 +7,13 @@ namespace Trenor\Core\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Trenor\Core\Database\InvoicePaymentRepository;
+use Trenor\Core\Tests\Support\WpdbStub;
 
 final class InvoicePaymentRepositoryTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new InvoicePaymentWpdbStub());
+        trn_set_test_wpdb(new WpdbStub());
     }
 
     public function testRepositoryMapsTableAndEntity(): void
@@ -29,7 +30,7 @@ final class InvoicePaymentRepositoryTest extends TestCase
 
     public function testTotalPaidByInvoiceReturnsExpectedValue(): void
     {
-        /** @var InvoicePaymentWpdbStub $wpdb */
+        /** @var WpdbStub $wpdb */
         $wpdb = $GLOBALS['wpdb'];
         $wpdb->sumByInvoice[11] = 3400;
 
@@ -43,7 +44,7 @@ final class InvoicePaymentRepositoryTest extends TestCase
     {
         $repo = new InvoicePaymentRepository();
 
-        /** @var InvoicePaymentWpdbStub $wpdb */
+        /** @var WpdbStub $wpdb */
         $wpdb = $GLOBALS['wpdb'];
         $wpdb->insert_id = 77;
 
@@ -60,49 +61,5 @@ final class InvoicePaymentRepositoryTest extends TestCase
 
         self::assertSame(77, $id);
         self::assertSame('wp_trn_invoice_payments', $wpdb->insertedTable);
-    }
-}
-
-final class InvoicePaymentWpdbStub
-{
-    public string $prefix = 'wp_';
-
-    public int $insert_id = 1;
-
-    public string $insertedTable = '';
-
-    /** @var array<int, int> */
-    public array $sumByInvoice = [];
-
-    public function prepare(string $query, ...$args): string
-    {
-        $escaped = array_map(
-            static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
-            $args
-        );
-
-        return vsprintf($query, $escaped);
-    }
-
-    public function insert(string $table, array $data, array $format = []): int
-    {
-        $this->insertedTable = $table;
-
-        return 1;
-    }
-
-    public function get_var(string $query)
-    {
-        if (preg_match('/invoice_id\s*=\s*(\d+)/', $query, $matches) === 1) {
-            return $this->sumByInvoice[(int) $matches[1]] ?? 0;
-        }
-
-        return 0;
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    public function get_results(string $query, string $outputType): array
-    {
-        return [];
     }
 }
