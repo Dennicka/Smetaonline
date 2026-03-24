@@ -527,6 +527,120 @@ final class PageController
         echo '</tbody></table></div>';
     }
 
+    public function renderDossier(): void
+    {
+        if (! current_user_can('read')) {
+            wp_die('Forbidden');
+        }
+
+        $projectIdRaw = filter_input(INPUT_GET, 'project_id', FILTER_UNSAFE_RAW);
+        $projectId = filter_input(INPUT_GET, 'project_id', FILTER_VALIDATE_INT);
+        $projectId = $projectId !== false && $projectId !== null ? (int) $projectId : 0;
+        $hasFilter = $projectIdRaw !== null;
+
+        echo '<div class="wrap"><h1>Dossier / Timeline / Досье</h1>';
+        $this->renderAdminNoticeFromRequest();
+        $this->renderDossierFilterForm($projectId);
+
+        if (! $hasFilter || $projectId <= 0) {
+            $this->renderEmptyState('Enter project_id to open dossier.');
+            echo '</div>';
+
+            return;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if (! is_array($project)) {
+            $this->renderInlineErrorNotice('Project not found for selected project_id.');
+            echo '</div>';
+
+            return;
+        }
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        $property = $propertyId > 0 ? $this->factory->properties()->find($propertyId) : null;
+        $property = is_array($property) ? $property : [];
+        $clientId = (int) ($property['client_id'] ?? 0);
+        $client = $clientId > 0 ? $this->factory->clients()->find($clientId) : null;
+        $client = is_array($client) ? $client : [];
+
+        $estimates = [];
+        foreach ($this->factory->estimates()->all() as $estimate) {
+            if ((int) ($estimate['project_id'] ?? 0) === $projectId) {
+                $estimates[] = $estimate;
+            }
+        }
+
+        $paymentsByInvoiceId = [];
+        $allInvoices = $this->factory->invoices()->all();
+        foreach ($allInvoices as $invoice) {
+            $invoiceId = (int) ($invoice['id'] ?? 0);
+            if ($invoiceId > 0) {
+                $paymentsByInvoiceId[$invoiceId] = $this->factory->invoicePayments()->byInvoice($invoiceId);
+            }
+        }
+
+        $builder = new ProjectDossierBuilder(new InvoicePaymentSummaryCalculator());
+        $normalizer = new ProjectDossierViewNormalizer();
+        $dossier = $normalizer->normalize($builder->build(
+            $project,
+            $property,
+            $client,
+            $estimates,
+            $this->factory->offerts()->all(),
+            $allInvoices,
+            $paymentsByInvoiceId
+        ));
+
+        echo '<h2>Project summary</h2>';
+        $this->renderKeyValueTable([
+            'id' => $dossier['project']['id'] ?? '',
+            'name' => $dossier['project']['name'] ?? '',
+            'code' => $dossier['project']['code'] ?? '',
+            'property_id' => $dossier['project']['property_id'] ?? '',
+        ]);
+
+        echo '<h2>Property summary</h2>';
+        $this->renderKeyValueTable([
+            'id' => $dossier['property']['id'] ?? '',
+            'name' => $dossier['property']['name'] ?? '',
+            'address_line' => $dossier['property']['address_line'] ?? '',
+            'city' => $dossier['property']['city'] ?? '',
+            'postal_code' => $dossier['property']['postal_code'] ?? '',
+            'client_id' => $dossier['property']['client_id'] ?? '',
+        ]);
+
+        echo '<h2>Client summary</h2>';
+        $this->renderKeyValueTable([
+            'id' => $dossier['client']['id'] ?? '',
+            'name' => $dossier['client']['name'] ?? '',
+            'org_number' => $dossier['client']['org_number'] ?? '',
+            'email' => $dossier['client']['email'] ?? '',
+            'phone' => $dossier['client']['phone'] ?? '',
+        ]);
+
+        $this->renderDossierEstimatesTable(is_array($dossier['estimates'] ?? null) ? $dossier['estimates'] : []);
+        $this->renderDossierOffertsTable(is_array($dossier['offerts'] ?? null) ? $dossier['offerts'] : []);
+        $this->renderDossierInvoicesTable(is_array($dossier['invoices'] ?? null) ? $dossier['invoices'] : []);
+        $this->renderDossierPaymentsTable(is_array($dossier['payments'] ?? null) ? $dossier['payments'] : []);
+
+        echo '<h2>Dossier summary</h2>';
+        $this->renderKeyValueTable([
+            'estimates_count' => (string) (($dossier['summary']['estimates_count'] ?? 0)),
+            'offerts_count' => (string) (($dossier['summary']['offerts_count'] ?? 0)),
+            'invoices_count' => (string) (($dossier['summary']['invoices_count'] ?? 0)),
+            'payments_count' => (string) (($dossier['summary']['payments_count'] ?? 0)),
+            'invoiced_total_minor' => (string) (($dossier['summary']['invoiced_total_minor'] ?? 0)),
+            'paid_total_minor' => (string) (($dossier['summary']['paid_total_minor'] ?? 0)),
+            'outstanding_total_minor' => (string) (($dossier['summary']['outstanding_total_minor'] ?? 0)),
+            'fully_paid_invoices_count' => (string) (($dossier['summary']['fully_paid_invoices_count'] ?? 0)),
+            'partially_paid_invoices_count' => (string) (($dossier['summary']['partially_paid_invoices_count'] ?? 0)),
+            'archived_invoices_count' => (string) (($dossier['summary']['archived_invoices_count'] ?? 0)),
+        ]);
+
+        echo '</div>';
+    }
+
     public function renderCreditNotes(): void
     {
         if (! current_user_can('trn_issue_credit_notes')) {
@@ -1681,6 +1795,133 @@ final class PageController
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';
+    }
+
+    private function renderDossierFilterForm(int $projectId): void
+    {
+        $clearUrl = admin_url('admin.php?page=trn_dossier');
+        $projectIdValue = $projectId > 0 ? (string) $projectId : '';
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_dossier">';
+        echo '<label style="margin-right:8px;">project_id <input type="text" name="project_id" value="' . esc_attr($projectIdValue) . '" class="small-text"></label>';
+        submit_button('Open', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear</a>';
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function renderDossierEstimatesTable(array $rows): void
+    {
+        echo '<h2>Estimates for this project</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="8">No estimates linked to this project.</td></tr>';
+        }
+        foreach ($rows as $row) {
+            $estimateId = (int) ($row['id'] ?? 0);
+            $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $offertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['title'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['currency'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['vat_rate_percent'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['labour_rate_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['calculated_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($estimateUrl) . '">Open estimate</a>';
+            echo '<a class="button" href="' . esc_url($offertsUrl) . '" style="margin-left:6px;">Open filtered offerts list for this estimate</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function renderDossierOffertsTable(array $rows): void
+    {
+        echo '<h2>Offerts for estimates of this project</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="8">No offerts linked to this project.</td></tr>';
+        }
+        foreach ($rows as $row) {
+            $offertId = (int) ($row['id'] ?? 0);
+            $estimateId = (int) ($row['estimate_id'] ?? 0);
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
+            $offertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
+            $invoicesUrl = admin_url('admin.php?page=trn_invoices&offert_id=' . $offertId . '&estimate_id=' . $estimateId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['estimate_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['total_inc_vat_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert detail</a>';
+            echo '<a class="button" href="' . esc_url($offertsUrl) . '" style="margin-left:6px;">Open filtered offerts list for this estimate</a>';
+            echo '<a class="button" href="' . esc_url($invoicesUrl) . '" style="margin-left:6px;">Open invoices list filtered by offert/invoice context</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function renderDossierInvoicesTable(array $rows): void
+    {
+        echo '<h2>Invoices linked to those offerts/estimates</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="12">No invoices linked to this project.</td></tr>';
+        }
+        foreach ($rows as $row) {
+            $invoiceId = (int) ($row['id'] ?? 0);
+            $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
+            $paymentsUrl = admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['offert_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['estimate_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['total_inc_vat_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['paid_total_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['outstanding_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['payment_count'] ?? 0)) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($invoiceUrl) . '">Open invoice detail</a>';
+            echo '<a class="button" href="' . esc_url($paymentsUrl) . '" style="margin-left:6px;">Open payments register filtered by invoice_id</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function renderDossierPaymentsTable(array $rows): void
+    {
+        echo '<h2>Payments linked to those invoices</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>payment_date</th><th>amount_minor</th><th>currency</th><th>method</th><th>reference</th><th>created_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($rows === []) {
+            echo '<tr><td colspan="9">No payments linked to this project.</td></tr>';
+        }
+        foreach ($rows as $row) {
+            $invoiceId = (int) ($row['invoice_id'] ?? 0);
+            $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['invoice_id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['payment_date'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['amount_minor'] ?? 0)) . '</td>';
+            echo '<td>' . esc_html((string) ($row['currency'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['method'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['reference'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($invoiceUrl) . '">Open invoice detail</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
     }
 
     /** @param array<string, string> $filters */
