@@ -378,7 +378,6 @@ final class PageController
         }
 
         $rawFilters = [
-            'invoice_id' => filter_input(INPUT_GET, 'invoice_id', FILTER_UNSAFE_RAW),
             'offert_id' => filter_input(INPUT_GET, 'offert_id', FILTER_UNSAFE_RAW),
             'estimate_id' => filter_input(INPUT_GET, 'estimate_id', FILTER_UNSAFE_RAW),
             'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
@@ -388,6 +387,7 @@ final class PageController
         $allInvoices = $this->factory->invoices()->all();
         $invoices = $invoiceFilter->apply($allInvoices, $rawFilters);
         $formFilters = $invoiceFilter->normalizedForForm($rawFilters);
+        $hasActiveFilters = $invoiceFilter->hasActiveFilters($rawFilters);
         $calculator = new InvoicePaymentSummaryCalculator();
         $invoicePayments = $this->factory->invoicePayments();
         $invoiceIds = array_map(static fn (array $invoice): int => (int) ($invoice['id'] ?? 0), $invoices);
@@ -401,6 +401,11 @@ final class PageController
         echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
         $this->renderAdminNoticeFromRequest();
         $this->renderInvoiceFilterForm($formFilters);
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($invoices));
+        if ($hasActiveFilters) {
+            echo ' <em>(filtered results)</em>';
+        }
+        echo '</p>';
         $this->renderInvoiceLedgerSummary($summary, $this->invoiceListCurrency($invoices));
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>paid_total_minor</th><th>outstanding_minor</th><th>payment_count</th><th>computed_status</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
@@ -451,17 +456,15 @@ final class PageController
         }
 
         $rawFilters = [
-            'payment_id' => filter_input(INPUT_GET, 'payment_id', FILTER_UNSAFE_RAW),
             'invoice_id' => filter_input(INPUT_GET, 'invoice_id', FILTER_UNSAFE_RAW),
             'currency' => filter_input(INPUT_GET, 'currency', FILTER_UNSAFE_RAW),
             'method' => filter_input(INPUT_GET, 'method', FILTER_UNSAFE_RAW),
             'reference' => filter_input(INPUT_GET, 'reference', FILTER_UNSAFE_RAW),
-            'payment_date_from' => filter_input(INPUT_GET, 'payment_date_from', FILTER_UNSAFE_RAW),
-            'payment_date_to' => filter_input(INPUT_GET, 'payment_date_to', FILTER_UNSAFE_RAW),
         ];
 
         $filter = new PaymentListFilter();
         $formFilters = $filter->normalizedForForm($rawFilters);
+        $hasActiveFilters = $filter->hasActiveFilters($rawFilters);
         $payments = $filter->apply($this->paymentRowsForList(), $rawFilters);
         $summary = (new PaymentListSummary())->summarize($payments);
         $calculator = new InvoicePaymentSummaryCalculator();
@@ -472,7 +475,11 @@ final class PageController
         $this->renderAdminNoticeFromRequest();
         $this->renderPaymentFilterForm($formFilters);
 
-        echo '<p><strong>Total rows:</strong> ' . esc_html((string) ($summary['total_rows'] ?? 0)) . '</p>';
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) ($summary['total_rows'] ?? 0));
+        if ($hasActiveFilters) {
+            echo ' <em>(filtered results)</em>';
+        }
+        echo '</p>';
         echo '<p><strong>Total amount_minor:</strong> ' . esc_html((string) ($summary['total_amount_minor'] ?? 0)) . '</p>';
         echo '<p><strong>Unique invoices:</strong> ' . esc_html((string) ($summary['unique_invoice_count'] ?? 0)) . '</p>';
         $methodCounts = is_array($summary['method_counts'] ?? null) ? $summary['method_counts'] : [];
@@ -1601,13 +1608,10 @@ final class PageController
 
         echo '<form method="get" style="margin:10px 0;">';
         echo '<input type="hidden" name="page" value="trn_payments">';
-        echo '<label style="margin-right:8px;">payment_id <input type="text" name="payment_id" value="' . esc_attr($filters['payment_id'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">invoice_id <input type="text" name="invoice_id" value="' . esc_attr($filters['invoice_id'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">currency <input type="text" name="currency" value="' . esc_attr($filters['currency'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">method <input type="text" name="method" value="' . esc_attr($filters['method'] ?? '') . '" class="small-text"></label>';
         echo '<label style="margin-right:8px;">reference <input type="text" name="reference" value="' . esc_attr($filters['reference'] ?? '') . '" class="regular-text"></label>';
-        echo '<label style="margin-right:8px;">payment_date_from <input type="text" name="payment_date_from" value="' . esc_attr($filters['payment_date_from'] ?? '') . '" class="regular-text" placeholder="YYYY-MM-DD"></label>';
-        echo '<label style="margin-right:8px;">payment_date_to <input type="text" name="payment_date_to" value="' . esc_attr($filters['payment_date_to'] ?? '') . '" class="regular-text" placeholder="YYYY-MM-DD"></label>';
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';

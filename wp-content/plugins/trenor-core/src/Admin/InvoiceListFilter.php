@@ -15,22 +15,17 @@ final class InvoiceListFilter
      */
     public function apply(array $rows, array $rawFilters): array
     {
-        $invoiceId = $this->normalizePositiveInteger($rawFilters['invoice_id'] ?? null);
         $offertId = $this->normalizePositiveInteger($rawFilters['offert_id'] ?? null);
         $estimateId = $this->normalizePositiveInteger($rawFilters['estimate_id'] ?? null);
         $status = $this->normalizeStatus($rawFilters['status'] ?? null);
         $documentNumber = $this->normalizeDocumentNumber($rawFilters['document_number'] ?? null);
 
-        if ($invoiceId === null && $offertId === null && $estimateId === null && $status === null && $documentNumber === null) {
+        if ($offertId === null && $estimateId === null && $status === null && $documentNumber === null) {
             return $rows;
         }
 
         $filtered = [];
         foreach ($rows as $row) {
-            if ($invoiceId !== null && (int) ($row['id'] ?? 0) !== $invoiceId) {
-                continue;
-            }
-
             if ($offertId !== null && (int) ($row['offert_id'] ?? 0) !== $offertId) {
                 continue;
             }
@@ -57,12 +52,20 @@ final class InvoiceListFilter
     public function normalizedForForm(array $rawFilters): array
     {
         return [
-            'invoice_id' => $this->normalizeFormText($rawFilters['invoice_id'] ?? null),
             'offert_id' => $this->normalizeFormText($rawFilters['offert_id'] ?? null),
             'estimate_id' => $this->normalizeFormText($rawFilters['estimate_id'] ?? null),
             'status' => $this->normalizeFormText($rawFilters['status'] ?? null),
             'document_number' => $this->normalizeFormText($rawFilters['document_number'] ?? null),
         ];
+    }
+
+    /** @param array<string, mixed> $rawFilters */
+    public function hasActiveFilters(array $rawFilters): bool
+    {
+        return $this->normalizePositiveInteger($rawFilters['offert_id'] ?? null) !== null
+            || $this->normalizePositiveInteger($rawFilters['estimate_id'] ?? null) !== null
+            || $this->normalizeStatus($rawFilters['status'] ?? null) !== null
+            || $this->normalizeDocumentNumber($rawFilters['document_number'] ?? null) !== null;
     }
 
     private function normalizePositiveInteger(mixed $value): ?int

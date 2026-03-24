@@ -25,13 +25,6 @@ final class PaymentListFilterTest extends TestCase
         self::assertSame($rows, $actual);
     }
 
-    public function testPaymentIdFilter(): void
-    {
-        $actual = $this->filter->apply($this->sampleRows(), ['payment_id' => '2']);
-
-        self::assertSame([2], array_column($actual, 'id'));
-    }
-
     public function testInvoiceIdFilter(): void
     {
         $actual = $this->filter->apply($this->sampleRows(), ['invoice_id' => '10']);
@@ -39,16 +32,16 @@ final class PaymentListFilterTest extends TestCase
         self::assertSame([1, 3], array_column($actual, 'id'));
     }
 
-    public function testCurrencyFilterCaseInsensitive(): void
+    public function testCurrencyFilterCaseInsensitiveAfterNormalization(): void
     {
-        $actual = $this->filter->apply($this->sampleRows(), ['currency' => 'sek']);
+        $actual = $this->filter->apply($this->sampleRows(), ['currency' => ' sek ']);
 
         self::assertSame([1, 2], array_column($actual, 'id'));
     }
 
-    public function testMethodFilterCaseInsensitive(): void
+    public function testMethodFilterAfterNormalization(): void
     {
-        $actual = $this->filter->apply($this->sampleRows(), ['method' => 'SWISH']);
+        $actual = $this->filter->apply($this->sampleRows(), ['method' => ' SWISH ']);
 
         self::assertSame([2], array_column($actual, 'id'));
     }
@@ -60,42 +53,15 @@ final class PaymentListFilterTest extends TestCase
         self::assertSame([1], array_column($actual, 'id'));
     }
 
-    public function testPaymentDateFromInclusive(): void
-    {
-        $actual = $this->filter->apply($this->sampleRows(), ['payment_date_from' => '2026-01-15']);
-
-        self::assertSame([2, 3], array_column($actual, 'id'));
-    }
-
-    public function testPaymentDateToInclusive(): void
-    {
-        $actual = $this->filter->apply($this->sampleRows(), ['payment_date_to' => '2026-01-15']);
-
-        self::assertSame([1, 2], array_column($actual, 'id'));
-    }
-
-    public function testCombinedDateRange(): void
-    {
-        $actual = $this->filter->apply($this->sampleRows(), [
-            'payment_date_from' => '2026-01-11',
-            'payment_date_to' => '2026-02-01',
-        ]);
-
-        self::assertSame([2], array_column($actual, 'id'));
-    }
-
     public function testInvalidFiltersIgnored(): void
     {
         $rows = $this->sampleRows();
 
         $actual = $this->filter->apply($rows, [
-            'payment_id' => '0',
             'invoice_id' => 'x',
             'currency' => ' ',
             'method' => null,
             'reference' => [],
-            'payment_date_from' => 'no-date',
-            'payment_date_to' => 'also bad',
         ]);
 
         self::assertSame($rows, $actual);
@@ -108,8 +74,6 @@ final class PaymentListFilterTest extends TestCase
             'currency' => 'sek',
             'method' => 'manual',
             'reference' => 'ALPHA',
-            'payment_date_from' => '2026-01-10',
-            'payment_date_to' => '2026-01-10',
         ]);
 
         self::assertSame([1], array_column($actual, 'id'));

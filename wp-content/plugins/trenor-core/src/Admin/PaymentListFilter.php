@@ -13,54 +13,30 @@ final class PaymentListFilter
      */
     public function apply(array $rows, array $rawFilters): array
     {
-        $paymentId = $this->normalizePositiveInteger($rawFilters['payment_id'] ?? null);
         $invoiceId = $this->normalizePositiveInteger($rawFilters['invoice_id'] ?? null);
-        $currency = $this->normalizeScalarText($rawFilters['currency'] ?? null);
-        $method = $this->normalizeScalarText($rawFilters['method'] ?? null);
-        $reference = $this->normalizeScalarText($rawFilters['reference'] ?? null);
-        $paymentDateFrom = $this->normalizeDate($rawFilters['payment_date_from'] ?? null);
-        $paymentDateTo = $this->normalizeDate($rawFilters['payment_date_to'] ?? null);
+        $currency = $this->normalizeCurrency($rawFilters['currency'] ?? null);
+        $method = $this->normalizeMethod($rawFilters['method'] ?? null);
+        $reference = $this->normalizeReference($rawFilters['reference'] ?? null);
 
-        if (
-            $paymentId === null
-            && $invoiceId === null
-            && $currency === null
-            && $method === null
-            && $reference === null
-            && $paymentDateFrom === null
-            && $paymentDateTo === null
-        ) {
+        if ($invoiceId === null && $currency === null && $method === null && $reference === null) {
             return $rows;
         }
 
         $filtered = [];
         foreach ($rows as $row) {
-            if ($paymentId !== null && (int) ($row['id'] ?? 0) !== $paymentId) {
-                continue;
-            }
-
             if ($invoiceId !== null && (int) ($row['invoice_id'] ?? 0) !== $invoiceId) {
                 continue;
             }
 
-            if ($currency !== null && strtolower((string) ($row['currency'] ?? '')) !== $currency) {
+            if ($currency !== null && strtoupper(trim((string) ($row['currency'] ?? ''))) !== $currency) {
                 continue;
             }
 
-            if ($method !== null && strtolower((string) ($row['method'] ?? '')) !== $method) {
+            if ($method !== null && strtolower(trim((string) ($row['method'] ?? ''))) !== $method) {
                 continue;
             }
 
             if ($reference !== null && stripos((string) ($row['reference'] ?? ''), $reference) === false) {
-                continue;
-            }
-
-            $paymentDate = $this->normalizeDate($row['payment_date'] ?? null);
-            if ($paymentDateFrom !== null && ($paymentDate === null || $paymentDate < $paymentDateFrom)) {
-                continue;
-            }
-
-            if ($paymentDateTo !== null && ($paymentDate === null || $paymentDate > $paymentDateTo)) {
                 continue;
             }
 
@@ -74,14 +50,20 @@ final class PaymentListFilter
     public function normalizedForForm(array $rawFilters): array
     {
         return [
-            'payment_id' => $this->normalizeFormText($rawFilters['payment_id'] ?? null),
             'invoice_id' => $this->normalizeFormText($rawFilters['invoice_id'] ?? null),
             'currency' => $this->normalizeFormText($rawFilters['currency'] ?? null),
             'method' => $this->normalizeFormText($rawFilters['method'] ?? null),
             'reference' => $this->normalizeFormText($rawFilters['reference'] ?? null),
-            'payment_date_from' => $this->normalizeFormText($rawFilters['payment_date_from'] ?? null),
-            'payment_date_to' => $this->normalizeFormText($rawFilters['payment_date_to'] ?? null),
         ];
+    }
+
+    /** @param array<string, mixed> $rawFilters */
+    public function hasActiveFilters(array $rawFilters): bool
+    {
+        return $this->normalizePositiveInteger($rawFilters['invoice_id'] ?? null) !== null
+            || $this->normalizeCurrency($rawFilters['currency'] ?? null) !== null
+            || $this->normalizeMethod($rawFilters['method'] ?? null) !== null
+            || $this->normalizeReference($rawFilters['reference'] ?? null) !== null;
     }
 
     private function normalizePositiveInteger(mixed $value): ?int
@@ -99,15 +81,37 @@ final class PaymentListFilter
         return null;
     }
 
-    private function normalizeScalarText(mixed $value): ?string
+    private function normalizeCurrency(mixed $currency): ?string
     {
-        if (! is_scalar($value)) {
+        if (! is_scalar($currency)) {
             return null;
         }
 
-        $text = strtolower(trim((string) $value));
+        $value = strtoupper(trim((string) $currency));
 
-        return $text === '' ? null : $text;
+        return $value === '' ? null : $value;
+    }
+
+    private function normalizeMethod(mixed $method): ?string
+    {
+        if (! is_scalar($method)) {
+            return null;
+        }
+
+        $value = strtolower(trim((string) $method));
+
+        return $value === '' ? null : $value;
+    }
+
+    private function normalizeReference(mixed $reference): ?string
+    {
+        if (! is_scalar($reference)) {
+            return null;
+        }
+
+        $value = trim((string) $reference);
+
+        return $value === '' ? null : $value;
     }
 
     private function normalizeFormText(mixed $value): string
@@ -117,24 +121,5 @@ final class PaymentListFilter
         }
 
         return trim((string) $value);
-    }
-
-    private function normalizeDate(mixed $value): ?string
-    {
-        if (! is_scalar($value)) {
-            return null;
-        }
-
-        $trimmed = trim((string) $value);
-        if ($trimmed === '') {
-            return null;
-        }
-
-        $timestamp = strtotime($trimmed);
-        if ($timestamp === false) {
-            return null;
-        }
-
-        return gmdate('Y-m-d', $timestamp);
     }
 }
