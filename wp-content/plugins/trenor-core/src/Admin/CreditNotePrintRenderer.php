@@ -60,6 +60,15 @@ final class CreditNotePrintRenderer
 
         echo '<h3>Material lines</h3>';
         $this->renderMaterialLinesTable($view['material_lines'], $view['currency']);
+
+        echo '<h3>Issuer / Company</h3>';
+        $this->renderKeyValueTable($view['issuer']);
+
+        echo '<h3>Contact / Payment details</h3>';
+        $this->renderKeyValueTable($view['payment_details']);
+
+        echo '<h3>Terms / Notes</h3>';
+        $this->renderKeyValueTable($view['terms_notes']);
         echo '</div>';
     }
 

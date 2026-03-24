@@ -74,4 +74,34 @@ final class CreditNotePrintViewModelTest extends TestCase
         self::assertSame([], $result['labour_lines']);
         self::assertSame([], $result['material_lines']);
     }
+
+    public function testBuildIntegratesDocumentSettingsForIssuerPaymentAndFooter(): void
+    {
+        $emptyResult = $this->viewModel->build(
+            ['id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => []]
+        );
+        self::assertSame('', $emptyResult['issuer']['company_name']);
+        self::assertSame('', $emptyResult['payment_details']['iban']);
+        self::assertSame('', $emptyResult['terms_notes']['credit_note_footer_text']);
+
+        $result = $this->viewModel->build(
+            ['id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => [
+                'company_name' => 'ACME',
+                'org_number' => '5566',
+                'bankgiro' => '123-456',
+                'payment_terms_days' => '30',
+                'credit_note_footer_text' => 'Adjusted balance',
+            ]]
+        );
+
+        self::assertSame('ACME', $result['issuer']['company_name']);
+        self::assertSame('5566', $result['issuer']['org_number']);
+        self::assertSame('123-456', $result['payment_details']['bankgiro']);
+        self::assertSame('30', $result['payment_details']['payment_terms_days']);
+        self::assertSame('Adjusted balance', $result['terms_notes']['credit_note_footer_text']);
+    }
 }

@@ -22,7 +22,8 @@ final class InvoicePrintViewModel
      *     property?: array<string, mixed>,
      *     client?: array<string, mixed>,
      *     payments?: array<int, mixed>,
-     *     payment_summary?: array<string, mixed>
+     *     payment_summary?: array<string, mixed>,
+     *     document_settings?: array<string, mixed>
      * } $context
      * @return array{
      *     document: array<string, string>,
@@ -32,6 +33,9 @@ final class InvoicePrintViewModel
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
      *     payment_summary: array<string, string>,
      *     payments: array<int, array{payment_date: string, amount_minor: string, currency: string, method: string, reference: string, note: string}>,
+     *     issuer: array<string, string>,
+     *     payment_details: array<string, string>,
+     *     terms_notes: array<string, string>,
      *     currency: string
      * }
      */
@@ -47,6 +51,7 @@ final class InvoicePrintViewModel
         $property = $this->normalizeMap($context['property'] ?? null);
         $client = $this->normalizeMap($context['client'] ?? null);
         $paymentSummary = $this->normalizeMap($context['payment_summary'] ?? null);
+        $settings = $this->normalizeMap($context['document_settings'] ?? null);
 
         $currency = $this->firstScalarString([
             $invoice['currency'] ?? null,
@@ -62,6 +67,9 @@ final class InvoicePrintViewModel
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
             'payment_summary' => $this->buildPaymentSummarySection($invoice, $paymentSummary),
             'payments' => $this->buildPaymentRows($context['payments'] ?? [], $currency),
+            'issuer' => $this->buildIssuerSection($settings),
+            'payment_details' => $this->buildPaymentDetailsSection($settings),
+            'terms_notes' => $this->buildTermsNotesSection($settings),
             'currency' => $currency,
         ];
     }
@@ -287,6 +295,47 @@ final class InvoicePrintViewModel
         }
 
         return $rows;
+    }
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildIssuerSection(array $settings): array
+    {
+        return [
+            'company_name' => $this->firstScalarString([$settings['company_name'] ?? null]),
+            'company_legal_name' => $this->firstScalarString([$settings['company_legal_name'] ?? null]),
+            'org_number' => $this->firstScalarString([$settings['org_number'] ?? null]),
+            'vat_number' => $this->firstScalarString([$settings['vat_number'] ?? null]),
+            'address_line_1' => $this->firstScalarString([$settings['address_line_1'] ?? null]),
+            'address_line_2' => $this->firstScalarString([$settings['address_line_2'] ?? null]),
+            'postal_code' => $this->firstScalarString([$settings['postal_code'] ?? null]),
+            'city' => $this->firstScalarString([$settings['city'] ?? null]),
+            'country' => $this->firstScalarString([$settings['country'] ?? null]),
+            'email' => $this->firstScalarString([$settings['email'] ?? null]),
+            'phone' => $this->firstScalarString([$settings['phone'] ?? null]),
+            'website' => $this->firstScalarString([$settings['website'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildPaymentDetailsSection(array $settings): array
+    {
+        return [
+            'bank_name' => $this->firstScalarString([$settings['bank_name'] ?? null]),
+            'iban' => $this->firstScalarString([$settings['iban'] ?? null]),
+            'bic' => $this->firstScalarString([$settings['bic'] ?? null]),
+            'plusgiro' => $this->firstScalarString([$settings['plusgiro'] ?? null]),
+            'bankgiro' => $this->firstScalarString([$settings['bankgiro'] ?? null]),
+            'swish' => $this->firstScalarString([$settings['swish'] ?? null]),
+            'payment_terms_days' => $this->firstScalarString([$settings['payment_terms_days'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, mixed> $settings @return array<string, string> */
+    private function buildTermsNotesSection(array $settings): array
+    {
+        return [
+            'invoice_footer_text' => $this->firstScalarString([$settings['invoice_footer_text'] ?? null]),
+        ];
     }
 
     /** @param array<int, mixed> $candidates */

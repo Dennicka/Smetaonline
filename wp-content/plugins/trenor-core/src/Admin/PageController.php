@@ -17,6 +17,7 @@ use Trenor\Core\Domain\Service\CreditNoteFromInvoiceService;
 use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
+use Trenor\Core\Domain\Service\DocumentSettings;
 
 final class PageController
 {
@@ -107,6 +108,10 @@ final class PageController
 
         if ($entity === 'credit_note') {
             $this->handleCreditNote($action, $postPayload);
+        }
+
+        if ($entity === 'document_settings' && $action === 'save') {
+            $this->handleDocumentSettingsSave($postPayload);
         }
     }
 
@@ -217,9 +222,58 @@ final class PageController
 
     public function renderSettings(): void
     {
+        if (! current_user_can('trn_manage_backups')) {
+            wp_die('Forbidden');
+        }
+
+        $settings = (new DocumentSettings())->get();
+
         echo '<div class="wrap"><h1>Настройки</h1>';
         $this->renderAdminNoticeFromRequest();
-        echo '<p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p></div>';
+        echo '<p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p>';
+        echo '<h2>Business document settings</h2>';
+        echo '<form method="post">';
+        wp_nonce_field('trn_document_settings_save');
+        echo '<input type="hidden" name="trn_entity" value="document_settings">';
+        echo '<input type="hidden" name="trn_action" value="save">';
+
+        $this->renderDocumentSettingsFieldset('Company', [
+            'company_name' => 'Company name',
+            'company_legal_name' => 'Company legal name',
+            'org_number' => 'Org number',
+            'vat_number' => 'VAT number',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'website' => 'Website',
+        ], $settings);
+
+        $this->renderDocumentSettingsFieldset('Address', [
+            'address_line_1' => 'Address line 1',
+            'address_line_2' => 'Address line 2',
+            'postal_code' => 'Postal code',
+            'city' => 'City',
+            'country' => 'Country',
+        ], $settings);
+
+        $this->renderDocumentSettingsFieldset('Payment / bank', [
+            'bank_name' => 'Bank name',
+            'iban' => 'IBAN',
+            'bic' => 'BIC',
+            'plusgiro' => 'Plusgiro',
+            'bankgiro' => 'Bankgiro',
+            'swish' => 'Swish',
+            'payment_terms_days' => 'Payment terms days',
+        ], $settings);
+
+        $this->renderDocumentSettingsTextareaFieldset('Default document text blocks', [
+            'offert_intro_text' => 'Offert intro text',
+            'offert_footer_text' => 'Offert footer text',
+            'invoice_footer_text' => 'Invoice footer text',
+            'credit_note_footer_text' => 'Credit note footer text',
+        ], $settings);
+
+        submit_button('Save settings');
+        echo '</form></div>';
     }
 
     public function renderOfferts(): void
@@ -1163,6 +1217,10 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_issue_credit_notes';
         }
 
+        if ($entity === 'document_settings') {
+            return 'trn_manage_backups';
+        }
+
         return 'read';
     }
 
@@ -1728,7 +1786,7 @@ final class PageController
 
     /**
      * @param array<string, mixed> $creditNote
-     * @return array{source_invoice: array<string, mixed>, source_offert: array<string, mixed>, source_estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>}
+     * @return array{source_invoice: array<string, mixed>, source_offert: array<string, mixed>, source_estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>, document_settings: array<string, string>}
      */
     private function loadCreditNoteContext(array $creditNote): array
     {
@@ -1739,6 +1797,7 @@ final class PageController
             'project' => [],
             'property' => [],
             'client' => [],
+            'document_settings' => (new DocumentSettings())->get(),
         ];
 
         $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
@@ -1822,7 +1881,8 @@ final class PageController
      *     property: array<string, mixed>,
      *     client: array<string, mixed>,
      *     payments: array<int, array<string, mixed>>,
-     *     payment_summary: array<string, mixed>
+     *     payment_summary: array<string, mixed>,
+     *     document_settings: array<string, string>
      * }
      */
     private function loadInvoicePrintContext(array $invoice): array
@@ -1835,6 +1895,7 @@ final class PageController
             'client' => [],
             'payments' => [],
             'payment_summary' => [],
+            'document_settings' => (new DocumentSettings())->get(),
         ];
 
         $invoiceId = (int) ($invoice['id'] ?? 0);
@@ -1903,7 +1964,7 @@ final class PageController
 
     /**
      * @param array<string, mixed> $offert
-     * @return array{estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>}
+     * @return array{estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>, document_settings: array<string, string>}
      */
     private function loadOffertPrintContext(array $offert): array
     {
@@ -1912,6 +1973,7 @@ final class PageController
             'project' => [],
             'property' => [],
             'client' => [],
+            'document_settings' => (new DocumentSettings())->get(),
         ];
 
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
@@ -1958,6 +2020,42 @@ final class PageController
         }
 
         return $context;
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function handleDocumentSettingsSave(array $postPayload): void
+    {
+        (new DocumentSettings())->save($postPayload);
+        wp_safe_redirect(admin_url('admin.php?page=trn_settings&trn_result=ok'));
+        exit;
+    }
+
+    /** @param array<string, string> $labels @param array<string, string> $values */
+    private function renderDocumentSettingsFieldset(string $title, array $labels, array $values): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        echo '<table class="form-table" role="presentation"><tbody>';
+        foreach ($labels as $field => $label) {
+            echo '<tr>';
+            echo '<th scope="row"><label for="' . esc_attr($field) . '">' . esc_html($label) . '</label></th>';
+            echo '<td><input class="regular-text" id="' . esc_attr($field) . '" name="' . esc_attr($field) . '" value="' . esc_attr((string) ($values[$field] ?? '')) . '"></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, string> $labels @param array<string, string> $values */
+    private function renderDocumentSettingsTextareaFieldset(string $title, array $labels, array $values): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        echo '<table class="form-table" role="presentation"><tbody>';
+        foreach ($labels as $field => $label) {
+            echo '<tr>';
+            echo '<th scope="row"><label for="' . esc_attr($field) . '">' . esc_html($label) . '</label></th>';
+            echo '<td><textarea class="large-text" rows="4" id="' . esc_attr($field) . '" name="' . esc_attr($field) . '">' . esc_textarea((string) ($values[$field] ?? '')) . '</textarea></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
     }
 
     /**
