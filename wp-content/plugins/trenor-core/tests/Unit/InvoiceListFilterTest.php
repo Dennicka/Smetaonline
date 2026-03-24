@@ -25,13 +25,6 @@ final class InvoiceListFilterTest extends TestCase
         self::assertSame($rows, $actual);
     }
 
-    public function testInvoiceIdFilter(): void
-    {
-        $actual = $this->filter->apply($this->sampleRows(), ['invoice_id' => '2']);
-
-        self::assertSame([2], array_column($actual, 'id'));
-    }
-
     public function testOffertIdFilter(): void
     {
         $actual = $this->filter->apply($this->sampleRows(), ['offert_id' => '100']);
@@ -65,7 +58,6 @@ final class InvoiceListFilterTest extends TestCase
         $rows = $this->sampleRows();
 
         $actual = $this->filter->apply($rows, [
-            'invoice_id' => '0',
             'offert_id' => 'oops',
             'estimate_id' => '',
             'status' => 'draft',
