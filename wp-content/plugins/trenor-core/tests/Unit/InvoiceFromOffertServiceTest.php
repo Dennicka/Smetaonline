@@ -15,16 +15,24 @@ final class InvoiceFromOffertServiceTest extends TestCase
 {
     public function testAcceptedOffertBuildsInvoicePayloadAndFreezesSnapshot(): void
     {
-        $versionProvider = new class implements InvoiceVersionProvider {
+        $versionProvider = new class () implements InvoiceVersionProvider {
+            public int $receivedOffertId = 0;
+
             public function nextVersionNo(int $offertId): int
             {
+                $this->receivedOffertId = $offertId;
+
                 return 3;
             }
         };
 
-        $documentNumbers = new class implements DocumentNumberGenerator {
+        $documentNumbers = new class () implements DocumentNumberGenerator {
+            public string $receivedDocType = '';
+
             public function next(string $docType, ?DateTimeImmutable $date = null): string
             {
+                $this->receivedDocType = $docType;
+
                 return 'INV-202603-00031';
             }
         };
@@ -45,15 +53,28 @@ final class InvoiceFromOffertServiceTest extends TestCase
         $snapshot['header']['title'] = 'Changed later';
         $snapshot['lines'][0]['quantity'] = 99.0;
         $snapshot['material_lines'][0]['quantity'] = 88.0;
+        $snapshot['totals']['vat_minor'] = 0;
 
+        self::assertSame(17, $payload['offert_id']);
+        self::assertSame(44, $payload['estimate_id']);
         self::assertSame('INV-202603-00031', $payload['document_number']);
         self::assertSame(3, $payload['version_no']);
+        self::assertSame('issued', $payload['status']);
+        self::assertSame(90000, $payload['labour_total_minor']);
+        self::assertSame(30000, $payload['materials_total_minor']);
+        self::assertSame(120000, $payload['subtotal_ex_vat_minor']);
+        self::assertSame(30000, $payload['vat_minor']);
+        self::assertSame(150000, $payload['total_inc_vat_minor']);
+
+        self::assertSame(17, $versionProvider->receivedOffertId);
+        self::assertSame('inv', $documentNumbers->receivedDocType);
 
         $frozen = json_decode((string) $payload['snapshot_json'], true);
         self::assertIsArray($frozen);
         self::assertSame('Kitchen refresh', $frozen['header']['title']);
         self::assertSame(1.5, $frozen['lines'][0]['quantity']);
         self::assertSame(2.25, $frozen['material_lines'][0]['quantity']);
+        self::assertSame(30000, $frozen['totals']['vat_minor']);
 
         self::assertSame(17, $frozen['metadata']['source_offert_id']);
         self::assertSame('OFF-202603-00077', $frozen['metadata']['source_offert_document_number']);
@@ -64,14 +85,14 @@ final class InvoiceFromOffertServiceTest extends TestCase
 
     public function testNonAcceptedOffertIsRejected(): void
     {
-        $versionProvider = new class implements InvoiceVersionProvider {
+        $versionProvider = new class () implements InvoiceVersionProvider {
             public function nextVersionNo(int $offertId): int
             {
                 return 1;
             }
         };
 
-        $documentNumbers = new class implements DocumentNumberGenerator {
+        $documentNumbers = new class () implements DocumentNumberGenerator {
             public function next(string $docType, ?DateTimeImmutable $date = null): string
             {
                 return 'INV-202603-00001';
