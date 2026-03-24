@@ -12,6 +12,7 @@ use Trenor\Core\Domain\Exception\EstimateCalculationException;
 use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
+use Trenor\Core\Domain\Service\InvoiceIssuePolicy;
 use Trenor\Core\Domain\Service\InvoicePaymentSummaryCalculator;
 use Trenor\Core\Domain\Service\CreditNoteFromInvoiceService;
 use Trenor\Core\Domain\Service\InvoiceFromOffertService;
@@ -1241,7 +1242,13 @@ final class PageController
                 wp_die(esc_html__('You do not have permissions to perform this action.', 'trenor-core'));
             }
 
-            $isSuccess = $offertRepo->transitionStatus($id, $action === 'archive' ? 'archived' : $action . 'ed');
+            $statusMap = [
+                'accept' => 'accepted',
+                'reject' => 'rejected',
+                'archive' => 'archived',
+            ];
+            $nextStatus = $statusMap[$action] ?? '';
+            $isSuccess = $nextStatus !== '' && $offertRepo->transitionStatus($id, $nextStatus);
             $status = $isSuccess ? 'ok' : 'error';
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=' . $status));
             exit;
@@ -1252,6 +1259,11 @@ final class PageController
             $offert = $offertRepo->find($offertId);
             if ($offert === null) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
+                exit;
+            }
+            $offertStatus = sanitize_key((string) ($offert['status'] ?? ''));
+            if (! (new InvoiceIssuePolicy())->canIssueFromOffertStatus($offertStatus)) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice can be issued only from accepted offert.')));
                 exit;
             }
 
@@ -1287,6 +1299,11 @@ final class PageController
         $offert = $this->factory->offerts()->find($offertId);
         if ($offert === null) {
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
+            exit;
+        }
+        $offertStatus = sanitize_key((string) ($offert['status'] ?? ''));
+        if (! (new InvoiceIssuePolicy())->canIssueFromOffertStatus($offertStatus)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&trn_result=error&trn_msg=' . rawurlencode('Invoice can be issued only from accepted offert.')));
             exit;
         }
 
@@ -1512,6 +1529,38 @@ final class PageController
 
         $renderer = new OffertDetailRenderer();
         $renderer->render($offert, $snapshot);
+        $this->renderIssuedInvoicesForOffert($offertId);
+    }
+
+    private function renderIssuedInvoicesForOffert(int $offertId): void
+    {
+        $invoices = $this->factory->invoices()->byOffert($offertId);
+
+        echo '<h2>Issued invoices for this offert</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>document_number</th><th>version_no</th><th>status</th><th>issued_at</th><th>total_inc_vat_minor</th><th>Actions</th></tr></thead><tbody>';
+
+        if ($invoices === []) {
+            echo '<tr><td colspan="7">No invoices yet.</td></tr>';
+            echo '</tbody></table>';
+
+            return;
+        }
+
+        foreach ($invoices as $invoice) {
+            $invoiceId = (int) ($invoice['id'] ?? 0);
+            $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $invoiceId) . '</td>';
+            echo '<td>' . esc_html((string) ($invoice['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($invoice['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($invoice['issued_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($invoice['total_inc_vat_minor'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($invoiceUrl) . '">Open invoice detail</a></td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
     }
 
     private function renderInvoiceDetail(int $invoiceId): void

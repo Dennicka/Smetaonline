@@ -26,6 +26,9 @@ final class WpdbStub
     /** @var array<int, array<int, array<string, mixed>>> */
     public array $paymentsByInvoice = [];
 
+    /** @var array<int, array<string, mixed>> */
+    public array $rowsById = [];
+
     public function prepare(string $query, ...$args): string
     {
         $escaped = array_map(
@@ -93,6 +96,15 @@ final class WpdbStub
             }
 
             return [];
+        }
+
+        if ($name === 'get_row') {
+            $query = (string) ($arguments[0] ?? '');
+            if (preg_match('/id\s*=\s*(\d+)/', $query, $matches) === 1) {
+                return $this->rowsById[(int) $matches[1]] ?? null;
+            }
+
+            return null;
         }
 
         return null;

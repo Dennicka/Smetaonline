@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Database;
 
 use Trenor\Core\Domain\Service\OffertVersionProvider;
+use Trenor\Core\Domain\Service\OffertStatusTransitionPolicy;
 
 final class OffertRepository extends BaseRepository implements OffertVersionProvider
 {
@@ -74,9 +75,14 @@ final class OffertRepository extends BaseRepository implements OffertVersionProv
     {
         global $wpdb;
 
-        $allowed = ['issued', 'accepted', 'rejected', 'archived'];
+        $offert = $this->find($id);
+        if (! is_array($offert)) {
+            return false;
+        }
+
+        $currentStatus = sanitize_key((string) ($offert['status'] ?? ''));
         $nextStatus = sanitize_key($status);
-        if (! in_array($nextStatus, $allowed, true)) {
+        if (! (new OffertStatusTransitionPolicy())->canTransition($currentStatus, $nextStatus)) {
             return false;
         }
 

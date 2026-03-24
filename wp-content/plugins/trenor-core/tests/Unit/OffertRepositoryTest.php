@@ -29,21 +29,38 @@ final class OffertRepositoryTest extends TestCase
         self::assertSame(2, $repo->nextVersionNo(99));
     }
 
-    public function testStatusTransitionsAndNoGeneralUpdatePath(): void
+    public function testStatusTransitionsRespectPolicyAndNoGeneralUpdatePath(): void
     {
         $repo = new OffertRepository();
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
 
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'issued'];
         self::assertTrue($repo->transitionStatus(10, 'accepted'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'issued'];
         self::assertTrue($repo->transitionStatus(10, 'rejected'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'issued'];
         self::assertTrue($repo->transitionStatus(10, 'archived'));
-        self::assertFalse($repo->transitionStatus(10, 'draft'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'accepted'];
+        self::assertTrue($repo->transitionStatus(10, 'archived'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'rejected'];
+        self::assertTrue($repo->transitionStatus(10, 'archived'));
+
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'accepted'];
+        self::assertFalse($repo->transitionStatus(10, 'rejected'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'rejected'];
+        self::assertFalse($repo->transitionStatus(10, 'accepted'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'archived'];
+        self::assertFalse($repo->transitionStatus(10, 'accepted'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'archived'];
+        self::assertFalse($repo->transitionStatus(10, 'rejected'));
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'archived'];
+        self::assertFalse($repo->transitionStatus(10, 'issued'));
 
         self::assertFalse(method_exists($repo, 'updateEntity'));
 
-        /** @var WpdbStub $wpdb */
-        $wpdb = $GLOBALS['wpdb'];
         $statuses = array_column(array_map(static fn (array $row): array => $row['data'], $wpdb->updatedRows), 'status');
-        self::assertSame(['accepted', 'rejected', 'archived'], $statuses);
+        self::assertSame(['accepted', 'rejected', 'archived', 'archived', 'archived'], $statuses);
     }
 
     public function testRepositoryMapsTableAndEntity(): void
