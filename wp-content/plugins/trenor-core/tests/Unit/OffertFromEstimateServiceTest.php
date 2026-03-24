@@ -12,18 +12,26 @@ use Trenor\Core\Domain\Service\OffertVersionProvider;
 
 final class OffertFromEstimateServiceTest extends TestCase
 {
-    public function testBuildPayloadCreatesImmutableSnapshot(): void
+    public function testBuildPayloadCreatesIssuedPayloadAndImmutableSnapshot(): void
     {
-        $versionProvider = new class implements OffertVersionProvider {
+        $versionProvider = new class () implements OffertVersionProvider {
+            public int $receivedEstimateId = 0;
+
             public function nextVersionNo(int $estimateId): int
             {
+                $this->receivedEstimateId = $estimateId;
+
                 return 2;
             }
         };
 
-        $documentNumbers = new class implements DocumentNumberGenerator {
+        $documentNumbers = new class () implements DocumentNumberGenerator {
+            public string $receivedDocType = '';
+
             public function next(string $docType, ?DateTimeImmutable $date = null): string
             {
+                $this->receivedDocType = $docType;
+
                 return 'OFF-202603-00077';
             }
         };
@@ -42,8 +50,18 @@ final class OffertFromEstimateServiceTest extends TestCase
         $materials[0]['quantity'] = 99.0;
         $totals['total_inc_vat_minor'] = 0;
 
-        self::assertStringStartsWith('OFF-', (string) $payload['document_number']);
+        self::assertSame(44, $payload['estimate_id']);
+        self::assertSame('OFF-202603-00077', $payload['document_number']);
         self::assertSame(2, $payload['version_no']);
+        self::assertSame('issued', $payload['status']);
+        self::assertSame(90000, $payload['labour_total_minor']);
+        self::assertSame(30000, $payload['materials_total_minor']);
+        self::assertSame(120000, $payload['subtotal_ex_vat_minor']);
+        self::assertSame(30000, $payload['vat_minor']);
+        self::assertSame(150000, $payload['total_inc_vat_minor']);
+
+        self::assertSame(44, $versionProvider->receivedEstimateId);
+        self::assertSame('off', $documentNumbers->receivedDocType);
 
         $snapshot = json_decode((string) $payload['snapshot_json'], true);
         self::assertIsArray($snapshot);
@@ -51,6 +69,7 @@ final class OffertFromEstimateServiceTest extends TestCase
         self::assertSame(1.5, $snapshot['lines'][0]['quantity']);
         self::assertSame(2.25, $snapshot['material_lines'][0]['quantity']);
         self::assertSame(150000, $snapshot['totals']['total_inc_vat_minor']);
+        self::assertSame(44, $snapshot['metadata']['source_estimate_id']);
         self::assertSame(2, $snapshot['metadata']['offert_version_no']);
         self::assertSame((string) $payload['document_number'], $snapshot['metadata']['document_number']);
     }

@@ -57,6 +57,25 @@ final class InvoicePaymentSummaryCalculatorTest extends TestCase
         self::assertSame('paid', $summary['computed_status']);
     }
 
+
+    public function testSummaryShapeIncludesAllContractFields(): void
+    {
+        $calculator = new InvoicePaymentSummaryCalculator();
+
+        $summary = $calculator->calculate(
+            ['total_inc_vat_minor' => 13000],
+            [
+                ['amount_minor' => 3000],
+            ]
+        );
+
+        self::assertSame(13000, $summary['invoice_total_minor']);
+        self::assertSame(3000, $summary['paid_total_minor']);
+        self::assertSame(10000, $summary['outstanding_minor']);
+        self::assertSame(1, $summary['payment_count']);
+        self::assertSame('partially_paid', $summary['computed_status']);
+    }
+
     public function testOutstandingNeverNegative(): void
     {
         $calculator = new InvoicePaymentSummaryCalculator();

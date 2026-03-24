@@ -16,7 +16,58 @@ final class OffertSnapshotReaderTest extends TestCase
         $this->reader = new OffertSnapshotReader();
     }
 
-    public function testReadReturnsExpectedSectionsForValidSnapshotJson(): void
+    public function testReadReturnsNormalizedEmptySectionsForInvalidJson(): void
+    {
+        $actual = $this->reader->read(['snapshot_json' => '{invalid']);
+
+        self::assertSame(['header', 'totals', 'lines', 'material_lines', 'metadata'], array_keys($actual));
+        self::assertSame([], $actual['header']);
+        self::assertSame([], $actual['totals']);
+        self::assertSame([], $actual['lines']);
+        self::assertSame([], $actual['material_lines']);
+        self::assertSame([], $actual['metadata']);
+    }
+
+    public function testReadNormalizesMissingSectionsSafely(): void
+    {
+        $offert = [
+            'snapshot_json' => json_encode([
+                'header' => ['currency' => 'SEK'],
+                'lines' => [['id' => 10]],
+            ]),
+        ];
+
+        $actual = $this->reader->read($offert);
+
+        self::assertSame(['currency' => 'SEK'], $actual['header']);
+        self::assertSame([], $actual['totals']);
+        self::assertSame([['id' => 10]], $actual['lines']);
+        self::assertSame([], $actual['material_lines']);
+        self::assertSame([], $actual['metadata']);
+    }
+
+    public function testReadNormalizesMalformedSectionTypesSafely(): void
+    {
+        $offert = [
+            'snapshot_json' => json_encode([
+                'header' => ['wrong'],
+                'totals' => 'not-a-map',
+                'lines' => ['a' => 'bad'],
+                'material_lines' => true,
+                'metadata' => ['x'],
+            ]),
+        ];
+
+        $actual = $this->reader->read($offert);
+
+        self::assertSame([], $actual['header']);
+        self::assertSame([], $actual['totals']);
+        self::assertSame([], $actual['lines']);
+        self::assertSame([], $actual['material_lines']);
+        self::assertSame([], $actual['metadata']);
+    }
+
+    public function testReadPreservesValidSnapshotSections(): void
     {
         $offert = [
             'snapshot_json' => json_encode([
@@ -35,55 +86,5 @@ final class OffertSnapshotReaderTest extends TestCase
         self::assertSame([['id' => 10, 'quantity' => 2]], $actual['lines']);
         self::assertSame([['id' => 20, 'quantity' => 3]], $actual['material_lines']);
         self::assertSame(['source_estimate_id' => 55], $actual['metadata']);
-    }
-
-    public function testReadReturnsEmptySectionsForInvalidJson(): void
-    {
-        $actual = $this->reader->read(['snapshot_json' => '{invalid']);
-
-        self::assertSame([], $actual['header']);
-        self::assertSame([], $actual['totals']);
-        self::assertSame([], $actual['lines']);
-        self::assertSame([], $actual['material_lines']);
-        self::assertSame([], $actual['metadata']);
-    }
-
-    public function testReadNormalizesMissingSectionsToEmptyArrays(): void
-    {
-        $offert = [
-            'snapshot_json' => json_encode([
-                'header' => ['currency' => 'SEK'],
-                'lines' => [['id' => 10]],
-            ]),
-        ];
-
-        $actual = $this->reader->read($offert);
-
-        self::assertSame(['currency' => 'SEK'], $actual['header']);
-        self::assertSame([], $actual['totals']);
-        self::assertSame([['id' => 10]], $actual['lines']);
-        self::assertSame([], $actual['material_lines']);
-        self::assertSame([], $actual['metadata']);
-    }
-
-    public function testReadNormalizesNonArraySectionsToEmptyArrays(): void
-    {
-        $offert = [
-            'snapshot_json' => json_encode([
-                'header' => 'wrong',
-                'totals' => 10,
-                'lines' => 'bad',
-                'material_lines' => 'bad-lines',
-                'metadata' => false,
-            ]),
-        ];
-
-        $actual = $this->reader->read($offert);
-
-        self::assertSame([], $actual['header']);
-        self::assertSame([], $actual['totals']);
-        self::assertSame([], $actual['lines']);
-        self::assertSame([], $actual['material_lines']);
-        self::assertSame([], $actual['metadata']);
     }
 }
