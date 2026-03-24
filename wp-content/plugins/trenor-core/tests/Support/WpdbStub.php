@@ -13,6 +13,9 @@ final class WpdbStub
 
     public string $insertedTable = '';
 
+    /** @var array<int, array<string, mixed>> */
+    public array $insertHistory = [];
+
     public int $insert_id = 1;
 
     public int $maxVersion = 0;
@@ -53,6 +56,11 @@ final class WpdbStub
     public function insert(string $table, array $data, array $format = []): int
     {
         $this->insertedTable = $table;
+        $this->insertHistory[] = [
+            'table' => $table,
+            'data' => $data,
+            'format' => $format,
+        ];
 
         if ($this->insert_id <= 0) {
             $this->insert_id = 1;

@@ -60,6 +60,12 @@ final class InvoicePaymentRepositoryTest extends TestCase
         ]);
 
         self::assertSame(77, $id);
-        self::assertSame('wp_trn_invoice_payments', $wpdb->insertedTable);
+        $insertTables = array_map(
+            static fn (array $insert): string => (string) ($insert['table'] ?? ''),
+            $wpdb->insertHistory
+        );
+
+        self::assertContains('wp_trn_invoice_payments', $insertTables);
+        self::assertContains('wp_trn_audit_log', $insertTables);
     }
 }
