@@ -25,11 +25,10 @@ final class DocumentArtifactRepository
         global $wpdb;
 
         $table = $this->table();
-        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed with WP prefix.
-        $query = "SELECT * FROM {$table} WHERE document_type = %s AND document_id = %d AND version_no = %d AND artifact_type = %s LIMIT 1";
         $row = $wpdb->get_row(
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is internally constructed with WP prefix.
             $wpdb->prepare(
-                $query,
+                "SELECT * FROM {$table} WHERE document_type = %s AND document_id = %d AND version_no = %d AND artifact_type = %s LIMIT 1",
                 sanitize_key($documentType),
                 $documentId,
                 $versionNo,
