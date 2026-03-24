@@ -210,25 +210,26 @@ final class PageController
             wp_die('Forbidden');
         }
 
+        $estimateFilter = filter_input(INPUT_GET, 'estimate_id', FILTER_UNSAFE_RAW);
+        $statusFilter = filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW);
+        $documentNumberFilter = filter_input(INPUT_GET, 'document_number', FILTER_UNSAFE_RAW);
         $offertId = filter_input(INPUT_GET, 'offert_id', FILTER_VALIDATE_INT);
         $offertId = $offertId !== false && $offertId !== null ? (int) $offertId : 0;
-        $estimateId = filter_input(INPUT_GET, 'estimate_id', FILTER_VALIDATE_INT);
-        $estimateId = $estimateId !== false && $estimateId !== null ? (int) $estimateId : 0;
-        $offerts = $estimateId > 0
-            ? $this->factory->offerts()->byEstimate($estimateId)
-            : $this->factory->offerts()->all();
+        $filter = new OffertListFilter();
+        $allOfferts = $this->factory->offerts()->all();
+        $offerts = $filter->apply($allOfferts, $estimateFilter, $statusFilter, $documentNumberFilter);
+        $hasActiveFilters = $filter->isEstimateIdFilterActive($estimateFilter)
+            || $filter->isStatusFilterActive($statusFilter)
+            || $filter->isDocumentNumberFilterActive($documentNumberFilter);
 
         echo '<div class="wrap"><h1>Offerter / Offerts / Оферты</h1>';
         $this->renderAdminNoticeFromRequest();
-        if ($estimateId > 0) {
-            $sourceEstimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
-            $clearFilterUrl = admin_url('admin.php?page=trn_offerts');
-            echo '<p><strong>Showing offerts for estimate #' . esc_html((string) $estimateId) . '</strong></p>';
-            echo '<p>';
-            echo '<a class="button button-secondary" href="' . esc_url($sourceEstimateUrl) . '">Open source estimate</a>';
-            echo '<a class="button button-secondary" href="' . esc_url($clearFilterUrl) . '" style="margin-left:6px;">Clear filter</a>';
-            echo '</p>';
+        $this->renderOffertFilterForm($estimateFilter, $statusFilter, $documentNumberFilter);
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($offerts));
+        if ($hasActiveFilters) {
+            echo ' <em>(filtered results)</em>';
         }
+        echo '</p>';
         echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
@@ -415,7 +416,7 @@ final class PageController
         $offerts = $this->factory->offerts()->byEstimate($estimateId);
         echo '<h3>Issued offerts for this estimate</h3>';
         if ($offerts === []) {
-            $this->renderEmptyState('No offerts issued for this estimate yet.');
+            $this->renderEmptyState('No offerts yet.');
         } else {
             $this->renderOffertsForEstimateTable($offerts, $estimateId);
         }
@@ -770,6 +771,17 @@ final class PageController
             return;
         }
 
+        $offertsUrl = admin_url('admin.php?page=trn_offerts');
+        $estimateId = (int) ($offert['estimate_id'] ?? 0);
+        echo '<p><a href="' . esc_url($offertsUrl) . '">Back to offerts list</a>';
+        if ($estimateId > 0) {
+            $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $estimateOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
+            echo ' | <a href="' . esc_url($estimateUrl) . '">Open source estimate</a>';
+            echo ' | <a href="' . esc_url($estimateOffertsUrl) . '">View all offerts for this estimate</a>';
+        }
+        echo '</p>';
+
         $reader = new OffertSnapshotReader();
         $snapshot = $reader->read($offert);
 
@@ -928,7 +940,7 @@ final class PageController
     /** @param array<int, array<string, mixed>> $offerts */
     private function renderOffertsForEstimateTable(array $offerts, int $estimateId = 0): void
     {
-        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>document_number</th><th>version_no</th><th>status</th><th>issued_at</th><th>total_inc_vat_minor</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($offert['id'] ?? 0));
             $filteredOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
@@ -937,8 +949,8 @@ final class PageController
             echo '<td>' . esc_html((string) ($offert['document_number'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['version_no'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['status'] ?? '')) . '</td>';
-            echo '<td>' . esc_html($this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) ($offert['issued_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['total_inc_vat_minor'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert detail</a>';
             if ($estimateId > 0) {
                 echo '<a class="button" href="' . esc_url($filteredOffertsUrl) . '" style="margin-left:6px;">Open filtered offert list</a>';
@@ -947,6 +959,28 @@ final class PageController
             echo '</tr>';
         }
         echo '</tbody></table>';
+    }
+
+    private function renderOffertFilterForm(mixed $estimateId, mixed $status, mixed $documentNumber): void
+    {
+        $estimateValue = is_scalar($estimateId) ? (string) $estimateId : '';
+        $statusValue = is_scalar($status) ? (string) $status : '';
+        $documentNumberValue = is_scalar($documentNumber) ? (string) $documentNumber : '';
+        $clearUrl = admin_url('admin.php?page=trn_offerts');
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_offerts">';
+        echo '<label style="margin-right:8px;">estimate_id <input type="text" name="estimate_id" value="' . esc_attr($estimateValue) . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">status <select name="status">';
+        echo '<option value=""></option>';
+        foreach (['issued', 'accepted', 'rejected', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected($statusValue, $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">document_number <input type="text" name="document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
+        submit_button('Filter', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
+        echo '</form>';
     }
 
     /** @param array<int, mixed> $rows */
