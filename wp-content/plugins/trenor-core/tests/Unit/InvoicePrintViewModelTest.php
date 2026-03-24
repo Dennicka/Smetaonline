@@ -222,18 +222,42 @@ final class InvoicePrintViewModelTest extends TestCase
             ['id' => 1],
             ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
             ['document_settings' => [
-                'company_legal_name' => 'ACME Legal AB',
+                'company_name' => 'ACME Legal AB',
                 'email' => 'billing@example.com',
+                'address_line_1' => 'Billing Street 2',
                 'iban' => 'SE22',
                 'payment_terms_days' => '15',
                 'invoice_footer_text' => 'Pay on time',
             ]]
         );
 
-        self::assertSame('ACME Legal AB', $result['issuer']['company_legal_name']);
+        self::assertSame('ACME Legal AB', $result['issuer']['company_name']);
         self::assertSame('billing@example.com', $result['issuer']['email']);
+        self::assertSame('Billing Street 2', $result['issuer']['address_line']);
         self::assertSame('SE22', $result['payment_details']['iban']);
-        self::assertSame('15', $result['payment_details']['payment_terms_days']);
+        self::assertSame('15', $result['payment_details']['due_days']);
         self::assertSame('Pay on time', $result['terms_notes']['invoice_footer_text']);
+    }
+
+    public function testBuildNormalizesPartialDocumentSettingsToSafeInvoiceFields(): void
+    {
+        $result = $this->viewModel->build(
+            ['id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => [
+                'company_name' => ['invalid'],
+                'moms_number' => 'SE999',
+                'swift' => '',
+                'bic' => 'DABASESX',
+                'payment_terms' => 'Net 30',
+                'payment_terms_days' => ['invalid'],
+            ]]
+        );
+
+        self::assertSame('', $result['issuer']['company_name']);
+        self::assertSame('SE999', $result['issuer']['vat_number']);
+        self::assertSame('DABASESX', $result['payment_details']['swift']);
+        self::assertSame('Net 30', $result['payment_details']['payment_terms']);
+        self::assertSame('', $result['payment_details']['due_days']);
     }
 }

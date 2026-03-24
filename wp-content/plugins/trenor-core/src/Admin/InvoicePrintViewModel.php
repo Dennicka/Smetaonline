@@ -302,11 +302,12 @@ final class InvoicePrintViewModel
     {
         return [
             'company_name' => $this->firstScalarString([$settings['company_name'] ?? null]),
-            'company_legal_name' => $this->firstScalarString([$settings['company_legal_name'] ?? null]),
             'org_number' => $this->firstScalarString([$settings['org_number'] ?? null]),
-            'vat_number' => $this->firstScalarString([$settings['vat_number'] ?? null]),
-            'address_line_1' => $this->firstScalarString([$settings['address_line_1'] ?? null]),
-            'address_line_2' => $this->firstScalarString([$settings['address_line_2'] ?? null]),
+            'vat_number' => $this->firstScalarString([$settings['vat_number'] ?? null, $settings['moms_number'] ?? null]),
+            'address_line' => $this->firstScalarString([
+                $settings['address_line'] ?? null,
+                $settings['address_line_1'] ?? null,
+            ]),
             'postal_code' => $this->firstScalarString([$settings['postal_code'] ?? null]),
             'city' => $this->firstScalarString([$settings['city'] ?? null]),
             'country' => $this->firstScalarString([$settings['country'] ?? null]),
@@ -320,13 +321,12 @@ final class InvoicePrintViewModel
     private function buildPaymentDetailsSection(array $settings): array
     {
         return [
-            'bank_name' => $this->firstScalarString([$settings['bank_name'] ?? null]),
             'iban' => $this->firstScalarString([$settings['iban'] ?? null]),
-            'bic' => $this->firstScalarString([$settings['bic'] ?? null]),
+            'swift' => $this->firstScalarString([$settings['swift'] ?? null, $settings['bic'] ?? null]),
             'plusgiro' => $this->firstScalarString([$settings['plusgiro'] ?? null]),
             'bankgiro' => $this->firstScalarString([$settings['bankgiro'] ?? null]),
-            'swish' => $this->firstScalarString([$settings['swish'] ?? null]),
-            'payment_terms_days' => $this->firstScalarString([$settings['payment_terms_days'] ?? null]),
+            'payment_terms' => $this->firstScalarString([$settings['payment_terms'] ?? null]),
+            'due_days' => $this->firstScalarString([$settings['due_days'] ?? null, $settings['payment_terms_days'] ?? null]),
         ];
     }
 
