@@ -10,6 +10,7 @@ use Trenor\Core\Database\AvtalRepository;
 use Trenor\Core\Database\InvoicePaymentRepository;
 use Trenor\Core\Database\InvoiceRepository;
 use Trenor\Core\Database\OffertRepository;
+use Trenor\Core\Database\ReminderRepository;
 use Trenor\Core\Tests\Support\WpdbStub;
 
 final class RepositorySmokeTest extends TestCase
@@ -25,6 +26,7 @@ final class RepositorySmokeTest extends TestCase
         $invoice = new InvoiceRepository();
         $avtal = new AvtalRepository();
         $payment = new InvoicePaymentRepository();
+        $reminder = new ReminderRepository();
 
         self::assertSame('wp_trn_offerts', $this->invokeProtected($offert, 'table'));
         self::assertSame('offert', $this->invokeProtected($offert, 'entityType'));
@@ -37,6 +39,9 @@ final class RepositorySmokeTest extends TestCase
 
         self::assertSame('wp_trn_invoice_payments', $this->invokeProtected($payment, 'table'));
         self::assertSame('invoice_payment', $this->invokeProtected($payment, 'entityType'));
+
+        self::assertSame('wp_trn_reminders', $this->invokeProtected($reminder, 'table'));
+        self::assertSame('reminder', $this->invokeProtected($reminder, 'entityType'));
     }
 
     public function testStatusTransitionsAcceptOnlyAllowedStatuses(): void
@@ -45,6 +50,7 @@ final class RepositorySmokeTest extends TestCase
         $wpdb = $GLOBALS['wpdb'];
         $offert = new OffertRepository();
         $invoice = new InvoiceRepository();
+        $reminder = new ReminderRepository();
 
         $wpdb->rowsById[11] = ['id' => 11, 'status' => 'issued'];
         self::assertTrue($offert->transitionStatus(11, 'accepted'));
@@ -89,6 +95,12 @@ final class RepositorySmokeTest extends TestCase
         self::assertFalse($invoice->transitionStatus(12, 'paid'));
 
         self::assertFalse($invoice->transitionStatus(12, 'accepted'));
+
+        $wpdb->rowsById[13] = ['id' => 13, 'status' => 'issued'];
+        self::assertTrue($reminder->transitionStatus(13, 'archived'));
+
+        $wpdb->rowsById[13] = ['id' => 13, 'status' => 'archived'];
+        self::assertFalse($reminder->transitionStatus(13, 'issued'));
     }
 
     public function testVersionIncrementMethodsBehaveCorrectly(): void

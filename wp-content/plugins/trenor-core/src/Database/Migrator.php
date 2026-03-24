@@ -68,6 +68,11 @@ final class Migrator
             $this->runQueries($this->avtalCoreQueries($charsetCollate));
             $this->markMigration('011_avtal_core');
         }
+
+        if (! $this->hasMigration('012_reminder_core')) {
+            $this->runQueries($this->reminderCoreQueries($charsetCollate));
+            $this->markMigration('012_reminder_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -651,6 +656,45 @@ final class Migrator
                 PRIMARY KEY (id),
                 UNIQUE KEY unique_document_artifact (document_type, document_id, version_no, artifact_type),
                 KEY document_lookup (document_type, document_id, version_no),
+                KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function reminderCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_reminders (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                invoice_id BIGINT UNSIGNED NOT NULL,
+                offert_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                estimate_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                project_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                client_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                reminder_level INT NOT NULL DEFAULT 1,
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                actor_user_id BIGINT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY invoice_id (invoice_id),
+                KEY status (status),
+                KEY reminder_level (reminder_level),
                 KEY created_at (created_at)
             ) {$charsetCollate};",
         ];

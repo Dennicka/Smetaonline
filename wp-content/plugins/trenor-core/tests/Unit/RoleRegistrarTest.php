@@ -18,6 +18,7 @@ final class RoleRegistrarTest extends TestCase
         self::assertArrayHasKey('trn_issue_invoices', $capabilities);
         self::assertArrayHasKey('trn_record_payments', $capabilities);
         self::assertArrayHasKey('trn_issue_credit_notes', $capabilities);
+        self::assertArrayHasKey('trn_issue_reminders', $capabilities);
         self::assertArrayHasKey('trn_archive_records', $capabilities);
         self::assertArrayHasKey('trn_manage_templates', $capabilities);
         self::assertArrayHasKey('trn_manage_backups', $capabilities);
@@ -49,6 +50,7 @@ final class RoleRegistrarTest extends TestCase
         self::assertArrayHasKey('trn_issue_invoices', $map['trn_accountant']);
         self::assertArrayHasKey('trn_record_payments', $map['trn_accountant']);
         self::assertArrayHasKey('trn_issue_credit_notes', $map['trn_accountant']);
+        self::assertArrayHasKey('trn_issue_reminders', $map['trn_accountant']);
         self::assertArrayNotHasKey('trn_issue_offerts', $map['trn_accountant']);
         self::assertArrayNotHasKey('trn_manage_estimates', $map['trn_accountant']);
         self::assertArrayNotHasKey('trn_archive_records', $map['trn_accountant']);

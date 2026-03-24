@@ -102,6 +102,8 @@ final class DocumentPdfArtifactService
             $document = $this->factory->invoices()->find($documentId);
         } elseif ($documentType === 'credit_note') {
             $document = $this->factory->creditNotes()->find($documentId);
+        } elseif ($documentType === 'reminder') {
+            $document = $this->factory->reminders()->find($documentId);
         } elseif ($documentType === 'avtal') {
             $document = $this->factory->avtals()->find($documentId);
         } else {

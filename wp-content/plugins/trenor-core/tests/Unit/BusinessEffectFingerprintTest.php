@@ -81,4 +81,18 @@ final class BusinessEffectFingerprintTest extends TestCase
 
         self::assertNotSame($hashA, $hashB);
     }
+
+    public function testReminderFingerprintChangesWithReminderEffectContext(): void
+    {
+        $service = new BusinessEffectFingerprint();
+        $invoice = ['id' => 17, 'status' => 'issued', 'currency' => 'SEK', 'snapshot_json' => '{"a":1}'];
+        $summary = ['computed_status' => 'partially_paid', 'outstanding_minor' => 2500];
+
+        $hashA = $service->reminderForInvoice($invoice, $summary, 1);
+        $hashB = $service->reminderForInvoice($invoice, $summary, 1);
+        self::assertSame($hashA, $hashB);
+
+        $summary['outstanding_minor'] = 1500;
+        self::assertNotSame($hashA, $service->reminderForInvoice($invoice, $summary, 1));
+    }
 }

@@ -21,6 +21,11 @@ final class DocumentFinanceTransitionPolicy
         return in_array(sanitize_key($invoiceStatus), ['issued', 'partially_paid', 'paid'], true);
     }
 
+    public function canIssueReminderFromInvoiceStatus(string $invoiceStatus): bool
+    {
+        return in_array(sanitize_key($invoiceStatus), ['issued', 'partially_paid'], true);
+    }
+
     public function canTransitionInvoiceStatus(string $fromStatus, string $toStatus): bool
     {
         $from = sanitize_key($fromStatus);
@@ -36,6 +41,18 @@ final class DocumentFinanceTransitionPolicy
     }
 
     public function canTransitionCreditNoteStatus(string $fromStatus, string $toStatus): bool
+    {
+        $from = sanitize_key($fromStatus);
+        $to = sanitize_key($toStatus);
+
+        $allowedTransitions = [
+            'issued' => ['archived'],
+        ];
+
+        return in_array($to, $allowedTransitions[$from] ?? [], true);
+    }
+
+    public function canTransitionReminderStatus(string $fromStatus, string $toStatus): bool
     {
         $from = sanitize_key($fromStatus);
         $to = sanitize_key($toStatus);

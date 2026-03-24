@@ -88,6 +88,19 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertStringContainsString('AVT-2026-009-id909-v1.pdf', (string) $artifact['storage_path']);
     }
 
+    public function testCreatesReminderPdfArtifactMetadata(): void
+    {
+        $this->seedDocument(1001, 'REM-2026-010', 2);
+
+        $artifact = $this->service()->getOrCreate('reminder', 1001);
+
+        self::assertSame('reminder', $artifact['document_type']);
+        self::assertSame(1001, (int) $artifact['document_id']);
+        self::assertSame(2, (int) $artifact['version_no']);
+        self::assertFileExists((string) $artifact['storage_path']);
+        self::assertStringContainsString('REM-2026-010-id1001-v2.pdf', (string) $artifact['storage_path']);
+    }
+
     public function testRepeatedRequestReusesSingleArtifactPerDocumentVersion(): void
     {
         /** @var WpdbStub $wpdb */

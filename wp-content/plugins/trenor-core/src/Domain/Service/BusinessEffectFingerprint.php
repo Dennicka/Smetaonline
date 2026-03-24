@@ -87,6 +87,24 @@ final class BusinessEffectFingerprint
         ]);
     }
 
+    /** @param array<string, mixed> $invoice @param array<string, mixed> $paymentSummary */
+    public function reminderForInvoice(array $invoice, array $paymentSummary, int $reminderLevel = 1): string
+    {
+        return $this->hash([
+            'invoice' => [
+                'id' => (int) ($invoice['id'] ?? 0),
+                'status' => (string) ($invoice['status'] ?? ''),
+                'currency' => strtoupper((string) ($invoice['currency'] ?? 'SEK')),
+                'snapshot_json' => (string) ($invoice['snapshot_json'] ?? ''),
+            ],
+            'payment_summary' => [
+                'computed_status' => (string) ($paymentSummary['computed_status'] ?? ''),
+                'outstanding_minor' => (int) ($paymentSummary['outstanding_minor'] ?? 0),
+            ],
+            'reminder_level' => max(1, $reminderLevel),
+        ]);
+    }
+
     /** @param array<string, mixed> $payload */
     public function paymentPayload(array $payload): string
     {
