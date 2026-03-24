@@ -38,6 +38,6 @@ final class EstimateSnapshotServiceTest extends TestCase
         self::assertCount(1, $repo->payloads);
         $saved = json_decode((string) $repo->payloads[0]['snapshot_json'], true);
         self::assertSame('Estimate 1', $saved['header']['title']);
-        self::assertSame(2.0, $saved['lines'][0]['calculated_hours']);
+        self::assertSame(2.0, (float) $saved['lines'][0]['calculated_hours']);
     }
 }
