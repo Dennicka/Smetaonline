@@ -145,7 +145,8 @@ final class PageController
             wp_die('Forbidden');
         }
 
-        $selectedEstimateId = (int) ($_GET['estimate_id'] ?? 0);
+        $selectedEstimateId = filter_input(INPUT_GET, 'estimate_id', FILTER_VALIDATE_INT);
+        $selectedEstimateId = $selectedEstimateId !== false && $selectedEstimateId !== null ? (int) $selectedEstimateId : 0;
         $estimates = $this->factory->estimates()->all();
 
         echo '<div class="wrap"><h1>Сметы</h1>';

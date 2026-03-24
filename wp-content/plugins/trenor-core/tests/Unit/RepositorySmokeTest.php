@@ -13,6 +13,7 @@ final class RepositorySmokeTest extends TestCase
 {
     protected function setUp(): void
     {
+        // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test-only stub of wpdb global to verify repository table/entity mapping.
         $GLOBALS['wpdb'] = (object) ['prefix' => 'wp_'];
     }
 
