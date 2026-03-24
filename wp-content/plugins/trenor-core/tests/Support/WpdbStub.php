@@ -38,6 +38,11 @@ final class WpdbStub
     /** @var array<int, array<string, mixed>> */
     public array $rowsById = [];
 
+    public bool $defaultRowByIdEnabled = true;
+
+    /** @var array<string, mixed> */
+    public array $defaultRowById = ['status' => 'issued'];
+
     /** @var array<int, string> */
     public array $queries = [];
 
@@ -154,10 +159,19 @@ final class WpdbStub
         if ($name === 'get_row') {
             $query = (string) ($arguments[0] ?? '');
             if (preg_match('/id\s*=\s*(\d+)/', $query, $matches) === 1) {
-                return $this->rowsById[(int) $matches[1]] ?? null;
+                $id = (int) $matches[1];
+                if (isset($this->rowsById[$id])) {
+                    return $this->rowsById[$id];
+                }
+
+                if ($this->defaultRowByIdEnabled) {
+                    return array_merge(['id' => $id], $this->defaultRowById);
+                }
+
+                return null;
             }
 
-            if ($this->receipts !== []) {
+            if (str_contains($query, $this->prefix . 'trn_operation_receipts') && $this->receipts !== []) {
                 return $this->receipts[0];
             }
 

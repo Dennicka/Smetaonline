@@ -71,10 +71,18 @@ final class RepositorySmokeTest extends TestCase
         self::assertFalse($offert->transitionStatus(11, 'accepted'));
         self::assertFalse($offert->transitionStatus(11, 'cancelled'));
 
-        self::assertTrue($invoice->transitionStatus(12, 'issued'));
+        $wpdb->rowsById[12] = ['id' => 12, 'status' => 'issued'];
+        self::assertFalse($invoice->transitionStatus(12, 'issued'));
         self::assertTrue($invoice->transitionStatus(12, 'partially_paid'));
         self::assertTrue($invoice->transitionStatus(12, 'paid'));
         self::assertTrue($invoice->transitionStatus(12, 'archived'));
+
+        $wpdb->rowsById[12] = ['id' => 12, 'status' => 'partially_paid'];
+        self::assertFalse($invoice->transitionStatus(12, 'issued'));
+
+        $wpdb->rowsById[12] = ['id' => 12, 'status' => 'archived'];
+        self::assertFalse($invoice->transitionStatus(12, 'paid'));
+
         self::assertFalse($invoice->transitionStatus(12, 'accepted'));
     }
 
