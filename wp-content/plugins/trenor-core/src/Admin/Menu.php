@@ -27,6 +27,9 @@ final class Menu
         add_submenu_page('trn_dashboard', 'Объекты', 'Объекты', 'trn_manage_projects', 'trn_properties', [$this->controller, 'renderProperties']);
         add_submenu_page('trn_dashboard', 'Проекты', 'Проекты', 'trn_manage_projects', 'trn_projects', [$this->controller, 'renderProjects']);
         add_submenu_page('trn_dashboard', 'Помещения', 'Помещения', 'trn_manage_projects', 'trn_rooms', [$this->controller, 'renderRooms']);
+        add_submenu_page('trn_dashboard', 'Работы', 'Работы', 'trn_manage_catalogs', 'trn_work_items', [$this->controller, 'renderWorkItems']);
+        add_submenu_page('trn_dashboard', 'Материалы', 'Материалы', 'trn_manage_catalogs', 'trn_materials', [$this->controller, 'renderMaterials']);
+        add_submenu_page('trn_dashboard', 'Сметы', 'Сметы', 'trn_manage_estimates', 'trn_estimates', [$this->controller, 'renderEstimates']);
         add_submenu_page('trn_dashboard', 'Настройки', 'Настройки', 'trn_manage_backups', 'trn_settings', [$this->controller, 'renderSettings']);
         add_submenu_page('trn_dashboard', 'Журнал', 'Журнал', 'trn_archive_records', 'trn_audit_log', [$this->controller, 'renderAuditLog']);
     }
