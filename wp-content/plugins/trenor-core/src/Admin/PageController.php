@@ -233,7 +233,7 @@ final class PageController
 
     public function renderSettings(): void
     {
-        if (! current_user_can('trn_manage_backups')) {
+        if (! current_user_can('trn_manage_templates')) {
             wp_die('Forbidden');
         }
 
@@ -1565,7 +1565,7 @@ final class PageController
         }
 
         if ($entity === 'document_settings' || $entity === 'document_profile_settings') {
-            return 'trn_manage_backups';
+            return 'trn_manage_templates';
         }
 
         return 'read';

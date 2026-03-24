@@ -35,7 +35,7 @@ final class Menu
         add_submenu_page('trn_dashboard', 'Kreditnotor / Credit Notes / Кредит-ноты', 'Kreditnotor / Credit Notes / Кредит-ноты', 'trn_issue_credit_notes', 'trn_credit_notes', [$this->controller, 'renderCreditNotes']);
         add_submenu_page('trn_dashboard', 'Betalningar / Payments / Оплаты', 'Betalningar / Payments / Оплаты', 'trn_record_payments', 'trn_payments', [$this->controller, 'renderPayments']);
         add_submenu_page('trn_dashboard', 'Dossier / Timeline / Досье', 'Dossier / Timeline / Досье', 'read', 'trn_dossier', [$this->controller, 'renderDossier']);
-        add_submenu_page('trn_dashboard', 'Настройки', 'Настройки', 'trn_manage_backups', 'trn_settings', [$this->controller, 'renderSettings']);
+        add_submenu_page('trn_dashboard', 'Настройки', 'Настройки', 'trn_manage_templates', 'trn_settings', [$this->controller, 'renderSettings']);
         add_submenu_page('trn_dashboard', 'Журнал', 'Журнал', 'trn_archive_records', 'trn_audit_log', [$this->controller, 'renderAuditLog']);
     }
 }
