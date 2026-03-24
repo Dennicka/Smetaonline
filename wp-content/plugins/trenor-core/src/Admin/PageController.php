@@ -156,6 +156,7 @@ final class PageController
         $estimates = $this->factory->estimates()->all();
 
         echo '<div class="wrap"><h1>Сметы</h1>';
+        $this->renderAdminNoticeFromRequest();
         $this->renderCreateEstimateForm();
 
         echo '<h2>Список смет</h2><table class="widefat striped"><thead><tr><th>ID</th><th>project_id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
@@ -198,6 +199,7 @@ final class PageController
         $offerts = $this->factory->offerts()->all();
 
         echo '<div class="wrap"><h1>Offerter / Offerts / Оферты</h1>';
+        $this->renderAdminNoticeFromRequest();
         echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
@@ -336,6 +338,27 @@ final class PageController
             echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
             submit_button('Issue Offert', 'primary', 'submit', false);
             echo '</form>';
+        }
+
+        $offerts = $this->factory->offerts()->byEstimate($estimateId);
+        echo '<h3>Issued offerts</h3>';
+        if ($offerts === []) {
+            echo '<p>No offerts issued yet.</p>';
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+            foreach ($offerts as $offert) {
+                $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
+                echo '<tr>';
+                echo '<td>' . esc_html((string) $offert['id']) . '</td>';
+                echo '<td>' . esc_html((string) $offert['document_number']) . '</td>';
+                echo '<td>' . esc_html((string) $offert['version_no']) . '</td>';
+                echo '<td>' . esc_html((string) $offert['status']) . '</td>';
+                echo '<td>' . esc_html($this->formatMinorValue($offert['total_inc_vat_minor'] ?? 0)) . '</td>';
+                echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
+                echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open/View</a></td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
         }
 
         echo '<h3>Work lines</h3>';
@@ -642,10 +665,101 @@ final class PageController
         $materialLines = is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [];
 
         echo '<h2>Offert #' . esc_html((string) $offertId) . ' (read-only)</h2>';
-        echo '<p><strong>Document:</strong> ' . esc_html((string) $offert['document_number']) . ' | <strong>Version:</strong> ' . esc_html((string) $offert['version_no']) . ' | <strong>Status:</strong> ' . esc_html((string) $offert['status']) . '</p>';
-        echo '<h3>Header</h3><pre>' . esc_html((string) wp_json_encode($header, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
-        echo '<h3>Totals</h3><pre>' . esc_html((string) wp_json_encode($totals, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
-        echo '<h3>Lines (snapshot)</h3><pre>' . esc_html((string) wp_json_encode($lines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
-        echo '<h3>Material lines (snapshot)</h3><pre>' . esc_html((string) wp_json_encode($materialLines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+        echo '<h3>Summary</h3>';
+        echo '<table class="widefat striped"><tbody>';
+        $summaryRows = [
+            'document_number' => $offert['document_number'] ?? '',
+            'version_no' => $offert['version_no'] ?? '',
+            'status' => $offert['status'] ?? '',
+            'estimate_id' => $offert['estimate_id'] ?? '',
+            'issued_at' => $offert['issued_at'] ?? '',
+            'currency' => $header['currency'] ?? '',
+            'vat_rate_percent' => $header['vat_rate_percent'] ?? '',
+            'source_estimate_id' => $header['source_estimate_id'] ?? '',
+            'source_estimate_title' => $header['source_estimate_title'] ?? '',
+            'estimate_title' => $header['title'] ?? '',
+        ];
+        foreach ($summaryRows as $label => $value) {
+            echo '<tr><th style="width:220px;">' . esc_html($label) . '</th><td>' . esc_html((string) $value) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        echo '<h3>Totals</h3>';
+        echo '<table class="widefat striped"><tbody>';
+        $totalRows = [
+            'labour_total_minor' => $totals['labour_total_minor'] ?? 0,
+            'materials_total_minor' => $totals['materials_total_minor'] ?? 0,
+            'subtotal_ex_vat_minor' => $totals['subtotal_ex_vat_minor'] ?? 0,
+            'vat_minor' => $totals['vat_minor'] ?? 0,
+            'total_inc_vat_minor' => $totals['total_inc_vat_minor'] ?? 0,
+        ];
+        foreach ($totalRows as $label => $value) {
+            echo '<tr><th style="width:220px;">' . esc_html($label) . '</th><td>' . esc_html($this->formatMinorValue($value)) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        echo '<h3>Labour lines</h3>';
+        if ($lines === []) {
+            echo '<p>No labour lines in snapshot.</p>';
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>line_title_ru_snapshot</th><th>line_title_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>calculated_hours</th><th>labour_subtotal_minor</th></tr></thead><tbody>';
+            foreach ($lines as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                echo '<tr>';
+                echo '<td>' . esc_html((string) ($line['id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['line_title_ru_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['line_title_sv_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['unit_code_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['quantity'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($line['calculated_hours'] ?? '')) . '</td>';
+                echo '<td>' . esc_html($this->formatMinorValue($line['labour_subtotal_minor'] ?? 0)) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        echo '<h3>Material lines</h3>';
+        if ($materialLines === []) {
+            echo '<p>No material lines in snapshot.</p>';
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>material_name_ru_snapshot</th><th>material_name_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>subtotal_minor</th></tr></thead><tbody>';
+            foreach ($materialLines as $materialLine) {
+                if (! is_array($materialLine)) {
+                    continue;
+                }
+                echo '<tr>';
+                echo '<td>' . esc_html((string) ($materialLine['id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($materialLine['material_name_ru_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($materialLine['material_name_sv_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($materialLine['unit_code_snapshot'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($materialLine['quantity'] ?? '')) . '</td>';
+                echo '<td>' . esc_html($this->formatMinorValue($materialLine['subtotal_minor'] ?? 0)) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+    }
+
+    private function renderAdminNoticeFromRequest(): void
+    {
+        $result = filter_input(INPUT_GET, 'trn_result', FILTER_UNSAFE_RAW);
+        $message = filter_input(INPUT_GET, 'trn_msg', FILTER_UNSAFE_RAW);
+        if (! is_string($result) || ($result !== 'ok' && $result !== 'error')) {
+            return;
+        }
+
+        $className = $result === 'ok' ? 'notice-success' : 'notice-error';
+        $defaultMessage = $result === 'ok' ? 'Operation completed successfully.' : 'Operation failed.';
+        $text = is_string($message) && $message !== '' ? $message : $defaultMessage;
+
+        echo '<div class="notice ' . esc_attr($className) . ' is-dismissible"><p>' . esc_html($text) . '</p></div>';
+    }
+
+    /** @param mixed $value */
+    private function formatMinorValue($value): string
+    {
+        return (string) ((int) $value) . ' (minor)';
     }
 }
