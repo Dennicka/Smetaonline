@@ -17,6 +17,7 @@ final class RoleRegistrar
             'trn_manage_estimates' => true,
             'trn_issue_offerts' => true,
             'trn_issue_invoices' => true,
+            'trn_issue_credit_notes' => true,
             'trn_record_payments' => true,
             'trn_manage_catalogs' => true,
             'trn_manage_prices' => true,
@@ -40,6 +41,7 @@ final class RoleRegistrar
             'trn_manage_estimates' => true,
             'trn_issue_offerts' => true,
             'trn_issue_invoices' => true,
+            'trn_issue_credit_notes' => true,
             'trn_record_payments' => true,
             'trn_manage_catalogs' => true,
             'trn_manage_prices' => true,
@@ -57,6 +59,7 @@ final class RoleRegistrar
         add_role('trn_viewer_accountant', 'Viewer/Accountant', [
             'read' => true,
             'trn_issue_invoices' => true,
+            'trn_issue_credit_notes' => true,
             'trn_record_payments' => true,
             'trn_view_margin' => true,
         ]);
