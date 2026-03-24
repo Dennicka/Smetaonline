@@ -7,27 +7,11 @@ namespace Trenor\Core\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Trenor\Core\Domain\Service\DocumentSettings;
 
-if (! function_exists('Trenor\\Core\\Domain\\Service\\get_option')) {
-    function get_option(string $key, mixed $default = false): mixed
-    {
-        return $GLOBALS['trn_document_settings_options'][$key] ?? $default;
-    }
-}
-
-if (! function_exists('Trenor\\Core\\Domain\\Service\\update_option')) {
-    function update_option(string $key, mixed $value): bool
-    {
-        $GLOBALS['trn_document_settings_options'][$key] = $value;
-
-        return true;
-    }
-}
-
 final class DocumentSettingsTest extends TestCase
 {
     protected function setUp(): void
     {
-        $GLOBALS['trn_document_settings_options'] = [];
+        $GLOBALS['trn_test_options'] = [];
     }
 
     public function testNormalizeReturnsStableShapeAndUppercasesStructuredFields(): void

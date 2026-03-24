@@ -42,7 +42,7 @@ final class DocumentSettings
     /** @return array<string, string> */
     public function get(): array
     {
-        $raw = get_option(self::OPTION_KEY, []);
+        $raw = \get_option(self::OPTION_KEY, []);
 
         return $this->normalize(is_array($raw) ? $raw : []);
     }
@@ -50,7 +50,7 @@ final class DocumentSettings
     /** @param array<string, mixed> $input */
     public function save(array $input): void
     {
-        update_option(self::OPTION_KEY, $this->normalize($input));
+        \update_option(self::OPTION_KEY, $this->normalize($input));
     }
 
     /** @return array<int, string> */
