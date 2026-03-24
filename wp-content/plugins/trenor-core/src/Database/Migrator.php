@@ -22,6 +22,11 @@ final class Migrator
             $this->markMigration('002_estimate_catalog_core');
             (new CatalogSeeder())->seed();
         }
+
+        if (! $this->hasMigration('003_offert_core')) {
+            $this->runQueries($this->offertCoreQueries($charsetCollate));
+            $this->markMigration('003_offert_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -145,6 +150,38 @@ final class Migrator
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY (id),
                 UNIQUE KEY doc_period (doc_type, yyyymm)
+            ) {$charsetCollate};",
+        ];
+    }
+
+
+    /** @return array<int, string> */
+    private function offertCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_offerts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
             ) {$charsetCollate};",
         ];
     }

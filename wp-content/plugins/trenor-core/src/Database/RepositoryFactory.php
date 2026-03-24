@@ -61,6 +61,12 @@ final class RepositoryFactory
         return new EstimateMaterialLineRepository();
     }
 
+
+    public function offerts(): OffertRepository
+    {
+        return new OffertRepository();
+    }
+
     public function estimateSnapshots(): EstimateSnapshotRepository
     {
         return new EstimateSnapshotRepository();
