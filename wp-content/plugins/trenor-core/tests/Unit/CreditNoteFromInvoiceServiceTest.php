@@ -156,4 +156,37 @@ final class CreditNoteFromInvoiceServiceTest extends TestCase
             'snapshot_json' => '{invalid',
         ]);
     }
+
+    public function testFailsWhenInvoiceStatusCannotIssueCreditNote(): void
+    {
+        $service = new CreditNoteFromInvoiceService(
+            new class implements CreditNoteVersionProvider {
+                public function nextVersionNo(int $invoiceId): int
+                {
+                    return 1;
+                }
+            },
+            new class implements DocumentNumberGenerator {
+                public function next(string $docType, ?DateTimeImmutable $date = null): string
+                {
+                    return 'CRN-202603-00001';
+                }
+            }
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Credit note can be issued only from issued, partially paid, or paid invoice.');
+
+        $service->buildPayload([
+            'id' => 10,
+            'status' => 'archived',
+            'snapshot_json' => json_encode([
+                'header' => ['title' => 'X'],
+                'totals' => ['total_inc_vat_minor' => 1],
+                'lines' => [['id' => 1]],
+                'material_lines' => [],
+                'metadata' => [],
+            ]),
+        ]);
+    }
 }

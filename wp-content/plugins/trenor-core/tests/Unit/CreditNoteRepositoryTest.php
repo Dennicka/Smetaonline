@@ -45,8 +45,14 @@ final class CreditNoteRepositoryTest extends TestCase
     {
         $repo = new CreditNoteRepository();
 
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->rowsById[3] = ['id' => 3, 'status' => 'issued'];
         self::assertFalse($repo->transitionStatus(3, 'paid'));
         self::assertTrue($repo->transitionStatus(3, 'archived'));
+
+        $wpdb->rowsById[4] = ['id' => 4, 'status' => 'archived'];
+        self::assertFalse($repo->transitionStatus(4, 'archived'));
     }
 
     public function testCreateReturnsInsertIdAndWritesAuditTrail(): void

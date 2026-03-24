@@ -6,6 +6,7 @@ namespace Trenor\Core\Database;
 
 use Trenor\Core\Domain\Service\InvoiceVersionProvider;
 use Trenor\Core\Domain\Service\InvoiceStatusAccess;
+use Trenor\Core\Domain\Service\DocumentFinanceTransitionPolicy;
 
 final class InvoiceRepository extends BaseRepository implements InvoiceVersionProvider, InvoiceStatusAccess
 {
@@ -87,8 +88,14 @@ final class InvoiceRepository extends BaseRepository implements InvoiceVersionPr
     {
         global $wpdb;
 
+        $invoice = $this->find($id);
+        if (! is_array($invoice)) {
+            return false;
+        }
+
+        $currentStatus = sanitize_key((string) ($invoice['status'] ?? ''));
         $normalizedStatus = sanitize_key($status);
-        if (! in_array($normalizedStatus, ['issued', 'partially_paid', 'paid', 'archived'], true)) {
+        if (! (new DocumentFinanceTransitionPolicy())->canTransitionInvoiceStatus($currentStatus, $normalizedStatus)) {
             return false;
         }
 

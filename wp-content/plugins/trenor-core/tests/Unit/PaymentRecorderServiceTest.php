@@ -74,7 +74,7 @@ final class PaymentRecorderServiceTest extends TestCase
         $service = $this->buildServiceWithInvoice(['status' => 'archived', 'currency' => 'SEK', 'total_inc_vat_minor' => 10000], []);
 
         $this->expectException(PaymentRegistrationException::class);
-        $this->expectExceptionMessage('Cannot record payment for an archived invoice.');
+        $this->expectExceptionMessage('Payments can be recorded only for issued or partially paid invoices.');
 
         $service->record(['invoice_id' => 14, 'amount_minor' => 1000, 'currency' => 'SEK']);
     }
@@ -84,7 +84,7 @@ final class PaymentRecorderServiceTest extends TestCase
         $service = $this->buildServiceWithInvoice(['status' => 'paid', 'currency' => 'SEK', 'total_inc_vat_minor' => 10000], []);
 
         $this->expectException(PaymentRegistrationException::class);
-        $this->expectExceptionMessage('Cannot record payment for a paid invoice.');
+        $this->expectExceptionMessage('Payments can be recorded only for issued or partially paid invoices.');
 
         $service->record(['invoice_id' => 14, 'amount_minor' => 1000, 'currency' => 'SEK']);
     }

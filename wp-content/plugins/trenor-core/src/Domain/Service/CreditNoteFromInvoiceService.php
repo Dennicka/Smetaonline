@@ -16,14 +16,18 @@ final class CreditNoteFromInvoiceService
     private DocumentNumberGenerator $documentNumberGenerator;
     private CreditNoteSnapshotReader $snapshotReader;
 
+    private DocumentFinanceTransitionPolicy $transitionPolicy;
+
     public function __construct(
         CreditNoteVersionProvider $versionProvider,
         DocumentNumberGenerator $documentNumberGenerator,
-        ?CreditNoteSnapshotReader $snapshotReader = null
+        ?CreditNoteSnapshotReader $snapshotReader = null,
+        ?DocumentFinanceTransitionPolicy $transitionPolicy = null
     ) {
         $this->versionProvider = $versionProvider;
         $this->documentNumberGenerator = $documentNumberGenerator;
         $this->snapshotReader = $snapshotReader ?? new CreditNoteSnapshotReader();
+        $this->transitionPolicy = $transitionPolicy ?? new DocumentFinanceTransitionPolicy();
     }
 
     /**
@@ -38,8 +42,8 @@ final class CreditNoteFromInvoiceService
         }
 
         $status = sanitize_key((string) ($invoiceRow['status'] ?? ''));
-        if ($status === 'archived') {
-            throw new RuntimeException('Cannot issue credit note from archived invoice.');
+        if (! $this->transitionPolicy->canIssueCreditNoteFromInvoiceStatus($status)) {
+            throw new RuntimeException('Credit note can be issued only from issued, partially paid, or paid invoice.');
         }
 
         $snapshot = $this->snapshotReader->read($invoiceRow);
