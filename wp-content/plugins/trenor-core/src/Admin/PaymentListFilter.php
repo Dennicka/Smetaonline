@@ -21,7 +21,8 @@ final class PaymentListFilter
         $paymentDateFrom = $this->normalizeDate($rawFilters['payment_date_from'] ?? null);
         $paymentDateTo = $this->normalizeDate($rawFilters['payment_date_to'] ?? null);
 
-        if ($paymentId === null
+        if (
+            $paymentId === null
             && $invoiceId === null
             && $currency === null
             && $method === null
