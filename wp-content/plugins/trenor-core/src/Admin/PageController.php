@@ -215,6 +215,7 @@ final class PageController
         echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
+            $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . (int) $offert['estimate_id']);
             echo '<tr>';
             echo '<td>' . esc_html((string) $offert['id']) . '</td>';
             echo '<td>' . esc_html((string) $offert['estimate_id']) . '</td>';
@@ -224,6 +225,7 @@ final class PageController
             echo '<td>' . esc_html((string) $offert['total_inc_vat_minor']) . '</td>';
             echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a> ';
+            echo '<a class="button" href="' . esc_url($estimateUrl) . '" style="margin-left:6px;">Open estimate</a> ';
             $this->renderOffertActionForm((int) $offert['id'], 'accept', 'Accept');
             $this->renderOffertActionForm((int) $offert['id'], 'reject', 'Reject');
             if (current_user_can('trn_archive_records')) {
@@ -352,27 +354,6 @@ final class PageController
             echo '</form>';
         }
 
-        $offerts = $this->factory->offerts()->byEstimate($estimateId);
-        echo '<h3>Issued offerts</h3>';
-        if ($offerts === []) {
-            echo '<p>No offerts issued yet.</p>';
-        } else {
-            echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
-            foreach ($offerts as $offert) {
-                $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
-                echo '<tr>';
-                echo '<td>' . esc_html((string) $offert['id']) . '</td>';
-                echo '<td>' . esc_html((string) $offert['document_number']) . '</td>';
-                echo '<td>' . esc_html((string) $offert['version_no']) . '</td>';
-                echo '<td>' . esc_html((string) $offert['status']) . '</td>';
-                echo '<td>' . esc_html($this->formatMinorValue($offert['total_inc_vat_minor'] ?? 0)) . '</td>';
-                echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
-                echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open/View</a></td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-        }
-
         echo '<h3>Work lines</h3>';
         $this->renderEstimateLinesTable($lines);
         echo '<h3>Material lines</h3>';
@@ -387,24 +368,40 @@ final class PageController
         echo '<h3>Recalculation snapshots</h3>';
         if ($snapshots === []) {
             $this->renderEmptyState('No snapshots yet.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>ID</th><th>snapshot_type</th><th>actor_user_id</th><th>created_at</th><th>Actions</th></tr></thead><tbody>';
+            foreach ($snapshots as $snapshot) {
+                $snapshotId = (int) ($snapshot['id'] ?? 0);
+                $detailUrl = admin_url(
+                    'admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&snapshot_id=' . $snapshotId
+                );
+                echo '<tr>';
+                echo '<td>' . esc_html((string) $snapshotId) . '</td>';
+                echo '<td>' . esc_html((string) ($snapshot['snapshot_type'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($snapshot['actor_user_id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($snapshot['created_at'] ?? '')) . '</td>';
+                echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Open snapshot</a></td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        $offerts = $this->factory->offerts()->byEstimate($estimateId);
+        echo '<h3>Issued offerts</h3>';
+        if ($offerts === []) {
+            $this->renderEmptyState('No offerts issued yet.');
             return;
         }
 
-        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>snapshot_type</th><th>actor_user_id</th><th>created_at</th><th>Actions</th></tr></thead><tbody>';
-        foreach ($snapshots as $snapshot) {
-            $snapshotId = (int) ($snapshot['id'] ?? 0);
-            $detailUrl = admin_url(
-                'admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&snapshot_id=' . $snapshotId
-            );
-            echo '<tr>';
-            echo '<td>' . esc_html((string) $snapshotId) . '</td>';
-            echo '<td>' . esc_html((string) ($snapshot['snapshot_type'] ?? '')) . '</td>';
-            echo '<td>' . esc_html((string) ($snapshot['actor_user_id'] ?? '')) . '</td>';
-            echo '<td>' . esc_html((string) ($snapshot['created_at'] ?? '')) . '</td>';
-            echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Open snapshot</a></td>';
-            echo '</tr>';
+        $latestOffert = $this->latestOffertByVersion($offerts);
+        if ($latestOffert !== null) {
+            $latestOffertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($latestOffert['id'] ?? 0));
+            echo '<p><a class="button button-secondary" href="' . esc_url($latestOffertUrl) . '">Open latest offert</a> ';
+            echo '<span><strong>Latest:</strong> ';
+            echo esc_html((string) ($latestOffert['document_number'] ?? ''));
+            echo ' (' . esc_html((string) ($latestOffert['status'] ?? '')) . ')</span></p>';
         }
-        echo '</tbody></table>';
+        $this->renderOffertsForEstimateTable($offerts);
     }
 
     /** @param array<int, array<string, mixed>> $rows */
@@ -698,8 +695,48 @@ final class PageController
         $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
         $lines = is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : [];
         $materialLines = is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : [];
+        $estimateId = (int) ($offert['estimate_id'] ?? 0);
+        $sourceEstimate = $estimateId > 0 ? $this->factory->estimates()->find($estimateId) : null;
 
         echo '<h2>Offert #' . esc_html((string) $offertId) . ' (read-only)</h2>';
+        echo '<h3>Source estimate</h3>';
+        if ($sourceEstimate === null) {
+            $this->renderAdminNotice('Source estimate not found.', 'warning');
+        } else {
+            $this->renderKeyValueTable([
+                'id' => $sourceEstimate['id'] ?? '',
+                'title' => $sourceEstimate['title'] ?? '',
+                'project_id' => $sourceEstimate['project_id'] ?? '',
+                'status' => $sourceEstimate['status'] ?? '',
+                'currency' => $sourceEstimate['currency'] ?? '',
+                'vat_rate_percent' => $sourceEstimate['vat_rate_percent'] ?? '',
+                'labour_rate_minor' => $sourceEstimate['labour_rate_minor'] ?? '',
+                'calculated_at' => $sourceEstimate['calculated_at'] ?? '',
+            ]);
+            $sourceEstimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . (int) ($sourceEstimate['id'] ?? 0));
+            echo '<p><a class="button button-secondary" href="' . esc_url($sourceEstimateUrl) . '">Open source estimate</a></p>';
+        }
+
+        $snapshotMetadata = [];
+        $snapshotMetadataMap = [
+            'source_estimate_id' => $header['source_estimate_id'] ?? null,
+            'source_estimate_title' => $header['source_estimate_title'] ?? null,
+            'offert_version_no' => $header['offert_version_no'] ?? ($offert['version_no'] ?? null),
+            'document_number' => $header['document_number'] ?? ($offert['document_number'] ?? null),
+            'issued_at_utc' => $header['issued_at_utc'] ?? ($offert['issued_at'] ?? null),
+        ];
+        foreach ($snapshotMetadataMap as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $snapshotMetadata[$key] = $value;
+        }
+        if ($snapshotMetadata !== []) {
+            echo '<h3>Snapshot metadata</h3>';
+            $this->renderKeyValueTable($snapshotMetadata);
+        }
+
         echo '<h3>Summary</h3>';
         echo '<table class="widefat striped"><tbody>';
         $summaryRows = [
@@ -906,6 +943,55 @@ final class PageController
     private function renderInlineErrorNotice(string $message): void
     {
         echo '<div class="notice notice-error"><p>' . esc_html($message) . '</p></div>';
+    }
+
+    private function renderAdminNotice(string $message, string $type = 'info'): void
+    {
+        $allowedTypes = ['info', 'warning', 'error', 'success'];
+        if (! in_array($type, $allowedTypes, true)) {
+            $type = 'info';
+        }
+
+        echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
+    }
+
+    /** @param array<int, array<string, mixed>> $offerts */
+    private function renderOffertsForEstimateTable(array $offerts): void
+    {
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($offerts as $offert) {
+            $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($offert['id'] ?? 0));
+            echo '<tr>';
+            echo '<td>' . esc_html((string) ($offert['id'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['document_number'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['version_no'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['total_inc_vat_minor'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($offert['issued_at'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $offerts */
+    private function latestOffertByVersion(array $offerts): ?array
+    {
+        $latest = null;
+        foreach ($offerts as $offert) {
+            if ($latest === null) {
+                $latest = $offert;
+                continue;
+            }
+
+            $currentVersion = (int) ($offert['version_no'] ?? 0);
+            $latestVersion = (int) ($latest['version_no'] ?? 0);
+            if ($currentVersion >= $latestVersion) {
+                $latest = $offert;
+            }
+        }
+
+        return $latest;
     }
 
     /** @param mixed $value */
