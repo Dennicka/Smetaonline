@@ -28,6 +28,9 @@ final class InvoicePrintViewModel
      * @return array{
      *     document: array<string, string>,
      *     context: array<string, string>,
+     *     recipient: array<string, string>,
+     *     project_object: array<string, string>,
+     *     commercial_summary: array<string, string>,
      *     totals: array<int, array{label: string, minor: string}>,
      *     labour_lines: array<int, array{title: string, unit: string, quantity: string, hours: string, subtotal_minor: string}>,
      *     material_lines: array<int, array{name: string, unit: string, quantity: string, subtotal_minor: string}>,
@@ -59,13 +62,20 @@ final class InvoicePrintViewModel
             $sourceEstimate['currency'] ?? null,
         ]);
 
+        $document = $this->buildDocumentSection($invoice, $header, $metadata, $currency);
+        $contextSection = $this->buildContextSection($invoice, $header, $metadata, $sourceOffert, $sourceEstimate, $project, $property, $client);
+        $paymentSummarySection = $this->buildPaymentSummarySection($invoice, $paymentSummary);
+
         return [
-            'document' => $this->buildDocumentSection($invoice, $header, $metadata, $currency),
-            'context' => $this->buildContextSection($invoice, $header, $metadata, $sourceOffert, $sourceEstimate, $project, $property, $client),
+            'document' => $document,
+            'context' => $contextSection,
+            'recipient' => $this->buildRecipientSection($contextSection),
+            'project_object' => $this->buildProjectObjectSection($contextSection),
+            'commercial_summary' => $this->buildCommercialSummarySection($document, $contextSection, $paymentSummarySection),
             'totals' => $this->buildTotalsSection($totals, $invoice),
             'labour_lines' => $this->buildLabourLines($snapshot['lines']),
             'material_lines' => $this->buildMaterialLines($snapshot['material_lines']),
-            'payment_summary' => $this->buildPaymentSummarySection($invoice, $paymentSummary),
+            'payment_summary' => $paymentSummarySection,
             'payments' => $this->buildPaymentRows($context['payments'] ?? [], $currency),
             'issuer' => $this->buildIssuerSection($settings),
             'payment_details' => $this->buildPaymentDetailsSection($settings),
@@ -159,6 +169,54 @@ final class InvoicePrintViewModel
             'client_org_number' => $this->firstScalarString([$client['org_number'] ?? null]),
             'client_email' => $this->firstScalarString([$client['email'] ?? null]),
             'client_phone' => $this->firstScalarString([$client['phone'] ?? null]),
+        ];
+    }
+
+    /** @param array<string, string> $contextSection @return array<string, string> */
+    private function buildRecipientSection(array $contextSection): array
+    {
+        return [
+            'client_name' => $contextSection['client_name'] ?? '',
+            'client_org_number' => $contextSection['client_org_number'] ?? '',
+            'client_email' => $contextSection['client_email'] ?? '',
+            'client_phone' => $contextSection['client_phone'] ?? '',
+        ];
+    }
+
+    /** @param array<string, string> $contextSection @return array<string, string> */
+    private function buildProjectObjectSection(array $contextSection): array
+    {
+        return [
+            'project_name' => $contextSection['project_name'] ?? '',
+            'project_code' => $contextSection['project_code'] ?? '',
+            'property_name' => $contextSection['property_name'] ?? '',
+            'property_address' => $contextSection['property_address'] ?? '',
+            'property_city' => $contextSection['property_city'] ?? '',
+            'property_postal_code' => $contextSection['property_postal_code'] ?? '',
+        ];
+    }
+
+    /**
+     * @param array<string, string> $document
+     * @param array<string, string> $contextSection
+     * @param array<string, string> $paymentSummarySection
+     * @return array<string, string>
+     */
+    private function buildCommercialSummarySection(
+        array $document,
+        array $contextSection,
+        array $paymentSummarySection
+    ): array {
+        return [
+            'source_offert_id' => $contextSection['source_offert_id'] ?? '',
+            'source_estimate_id' => $contextSection['source_estimate_id'] ?? '',
+            'source_estimate_title' => $contextSection['source_estimate_title'] ?? '',
+            'document_number' => $document['document_number'] ?? '',
+            'version_no' => $document['version_no'] ?? '',
+            'issued_at' => $document['issued_at'] ?? '',
+            'currency' => $document['currency'] ?? '',
+            'vat_rate_percent' => $document['vat_rate_percent'] ?? '',
+            'payment_status_summary' => $paymentSummarySection['computed_status'] ?? '',
         ];
     }
 

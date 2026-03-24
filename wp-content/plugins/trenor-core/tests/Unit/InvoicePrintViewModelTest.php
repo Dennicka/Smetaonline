@@ -76,6 +76,39 @@ final class InvoicePrintViewModelTest extends TestCase
         self::assertSame('Paint', $result['material_lines'][0]['name']);
         self::assertSame('partially_paid', $result['payment_summary']['computed_status']);
         self::assertSame('REF-1', $result['payments'][0]['reference']);
+        self::assertSame('Client A', $result['recipient']['client_name']);
+        self::assertSame('Project A', $result['project_object']['project_name']);
+        self::assertSame('partially_paid', $result['commercial_summary']['payment_status_summary']);
+    }
+
+    public function testBuildIncludesRecipientAndProjectObjectSectionsWhenContextDataExists(): void
+    {
+        $result = $this->viewModel->build(
+            ['offert_id' => 17, 'estimate_id' => 55],
+            [
+                'header' => [],
+                'totals' => [],
+                'lines' => [],
+                'material_lines' => [],
+                'metadata' => [],
+            ],
+            [
+                'project' => ['name' => 'Project A', 'code' => 'PA-1'],
+                'property' => ['name' => 'Property A', 'address_line' => 'Main 1', 'city' => 'Stockholm', 'postal_code' => '11111'],
+                'client' => ['name' => 'Client A', 'org_number' => '555', 'email' => 'a@example.com', 'phone' => '123'],
+            ]
+        );
+
+        self::assertSame('Client A', $result['recipient']['client_name']);
+        self::assertSame('555', $result['recipient']['client_org_number']);
+        self::assertSame('a@example.com', $result['recipient']['client_email']);
+        self::assertSame('123', $result['recipient']['client_phone']);
+        self::assertSame('Project A', $result['project_object']['project_name']);
+        self::assertSame('PA-1', $result['project_object']['project_code']);
+        self::assertSame('Property A', $result['project_object']['property_name']);
+        self::assertSame('Main 1', $result['project_object']['property_address']);
+        self::assertSame('Stockholm', $result['project_object']['property_city']);
+        self::assertSame('11111', $result['project_object']['property_postal_code']);
     }
 
     public function testBuildNormalizesMissingSectionsSafely(): void
@@ -107,6 +140,9 @@ final class InvoicePrintViewModelTest extends TestCase
         self::assertSame([], $result['material_lines']);
         self::assertSame('999', $result['payment_summary']['invoice_total_minor']);
         self::assertSame([], $result['payments']);
+        self::assertSame('', $result['recipient']['client_name']);
+        self::assertSame('', $result['project_object']['project_name']);
+        self::assertSame('', $result['commercial_summary']['payment_status_summary']);
     }
 
     public function testBuildPrefersBestAvailableCandidateFields(): void
