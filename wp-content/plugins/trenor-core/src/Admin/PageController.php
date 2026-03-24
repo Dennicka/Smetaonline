@@ -307,6 +307,17 @@ final class PageController
 
         $invoiceId = filter_input(INPUT_GET, 'invoice_id', FILTER_VALIDATE_INT);
         $invoiceId = $invoiceId !== false && $invoiceId !== null ? (int) $invoiceId : 0;
+        $view = filter_input(INPUT_GET, 'view', FILTER_UNSAFE_RAW);
+        $view = is_string($view) ? sanitize_key($view) : '';
+
+        if ($view === 'print' && $invoiceId > 0) {
+            echo '<div class="wrap">';
+            $this->renderInvoicePrint($invoiceId);
+            echo '</div>';
+
+            return;
+        }
+
         $invoices = $this->factory->invoices()->all();
 
         echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
@@ -314,6 +325,7 @@ final class PageController
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>offert_id</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($invoices as $invoice) {
             $viewUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id']);
+            $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . (int) $invoice['id'] . '&view=print');
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $invoice['offert_id']);
             echo '<tr>';
             echo '<td>' . esc_html((string) $invoice['id']) . '</td>';
@@ -325,6 +337,7 @@ final class PageController
             echo '<td>' . esc_html($this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, (string) ($invoice['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) $invoice['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
+            echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
             if ((int) ($invoice['offert_id'] ?? 0) > 0) {
                 echo '<a class="button" href="' . esc_url($offertUrl) . '" style="margin-left:6px;">Open source offert</a>';
             }
@@ -1020,7 +1033,9 @@ final class PageController
 
         $invoicesUrl = admin_url('admin.php?page=trn_invoices');
         $offertId = (int) ($invoice['offert_id'] ?? 0);
+        $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&view=print');
         echo '<p><a href="' . esc_url($invoicesUrl) . '">Back to invoices list</a>';
+        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
         if ($offertId > 0) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
             echo ' | <a href="' . esc_url($offertUrl) . '">Open source offert</a>';
@@ -1364,6 +1379,108 @@ final class PageController
         $snapshot = $reader->read($offert);
         $renderer = new OffertPrintRenderer();
         $renderer->render($offert, $snapshot, $this->loadOffertPrintContext($offert));
+    }
+
+    private function renderInvoicePrint(int $invoiceId): void
+    {
+        $invoice = $this->factory->invoices()->find($invoiceId);
+        if ($invoice === null) {
+            echo '<h2>Invoice print view</h2><p>Invoice not found.</p>';
+
+            return;
+        }
+
+        $snapshot = (new OffertSnapshotReader())->read($invoice);
+        $renderer = new InvoicePrintRenderer();
+        $renderer->render($invoice, $snapshot, $this->loadInvoicePrintContext($invoice));
+    }
+
+    /**
+     * @param array<string, mixed> $invoice
+     * @return array{
+     *     source_offert: array<string, mixed>,
+     *     source_estimate: array<string, mixed>,
+     *     project: array<string, mixed>,
+     *     property: array<string, mixed>,
+     *     client: array<string, mixed>,
+     *     payments: array<int, array<string, mixed>>,
+     *     payment_summary: array<string, mixed>
+     * }
+     */
+    private function loadInvoicePrintContext(array $invoice): array
+    {
+        $context = [
+            'source_offert' => [],
+            'source_estimate' => [],
+            'project' => [],
+            'property' => [],
+            'client' => [],
+            'payments' => [],
+            'payment_summary' => [],
+        ];
+
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+        if ($invoiceId > 0) {
+            $payments = $this->factory->invoicePayments()->byInvoice($invoiceId);
+            $context['payments'] = $payments;
+            $context['payment_summary'] = (new InvoicePaymentSummaryCalculator())->calculate($invoice, $payments);
+        }
+
+        $offertId = (int) ($invoice['offert_id'] ?? 0);
+        if ($offertId > 0) {
+            $sourceOffert = $this->factory->offerts()->find($offertId);
+            if ($sourceOffert !== null) {
+                $context['source_offert'] = $sourceOffert;
+            }
+        }
+
+        $estimateId = (int) ($invoice['estimate_id'] ?? 0);
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_offert']['estimate_id'] ?? 0);
+        }
+        if ($estimateId <= 0) {
+            return $context;
+        }
+
+        $sourceEstimate = $this->factory->estimates()->find($estimateId);
+        if ($sourceEstimate === null) {
+            return $context;
+        }
+        $context['source_estimate'] = $sourceEstimate;
+
+        $projectId = (int) ($sourceEstimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return $context;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return $context;
+        }
+        $context['project'] = $project;
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return $context;
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return $context;
+        }
+        $context['property'] = $property;
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return $context;
+        }
+
+        $client = $this->factory->clients()->find($clientId);
+        if ($client !== null) {
+            $context['client'] = $client;
+        }
+
+        return $context;
     }
 
     /**
