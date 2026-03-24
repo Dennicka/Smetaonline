@@ -62,4 +62,26 @@ final class InvoiceRepositoryTest extends TestCase
 
         self::assertSame(41, $id);
     }
+
+    public function testTransitionStatusFollowsStateMachineRules(): void
+    {
+        $repo = new InvoiceRepository();
+
+        /** @var WpdbStub $wpdb */
+        $wpdb = $GLOBALS['wpdb'];
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'issued'];
+        self::assertTrue($repo->transitionStatus(10, 'partially_paid'));
+
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'partially_paid'];
+        self::assertTrue($repo->transitionStatus(10, 'paid'));
+
+        $wpdb->rowsById[10] = ['id' => 10, 'status' => 'paid'];
+        self::assertTrue($repo->transitionStatus(10, 'archived'));
+
+        $wpdb->rowsById[11] = ['id' => 11, 'status' => 'archived'];
+        self::assertFalse($repo->transitionStatus(11, 'issued'));
+
+        $wpdb->rowsById[12] = ['id' => 12, 'status' => 'issued'];
+        self::assertFalse($repo->transitionStatus(12, 'issued'));
+    }
 }

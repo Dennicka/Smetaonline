@@ -8,6 +8,6 @@ final class InvoiceIssuePolicy
 {
     public function canIssueFromOffertStatus(string $status): bool
     {
-        return sanitize_key($status) === 'accepted';
+        return (new DocumentFinanceTransitionPolicy())->canIssueInvoiceFromOffertStatus($status);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Database;
 
 use Trenor\Core\Domain\Service\CreditNoteVersionProvider;
+use Trenor\Core\Domain\Service\DocumentFinanceTransitionPolicy;
 
 final class CreditNoteRepository extends BaseRepository implements CreditNoteVersionProvider
 {
@@ -78,8 +79,14 @@ final class CreditNoteRepository extends BaseRepository implements CreditNoteVer
     {
         global $wpdb;
 
+        $creditNote = $this->find($id);
+        if (! is_array($creditNote)) {
+            return false;
+        }
+
+        $currentStatus = sanitize_key((string) ($creditNote['status'] ?? ''));
         $normalizedStatus = sanitize_key($status);
-        if (! in_array($normalizedStatus, ['issued', 'archived'], true)) {
+        if (! (new DocumentFinanceTransitionPolicy())->canTransitionCreditNoteStatus($currentStatus, $normalizedStatus)) {
             return false;
         }
 

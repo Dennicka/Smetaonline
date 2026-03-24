@@ -14,14 +14,18 @@ final class PaymentRecorderService
 
     private InvoicePaymentSummaryCalculator $summaryCalculator;
 
+    private DocumentFinanceTransitionPolicy $transitionPolicy;
+
     public function __construct(
         InvoiceStatusAccess $invoiceRepository,
         InvoicePaymentAccess $paymentRepository,
-        InvoicePaymentSummaryCalculator $summaryCalculator
+        InvoicePaymentSummaryCalculator $summaryCalculator,
+        ?DocumentFinanceTransitionPolicy $transitionPolicy = null
     ) {
         $this->invoiceRepository = $invoiceRepository;
         $this->paymentRepository = $paymentRepository;
         $this->summaryCalculator = $summaryCalculator;
+        $this->transitionPolicy = $transitionPolicy ?? new DocumentFinanceTransitionPolicy();
     }
 
     /** @param array<string, mixed> $payload */
@@ -35,15 +39,7 @@ final class PaymentRecorderService
         }
 
         $invoiceStatus = (string) ($invoice['status'] ?? '');
-        if ($invoiceStatus === 'paid') {
-            throw new PaymentRegistrationException('Cannot record payment for a paid invoice.');
-        }
-
-        if ($invoiceStatus === 'archived') {
-            throw new PaymentRegistrationException('Cannot record payment for an archived invoice.');
-        }
-
-        if (! in_array($invoiceStatus, ['issued', 'partially_paid'], true)) {
+        if (! $this->transitionPolicy->canRecordPaymentForInvoiceStatus($invoiceStatus)) {
             throw new PaymentRegistrationException('Payments can be recorded only for issued or partially paid invoices.');
         }
 
