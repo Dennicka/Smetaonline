@@ -47,6 +47,11 @@ final class Migrator
             $this->runQueries($this->estimateArchiveAndReplayGuardQueries($charsetCollate));
             $this->markMigration('007_estimate_archive_and_replay_guard');
         }
+
+        if (! $this->hasMigration('008_business_effect_receipts')) {
+            $this->runQueries($this->businessEffectReceiptQueries($charsetCollate));
+            $this->markMigration('008_business_effect_receipts');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -521,6 +526,30 @@ final class Migrator
                 UNIQUE KEY token (token),
                 KEY action_scope (action_name, scope_key),
                 KEY consumed_at (consumed_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function businessEffectReceiptQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_operation_receipts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                action_name VARCHAR(64) NOT NULL,
+                scope_key VARCHAR(191) NOT NULL,
+                effect_hash CHAR(64) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'processing',
+                result_entity_type VARCHAR(64) NULL,
+                result_entity_id BIGINT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY uniq_effect (action_name, scope_key, effect_hash),
+                KEY status (status),
+                KEY result_entity (result_entity_type, result_entity_id)
             ) {$charsetCollate};",
         ];
     }

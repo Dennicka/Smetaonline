@@ -7,76 +7,13 @@ namespace Trenor\Core\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Trenor\Core\Database\EstimateLineRepository;
 use Trenor\Core\Database\EstimateMaterialLineRepository;
+use Trenor\Core\Tests\Support\WpdbStub;
 
 final class EstimateArchiveRepositoryTest extends TestCase
 {
     protected function setUp(): void
     {
-        trn_set_test_wpdb(new class () {
-            public string $prefix = 'wp_';
-
-            /** @var array<int, array<string, mixed>> */
-            public array $updatedRows = [];
-
-            /** @var array<int, array<string, mixed>> */
-            public array $insertHistory = [];
-
-            public int $updateResult = 1;
-
-            /** @var array<int, string> */
-            public array $queries = [];
-
-            public bool $deleteCalled = false;
-
-            public function prepare(string $query, ...$args): string
-            {
-                $escaped = array_map(
-                    static fn ($value): string => is_numeric($value) ? (string) $value : "'" . addslashes((string) $value) . "'",
-                    $args
-                );
-
-                return vsprintf($query, $escaped);
-            }
-
-            public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int
-            {
-                $this->updatedRows[] = [
-                    'table' => $table,
-                    'data' => $data,
-                    'where' => $where,
-                    'format' => $format,
-                    'where_format' => $whereFormat,
-                ];
-
-                return $this->updateResult;
-            }
-
-            public function insert(string $table, array $data, array $format = []): int
-            {
-                $this->insertHistory[] = [
-                    'table' => $table,
-                    'data' => $data,
-                    'format' => $format,
-                ];
-
-                return 1;
-            }
-
-            public function delete(string $table, array $where, array $format = []): int
-            {
-                $this->deleteCalled = true;
-
-                return 1;
-            }
-
-            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- Mimics wpdb API method name.
-            public function get_results(string $query, string $output = ARRAY_A): array
-            {
-                $this->queries[] = $query;
-
-                return [];
-            }
-        });
+        trn_set_test_wpdb(new WpdbStub());
     }
 
     public function testEstimateLineArchiveUsesSoftArchiveAndNeverDeletesRow(): void
