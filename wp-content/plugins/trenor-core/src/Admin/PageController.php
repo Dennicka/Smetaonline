@@ -215,6 +215,17 @@ final class PageController
         $documentNumberFilter = filter_input(INPUT_GET, 'document_number', FILTER_UNSAFE_RAW);
         $offertId = filter_input(INPUT_GET, 'offert_id', FILTER_VALIDATE_INT);
         $offertId = $offertId !== false && $offertId !== null ? (int) $offertId : 0;
+        $view = filter_input(INPUT_GET, 'view', FILTER_UNSAFE_RAW);
+        $view = is_string($view) ? sanitize_key($view) : '';
+
+        if ($view === 'print' && $offertId > 0) {
+            echo '<div class="wrap">';
+            $this->renderOffertPrint($offertId);
+            echo '</div>';
+
+            return;
+        }
+
         $filter = new OffertListFilter();
         $allOfferts = $this->factory->offerts()->all();
         $offerts = $filter->apply($allOfferts, $estimateFilter, $statusFilter, $documentNumberFilter);
@@ -233,6 +244,7 @@ final class PageController
         echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
+            $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id'] . '&view=print');
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . (int) $offert['estimate_id']);
             echo '<tr>';
             echo '<td>' . esc_html((string) $offert['id']) . '</td>';
@@ -243,6 +255,7 @@ final class PageController
             echo '<td>' . esc_html($this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) $offert['issued_at']) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a> ';
+            echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a> ';
             echo '<a class="button" href="' . esc_url($estimateUrl) . '" style="margin-left:6px;">Open estimate</a> ';
             $this->renderOffertActionForm((int) $offert['id'], 'accept', 'Accept');
             $this->renderOffertActionForm((int) $offert['id'], 'reject', 'Reject');
@@ -773,7 +786,9 @@ final class PageController
 
         $offertsUrl = admin_url('admin.php?page=trn_offerts');
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
+        $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&view=print');
         echo '<p><a href="' . esc_url($offertsUrl) . '">Back to offerts list</a>';
+        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
         if ($estimateId > 0) {
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
             $estimateOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
@@ -943,6 +958,7 @@ final class PageController
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>document_number</th><th>version_no</th><th>status</th><th>issued_at</th><th>total_inc_vat_minor</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($offert['id'] ?? 0));
+            $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($offert['id'] ?? 0) . '&view=print');
             $filteredOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
             echo '<tr>';
             echo '<td>' . esc_html((string) ($offert['id'] ?? '')) . '</td>';
@@ -952,6 +968,7 @@ final class PageController
             echo '<td>' . esc_html((string) ($offert['issued_at'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['total_inc_vat_minor'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert detail</a>';
+            echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
             if ($estimateId > 0) {
                 echo '<a class="button" href="' . esc_url($filteredOffertsUrl) . '" style="margin-left:6px;">Open filtered offert list</a>';
             }
@@ -1038,6 +1055,80 @@ final class PageController
             echo '</tr>';
         }
         echo '</tbody></table>';
+    }
+
+    private function renderOffertPrint(int $offertId): void
+    {
+        $offert = $this->factory->offerts()->find($offertId);
+        if ($offert === null) {
+            echo '<h2>Offert print view</h2><p>Offert not found.</p>';
+
+            return;
+        }
+
+        $reader = new OffertSnapshotReader();
+        $snapshot = $reader->read($offert);
+        $renderer = new OffertPrintRenderer();
+        $renderer->render($offert, $snapshot, $this->loadOffertPrintContext($offert));
+    }
+
+    /**
+     * @param array<string, mixed> $offert
+     * @return array{estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>}
+     */
+    private function loadOffertPrintContext(array $offert): array
+    {
+        $context = [
+            'estimate' => [],
+            'project' => [],
+            'property' => [],
+            'client' => [],
+        ];
+
+        $estimateId = (int) ($offert['estimate_id'] ?? 0);
+        if ($estimateId <= 0) {
+            return $context;
+        }
+
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if ($estimate === null) {
+            return $context;
+        }
+        $context['estimate'] = $estimate;
+
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return $context;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return $context;
+        }
+        $context['project'] = $project;
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return $context;
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return $context;
+        }
+        $context['property'] = $property;
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return $context;
+        }
+
+        $client = $this->factory->clients()->find($clientId);
+        if ($client !== null) {
+            $context['client'] = $client;
+        }
+
+        return $context;
     }
 
     /**
