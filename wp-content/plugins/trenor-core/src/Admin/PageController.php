@@ -469,15 +469,40 @@ final class PageController
 
         $creditNoteId = filter_input(INPUT_GET, 'credit_note_id', FILTER_VALIDATE_INT);
         $creditNoteId = $creditNoteId !== false && $creditNoteId !== null ? (int) $creditNoteId : 0;
-        $creditNotes = $this->factory->creditNotes()->all();
+        $view = filter_input(INPUT_GET, 'view', FILTER_UNSAFE_RAW);
+        $view = is_string($view) ? sanitize_key($view) : '';
+
+        if ($view === 'print' && $creditNoteId > 0) {
+            echo '<div class="wrap">';
+            $this->renderCreditNotePrint($creditNoteId);
+            echo '</div>';
+
+            return;
+        }
+
+        $rawFilters = [
+            'invoice_id' => filter_input(INPUT_GET, 'invoice_id', FILTER_UNSAFE_RAW),
+            'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
+            'document_number' => filter_input(INPUT_GET, 'document_number', FILTER_UNSAFE_RAW),
+        ];
+        $filter = new CreditNoteListFilter();
+        $creditNotes = $filter->apply($this->factory->creditNotes()->all(), $rawFilters);
+        $formFilters = $filter->normalizedForForm($rawFilters);
 
         echo '<div class="wrap"><h1>Kreditnotor / Credit Notes / Кредит-ноты</h1>';
         $this->renderAdminNoticeFromRequest();
+        $this->renderCreditNoteFilterForm($formFilters);
+
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        if ($creditNotes === []) {
+            echo '<tr><td colspan="8">No credit notes found for current filters.</td></tr>';
+        }
+
         foreach ($creditNotes as $creditNote) {
             $id = (int) ($creditNote['id'] ?? 0);
             $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
             $viewUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id);
+            $printUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $id . '&view=print');
             $invoiceUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);
             $currency = (string) ($creditNote['currency'] ?? 'SEK');
 
@@ -490,6 +515,7 @@ final class PageController
             echo '<td>' . esc_html($this->formatMinorMoney($creditNote['total_inc_vat_minor'] ?? null, $currency)) . '</td>';
             echo '<td>' . esc_html((string) ($creditNote['issued_at'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url($viewUrl) . '">Open/View</a>';
+            echo '<a class="button" href="' . esc_url($printUrl) . '" style="margin-left:6px;">Print / Printable view</a>';
             if ($invoiceId > 0) {
                 echo '<a class="button" href="' . esc_url($invoiceUrl) . '" style="margin-left:6px;">Open source invoice</a>';
             }
@@ -1203,6 +1229,7 @@ final class PageController
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
             echo ' | <a href="' . esc_url($offertUrl) . '">Open source offert</a>';
         }
+        echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)) . '">View all credit notes for this invoice</a>';
         echo '</p>';
 
         if (current_user_can('trn_issue_credit_notes') && (string) ($invoice['status'] ?? '') !== 'archived') {
@@ -1232,9 +1259,12 @@ final class PageController
         $offertId = (int) ($creditNote['offert_id'] ?? 0);
         $estimateId = (int) ($creditNote['estimate_id'] ?? 0);
 
+        $printUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&view=print');
         echo '<p><a href="' . esc_url($creditNotesUrl) . '">Back to credit notes list</a>';
+        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
         if ($invoiceId > 0) {
             echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) . '">Open source invoice</a>';
+            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)) . '">View all credit notes for this invoice</a>';
         }
         if ($offertId > 0) {
             echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId)) . '">Open source offert</a>';
@@ -1245,7 +1275,7 @@ final class PageController
         echo '</p>';
 
         $snapshot = (new CreditNoteSnapshotReader())->read($creditNote);
-        (new CreditNoteDetailRenderer())->render($creditNote, $snapshot);
+        (new CreditNoteDetailRenderer())->render($creditNote, $snapshot, $this->loadCreditNoteContext($creditNote));
     }
 
     /** @param array<string, mixed> $invoice */
@@ -1546,6 +1576,26 @@ final class PageController
         echo '</form>';
     }
 
+    /** @param array<string, string> $filters */
+    private function renderCreditNoteFilterForm(array $filters): void
+    {
+        $clearUrl = admin_url('admin.php?page=trn_credit_notes');
+
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_credit_notes">';
+        echo '<label style="margin-right:8px;">invoice_id <input type="text" name="invoice_id" value="' . esc_attr($filters['invoice_id'] ?? '') . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">status <select name="status">';
+        echo '<option value=""></option>';
+        foreach (['issued', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected($filters['status'] ?? '', $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">document_number <input type="text" name="document_number" value="' . esc_attr($filters['document_number'] ?? '') . '" class="regular-text"></label>';
+        submit_button('Filter', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url($clearUrl) . '" style="margin-left:6px;">Clear filters</a>';
+        echo '</form>';
+    }
+
     /** @param array<string, int> $summary */
     private function renderInvoiceLedgerSummary(array $summary, string $currency): void
     {
@@ -1661,6 +1711,106 @@ final class PageController
         $snapshot = (new OffertSnapshotReader())->read($invoice);
         $renderer = new InvoicePrintRenderer();
         $renderer->render($invoice, $snapshot, $this->loadInvoicePrintContext($invoice));
+    }
+
+    private function renderCreditNotePrint(int $creditNoteId): void
+    {
+        $creditNote = $this->factory->creditNotes()->find($creditNoteId);
+        if ($creditNote === null) {
+            echo '<h2>Credit note print view</h2><p>Credit note not found.</p>';
+
+            return;
+        }
+
+        $snapshot = (new CreditNoteSnapshotReader())->read($creditNote);
+        (new CreditNotePrintRenderer())->render($creditNote, $snapshot, $this->loadCreditNoteContext($creditNote));
+    }
+
+    /**
+     * @param array<string, mixed> $creditNote
+     * @return array{source_invoice: array<string, mixed>, source_offert: array<string, mixed>, source_estimate: array<string, mixed>, project: array<string, mixed>, property: array<string, mixed>, client: array<string, mixed>}
+     */
+    private function loadCreditNoteContext(array $creditNote): array
+    {
+        $context = [
+            'source_invoice' => [],
+            'source_offert' => [],
+            'source_estimate' => [],
+            'project' => [],
+            'property' => [],
+            'client' => [],
+        ];
+
+        $invoiceId = (int) ($creditNote['invoice_id'] ?? 0);
+        if ($invoiceId > 0) {
+            $sourceInvoice = $this->factory->invoices()->find($invoiceId);
+            if ($sourceInvoice !== null) {
+                $context['source_invoice'] = $sourceInvoice;
+            }
+        }
+
+        $offertId = (int) ($creditNote['offert_id'] ?? 0);
+        if ($offertId <= 0) {
+            $offertId = (int) ($context['source_invoice']['offert_id'] ?? 0);
+        }
+        if ($offertId > 0) {
+            $sourceOffert = $this->factory->offerts()->find($offertId);
+            if ($sourceOffert !== null) {
+                $context['source_offert'] = $sourceOffert;
+            }
+        }
+
+        $estimateId = (int) ($creditNote['estimate_id'] ?? 0);
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_invoice']['estimate_id'] ?? 0);
+        }
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_offert']['estimate_id'] ?? 0);
+        }
+
+        if ($estimateId <= 0) {
+            return $context;
+        }
+
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if ($estimate === null) {
+            return $context;
+        }
+        $context['source_estimate'] = $estimate;
+
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return $context;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return $context;
+        }
+        $context['project'] = $project;
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return $context;
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return $context;
+        }
+        $context['property'] = $property;
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return $context;
+        }
+
+        $client = $this->factory->clients()->find($clientId);
+        if ($client !== null) {
+            $context['client'] = $client;
+        }
+
+        return $context;
     }
 
     /**

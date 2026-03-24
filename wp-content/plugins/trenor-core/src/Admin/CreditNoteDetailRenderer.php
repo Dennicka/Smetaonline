@@ -9,11 +9,18 @@ final class CreditNoteDetailRenderer
     /**
      * @param array<string, mixed> $creditNote
      * @param array{header: array<string, mixed>, totals: array<string, mixed>, lines: array<int, mixed>, material_lines: array<int, mixed>, metadata: array<string, mixed>} $snapshot
+     * @param array{source_invoice?: array<string, mixed>, source_offert?: array<string, mixed>, source_estimate?: array<string, mixed>, project?: array<string, mixed>, property?: array<string, mixed>, client?: array<string, mixed>} $context
      */
-    public function render(array $creditNote, array $snapshot): void
+    public function render(array $creditNote, array $snapshot, array $context = []): void
     {
         $currency = (string) ($creditNote['currency'] ?? 'SEK');
         $metadata = is_array($snapshot['metadata'] ?? null) ? $snapshot['metadata'] : [];
+        $sourceInvoice = is_array($context['source_invoice'] ?? null) ? $context['source_invoice'] : [];
+        $sourceOffert = is_array($context['source_offert'] ?? null) ? $context['source_offert'] : [];
+        $sourceEstimate = is_array($context['source_estimate'] ?? null) ? $context['source_estimate'] : [];
+        $project = is_array($context['project'] ?? null) ? $context['project'] : [];
+        $property = is_array($context['property'] ?? null) ? $context['property'] : [];
+        $client = is_array($context['client'] ?? null) ? $context['client'] : [];
 
         echo '<h2>Credit note detail</h2>';
 
@@ -27,15 +34,19 @@ final class CreditNoteDetailRenderer
             'issued_at' => $creditNote['issued_at'] ?? '',
         ]);
 
-        echo '<h3>2. Source links and metadata</h3>';
+        echo '<h3>2. Source context</h3>';
         $this->renderKeyValueTable([
             'invoice_id' => $creditNote['invoice_id'] ?? '',
-            'source_invoice_document_number' => $metadata['source_invoice_document_number'] ?? '',
+            'source_invoice_document_number' => $metadata['source_invoice_document_number'] ?? ($sourceInvoice['document_number'] ?? ''),
             'offert_id' => $creditNote['offert_id'] ?? '',
             'estimate_id' => $creditNote['estimate_id'] ?? '',
-            'source_estimate_title' => $metadata['source_estimate_title'] ?? '',
+            'source_estimate_title' => $metadata['source_estimate_title'] ?? ($sourceEstimate['title'] ?? ''),
+            'project_name' => $project['name'] ?? '',
+            'property_name' => $property['name'] ?? '',
+            'client_name' => $client['name'] ?? '',
             'credit_note_version_no' => $metadata['credit_note_version_no'] ?? '',
             'issued_at_utc' => $metadata['issued_at_utc'] ?? '',
+            'source_offert_document_number' => $sourceOffert['document_number'] ?? '',
         ]);
 
         echo '<h3>3. Totals</h3>';
@@ -44,7 +55,7 @@ final class CreditNoteDetailRenderer
             'materials_total_minor' => $this->formatMinorMoney($snapshot['totals']['materials_total_minor'] ?? 0, $currency),
             'subtotal_ex_vat_minor' => $this->formatMinorMoney($snapshot['totals']['subtotal_ex_vat_minor'] ?? 0, $currency),
             'vat_minor' => $this->formatMinorMoney($snapshot['totals']['vat_minor'] ?? 0, $currency),
-            'total_inc_vat_minor' => $this->formatMinorMoney($snapshot['totals']['total_inc_vat_minor'] ?? 0, $currency),
+            'total_inc_vat_minor' => $this->formatMinorMoney($snapshot['totals']['total_inc_vat_minor'] ?? ($creditNote['total_inc_vat_minor'] ?? 0), $currency),
         ]);
 
         echo '<h3>4. Labour lines snapshot</h3>';
@@ -62,6 +73,9 @@ final class CreditNoteDetailRenderer
     {
         echo '<table class="widefat striped"><tbody>';
         foreach ($rows as $label => $value) {
+            if ($value === '') {
+                continue;
+            }
             echo '<tr><th style="width:220px;">' . esc_html((string) $label) . '</th><td>' . esc_html((string) $value) . '</td></tr>';
         }
         echo '</tbody></table>';
