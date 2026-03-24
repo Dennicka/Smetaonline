@@ -42,6 +42,11 @@ final class Migrator
             $this->runQueries($this->creditNoteCoreQueries($charsetCollate));
             $this->markMigration('006_credit_note_core');
         }
+
+        if (! $this->hasMigration('007_estimate_archive_and_replay_guard')) {
+            $this->runQueries($this->estimateArchiveAndReplayGuardQueries($charsetCollate));
+            $this->markMigration('007_estimate_archive_and_replay_guard');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -301,13 +306,16 @@ final class Migrator
                 calculated_hours DECIMAL(12,4) NOT NULL DEFAULT 0,
                 labour_rate_minor_snapshot BIGINT NOT NULL DEFAULT 0,
                 labour_subtotal_minor BIGINT NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
                 sort_order INT NOT NULL DEFAULT 100,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY (id),
                 KEY estimate_id (estimate_id),
                 KEY room_id (room_id),
-                KEY work_item_id (work_item_id)
+                KEY work_item_id (work_item_id),
+                KEY status (status)
             ) {$charsetCollate};",
             "CREATE TABLE {$wpdb->prefix}trn_estimate_material_lines (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -322,13 +330,16 @@ final class Migrator
                 buy_price_minor_snapshot BIGINT NOT NULL DEFAULT 0,
                 sell_price_minor_snapshot BIGINT NOT NULL DEFAULT 0,
                 subtotal_minor BIGINT NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
                 sort_order INT NOT NULL DEFAULT 100,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY (id),
                 KEY estimate_id (estimate_id),
                 KEY estimate_line_id (estimate_line_id),
-                KEY material_id (material_id)
+                KEY material_id (material_id),
+                KEY status (status)
             ) {$charsetCollate};",
             "CREATE TABLE {$wpdb->prefix}trn_estimate_snapshots (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -434,6 +445,82 @@ final class Migrator
                 KEY invoice_id (invoice_id),
                 KEY payment_date (payment_date),
                 KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function estimateArchiveAndReplayGuardQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_estimate_lines (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                room_id BIGINT UNSIGNED NULL,
+                work_item_id BIGINT UNSIGNED NULL,
+                line_title_ru_snapshot VARCHAR(191) NOT NULL,
+                line_title_sv_snapshot VARCHAR(191) NOT NULL,
+                unit_code_snapshot VARCHAR(32) NOT NULL,
+                quantity DECIMAL(12,4) NOT NULL DEFAULT 0,
+                speed_profile VARCHAR(16) NOT NULL DEFAULT 'medium',
+                norm_per_hour_snapshot DECIMAL(12,4) NOT NULL DEFAULT 0,
+                complexity_coeff DECIMAL(10,4) NOT NULL DEFAULT 1,
+                surface_coeff DECIMAL(10,4) NOT NULL DEFAULT 1,
+                access_coeff DECIMAL(10,4) NOT NULL DEFAULT 1,
+                urgency_coeff DECIMAL(10,4) NOT NULL DEFAULT 1,
+                manual_hours_delta DECIMAL(12,4) NOT NULL DEFAULT 0,
+                calculated_hours DECIMAL(12,4) NOT NULL DEFAULT 0,
+                labour_rate_minor_snapshot BIGINT NOT NULL DEFAULT 0,
+                labour_subtotal_minor BIGINT NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                sort_order INT NOT NULL DEFAULT 100,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY estimate_id (estimate_id),
+                KEY room_id (room_id),
+                KEY work_item_id (work_item_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_estimate_material_lines (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                estimate_line_id BIGINT UNSIGNED NULL,
+                material_id BIGINT UNSIGNED NULL,
+                material_name_ru_snapshot VARCHAR(191) NOT NULL,
+                material_name_sv_snapshot VARCHAR(191) NOT NULL,
+                unit_code_snapshot VARCHAR(32) NOT NULL,
+                quantity DECIMAL(12,4) NOT NULL DEFAULT 0,
+                coverage_snapshot DECIMAL(12,4) NOT NULL DEFAULT 0,
+                buy_price_minor_snapshot BIGINT NOT NULL DEFAULT 0,
+                sell_price_minor_snapshot BIGINT NOT NULL DEFAULT 0,
+                subtotal_minor BIGINT NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                sort_order INT NOT NULL DEFAULT 100,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY estimate_id (estimate_id),
+                KEY estimate_line_id (estimate_line_id),
+                KEY material_id (material_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_operation_tokens (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                token VARCHAR(64) NOT NULL,
+                action_name VARCHAR(64) NOT NULL,
+                scope_key VARCHAR(191) NOT NULL,
+                actor_user_id BIGINT UNSIGNED NULL,
+                consumed_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY token (token),
+                KEY action_scope (action_name, scope_key),
+                KEY consumed_at (consumed_at)
             ) {$charsetCollate};",
         ];
     }

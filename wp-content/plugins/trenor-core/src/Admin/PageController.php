@@ -19,14 +19,17 @@ use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
 use Trenor\Core\Domain\Service\DocumentSettings;
+use Trenor\Core\Domain\Service\OperationReplayGuard;
 
 final class PageController
 {
     private RepositoryFactory $factory;
+    private OperationReplayGuard $operationReplayGuard;
 
-    public function __construct(RepositoryFactory $factory)
+    public function __construct(RepositoryFactory $factory, ?OperationReplayGuard $operationReplayGuard = null)
     {
         $this->factory = $factory;
+        $this->operationReplayGuard = $operationReplayGuard ?? new OperationReplayGuard();
     }
 
     public function handleRequests(): void
@@ -964,6 +967,7 @@ final class PageController
             echo '<form method="post" style="margin-top:10px;">';
             wp_nonce_field('trn_offert_issue');
             echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
+            $this->renderOperationTokenField('issue_offert', $this->issueOffertScope($estimateId));
             submit_button('Issue Offert', 'primary', 'submit', false);
             echo '</form>';
         }
@@ -1210,6 +1214,9 @@ final class PageController
 
         if ($action === 'issue') {
             $estimateId = (int) $this->postValue($postPayload, 'estimate_id');
+            if (! $this->consumeOperationToken($postPayload, 'issue_offert', $this->issueOffertScope($estimateId), 'admin.php?page=trn_estimates&estimate_id=' . $estimateId)) {
+                exit;
+            }
             $estimate = $this->factory->estimates()->find($estimateId);
             if ($estimate === null) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('Estimate not found.')));
@@ -1256,6 +1263,9 @@ final class PageController
 
         if ($action === 'issue_invoice') {
             $offertId = (int) $this->postValue($postPayload, 'offert_id');
+            if (! $this->consumeOperationToken($postPayload, 'issue_invoice', $this->issueInvoiceScope($offertId), 'admin.php?page=trn_offerts&offert_id=' . $offertId)) {
+                exit;
+            }
             $offert = $offertRepo->find($offertId);
             if ($offert === null) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
@@ -1296,6 +1306,9 @@ final class PageController
         }
 
         $offertId = (int) $this->postValue($postPayload, 'offert_id');
+        if (! $this->consumeOperationToken($postPayload, 'issue_invoice', $this->issueInvoiceScope($offertId), 'admin.php?page=trn_offerts&offert_id=' . $offertId)) {
+            exit;
+        }
         $offert = $this->factory->offerts()->find($offertId);
         if ($offert === null) {
             wp_safe_redirect(admin_url('admin.php?page=trn_offerts&trn_result=error&trn_msg=' . rawurlencode('Offert not found.')));
@@ -1335,6 +1348,9 @@ final class PageController
         }
 
         $invoiceId = (int) $this->postValue($postPayload, 'invoice_id');
+        if (! $this->consumeOperationToken($postPayload, 'record_payment', $this->recordPaymentScope($invoiceId), 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) {
+            exit;
+        }
         $service = new PaymentRecorderService(
             $this->factory->invoices(),
             $this->factory->invoicePayments(),
@@ -1368,6 +1384,9 @@ final class PageController
 
         if ($action === 'issue') {
             $invoiceId = (int) $this->postValue($postPayload, 'invoice_id');
+            if (! $this->consumeOperationToken($postPayload, 'issue_credit_note', $this->issueCreditNoteScope($invoiceId), 'admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) {
+                exit;
+            }
             $invoice = $this->factory->invoices()->find($invoiceId);
             if ($invoice === null) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_invoices&trn_result=error&trn_msg=' . rawurlencode('Source invoice not found.')));
@@ -1520,6 +1539,7 @@ final class PageController
             echo '<form method="post" style="margin:10px 0;">';
             wp_nonce_field('trn_offert_issue_invoice');
             echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue_invoice"><input type="hidden" name="offert_id" value="' . esc_attr((string) $offertId) . '">';
+            $this->renderOperationTokenField('issue_invoice', $this->issueInvoiceScope($offertId));
             submit_button('Issue Invoice', 'primary', 'submit', false);
             echo '</form>';
         }
@@ -1588,6 +1608,7 @@ final class PageController
             echo '<form method="post" style="margin:10px 0;">';
             wp_nonce_field('trn_credit_note_issue');
             echo '<input type="hidden" name="trn_entity" value="credit_note"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="invoice_id" value="' . esc_attr((string) $invoiceId) . '">';
+            $this->renderOperationTokenField('issue_credit_note', $this->issueCreditNoteScope($invoiceId));
             submit_button('Issue credit note', 'secondary', 'submit', false);
             echo '</form>';
         }
@@ -1676,6 +1697,7 @@ final class PageController
         echo '<input type="hidden" name="trn_entity" value="invoice_payment">';
         echo '<input type="hidden" name="trn_action" value="create">';
         echo '<input type="hidden" name="invoice_id" value="' . esc_attr((string) $invoiceId) . '">';
+        $this->renderOperationTokenField('record_payment', $this->recordPaymentScope($invoiceId));
         echo '<p><label>payment_date<br><input class="regular-text" name="payment_date" value="' . esc_attr((string) current_time('mysql', true)) . '"></label></p>';
         echo '<p><label>amount_minor<br><input class="regular-text" name="amount_minor" value=""></label></p>';
         echo '<p><label>currency<br><input class="regular-text" name="currency" value="' . esc_attr((string) ($invoice['currency'] ?? 'SEK')) . '"></label></p>';
@@ -1712,6 +1734,45 @@ final class PageController
         $text = is_string($message) && $message !== '' ? $message : $defaultMessage;
 
         echo '<div class="notice ' . esc_attr($className) . ' is-dismissible"><p>' . esc_html($text) . '</p></div>';
+    }
+
+    private function issueOffertScope(int $estimateId): string
+    {
+        return 'estimate:' . $estimateId;
+    }
+
+    private function issueInvoiceScope(int $offertId): string
+    {
+        return 'offert:' . $offertId;
+    }
+
+    private function issueCreditNoteScope(int $invoiceId): string
+    {
+        return 'invoice:' . $invoiceId;
+    }
+
+    private function recordPaymentScope(int $invoiceId): string
+    {
+        return 'invoice:' . $invoiceId;
+    }
+
+    private function renderOperationTokenField(string $actionName, string $scopeKey): void
+    {
+        $token = $this->operationReplayGuard->issueToken($actionName, $scopeKey, get_current_user_id() ?: null);
+        echo '<input type="hidden" name="trn_operation_token" value="' . esc_attr($token) . '">';
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function consumeOperationToken(array $postPayload, string $actionName, string $scopeKey, string $redirectPath): bool
+    {
+        $token = sanitize_text_field($this->postValue($postPayload, 'trn_operation_token'));
+        $consumed = $this->operationReplayGuard->consumeToken($token, $actionName, $scopeKey, get_current_user_id() ?: null);
+        if ($consumed) {
+            return true;
+        }
+
+        wp_safe_redirect(admin_url($redirectPath . '&trn_result=error&trn_msg=' . rawurlencode('This action has already been processed or token is invalid.')));
+        return false;
     }
 
     /** @param array<string, mixed> $snapshotRow */
