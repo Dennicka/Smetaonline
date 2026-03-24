@@ -212,10 +212,23 @@ final class PageController
 
         $offertId = filter_input(INPUT_GET, 'offert_id', FILTER_VALIDATE_INT);
         $offertId = $offertId !== false && $offertId !== null ? (int) $offertId : 0;
-        $offerts = $this->factory->offerts()->all();
+        $estimateId = filter_input(INPUT_GET, 'estimate_id', FILTER_VALIDATE_INT);
+        $estimateId = $estimateId !== false && $estimateId !== null ? (int) $estimateId : 0;
+        $offerts = $estimateId > 0
+            ? $this->factory->offerts()->byEstimate($estimateId)
+            : $this->factory->offerts()->all();
 
         echo '<div class="wrap"><h1>Offerter / Offerts / Оферты</h1>';
         $this->renderAdminNoticeFromRequest();
+        if ($estimateId > 0) {
+            $sourceEstimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $clearFilterUrl = admin_url('admin.php?page=trn_offerts');
+            echo '<p><strong>Showing offerts for estimate #' . esc_html((string) $estimateId) . '</strong></p>';
+            echo '<p>';
+            echo '<a class="button button-secondary" href="' . esc_url($sourceEstimateUrl) . '">Open source estimate</a>';
+            echo '<a class="button button-secondary" href="' . esc_url($clearFilterUrl) . '" style="margin-left:6px;">Clear filter</a>';
+            echo '</p>';
+        }
         echo '<table class="widefat striped"><thead><tr><th>ID</th><th>estimate_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $viewUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) $offert['id']);
@@ -399,6 +412,14 @@ final class PageController
             'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
         ]);
 
+        $offerts = $this->factory->offerts()->byEstimate($estimateId);
+        echo '<h3>Issued offerts for this estimate</h3>';
+        if ($offerts === []) {
+            $this->renderEmptyState('No offerts issued for this estimate yet.');
+        } else {
+            $this->renderOffertsForEstimateTable($offerts, $estimateId);
+        }
+
         echo '<h3>Добавить work line</h3><form method="post">';
         wp_nonce_field('trn_estimate_line_create');
         echo '<input type="hidden" name="trn_entity" value="estimate_line"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
@@ -462,23 +483,6 @@ final class PageController
             }
             echo '</tbody></table>';
         }
-
-        $offerts = $this->factory->offerts()->byEstimate($estimateId);
-        echo '<h3>Issued offerts</h3>';
-        if ($offerts === []) {
-            $this->renderEmptyState('No offerts issued yet.');
-            return;
-        }
-
-        $latestOffert = $this->latestOffertByVersion($offerts);
-        if ($latestOffert !== null) {
-            $latestOffertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($latestOffert['id'] ?? 0));
-            echo '<p><a class="button button-secondary" href="' . esc_url($latestOffertUrl) . '">Open latest offert</a> ';
-            echo '<span><strong>Latest:</strong> ';
-            echo esc_html((string) ($latestOffert['document_number'] ?? ''));
-            echo ' (' . esc_html((string) ($latestOffert['status'] ?? '')) . ')</span></p>';
-        }
-        $this->renderOffertsForEstimateTable($offerts);
     }
 
     /** @param array<int, array<string, mixed>> $rows */
@@ -797,6 +801,14 @@ final class PageController
         }
 
         echo '<h2>Offert #' . esc_html((string) $offertId) . ' (read-only)</h2>';
+        if ($estimateId > 0) {
+            $sourceEstimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $offertsByEstimateUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
+            echo '<p>';
+            echo '<a class="button button-secondary" href="' . esc_url($sourceEstimateUrl) . '">Open source estimate</a>';
+            echo '<a class="button button-secondary" href="' . esc_url($offertsByEstimateUrl) . '" style="margin-left:6px;">View all offerts for this estimate</a>';
+            echo '</p>';
+        }
         echo '<h3>Offert summary</h3>';
         $this->renderKeyValueTable([
             'document_number' => $offert['document_number'] ?? '',
@@ -934,48 +946,16 @@ final class PageController
         }
         echo '</tbody></table>';
 
-        echo '<h3>Labour lines</h3>';
-        if ($lines === []) {
-            echo '<p>No labour lines in snapshot.</p>';
-        } else {
-            echo '<table class="widefat striped"><thead><tr><th>id</th><th>line_title_ru_snapshot</th><th>line_title_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>calculated_hours</th><th>labour_subtotal_minor</th></tr></thead><tbody>';
-            foreach ($lines as $line) {
-                if (! is_array($line)) {
-                    continue;
-                }
-                echo '<tr>';
-                echo '<td>' . esc_html((string) ($line['id'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($line['line_title_ru_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($line['line_title_sv_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($line['unit_code_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($line['quantity'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($line['calculated_hours'] ?? '')) . '</td>';
-                echo '<td>' . esc_html($this->formatMinorValue($line['labour_subtotal_minor'] ?? 0)) . '</td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-        }
+        echo '<h3>Snapshot labour lines</h3>';
+        $this->renderSnapshotLabourTable($lines, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK')));
 
-        echo '<h3>Material lines</h3>';
-        if ($materialLines === []) {
-            echo '<p>No material lines in snapshot.</p>';
-        } else {
-            echo '<table class="widefat striped"><thead><tr><th>id</th><th>material_name_ru_snapshot</th><th>material_name_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>subtotal_minor</th></tr></thead><tbody>';
-            foreach ($materialLines as $materialLine) {
-                if (! is_array($materialLine)) {
-                    continue;
-                }
-                echo '<tr>';
-                echo '<td>' . esc_html((string) ($materialLine['id'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($materialLine['material_name_ru_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($materialLine['material_name_sv_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($materialLine['unit_code_snapshot'] ?? '')) . '</td>';
-                echo '<td>' . esc_html((string) ($materialLine['quantity'] ?? '')) . '</td>';
-                echo '<td>' . esc_html($this->formatMinorValue($materialLine['subtotal_minor'] ?? 0)) . '</td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-        }
+        echo '<h3>Snapshot material lines</h3>';
+        $this->renderSnapshotMaterialTable($materialLines, (string) ($offert['currency'] ?? ($header['currency'] ?? 'SEK')));
+
+        echo '<h3>Snapshot labour lines (raw JSON)</h3>';
+        echo '<pre>' . esc_html(wp_json_encode($lines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]') . '</pre>';
+        echo '<h3>Snapshot material lines (raw JSON)</h3>';
+        echo '<pre>' . esc_html(wp_json_encode($materialLines, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]') . '</pre>';
     }
 
     private function renderAdminNoticeFromRequest(): void
@@ -1127,11 +1107,12 @@ final class PageController
     }
 
     /** @param array<int, array<string, mixed>> $offerts */
-    private function renderOffertsForEstimateTable(array $offerts): void
+    private function renderOffertsForEstimateTable(array $offerts, int $estimateId = 0): void
     {
-        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($offerts as $offert) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . (int) ($offert['id'] ?? 0));
+            $filteredOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
             echo '<tr>';
             echo '<td>' . esc_html((string) ($offert['id'] ?? '')) . '</td>';
             echo '<td>' . esc_html((string) ($offert['document_number'] ?? '')) . '</td>';
@@ -1139,30 +1120,83 @@ final class PageController
             echo '<td>' . esc_html((string) ($offert['status'] ?? '')) . '</td>';
             echo '<td>' . esc_html($this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK'))) . '</td>';
             echo '<td>' . esc_html((string) ($offert['issued_at'] ?? '')) . '</td>';
-            echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert</a></td>';
+            echo '<td><a class="button" href="' . esc_url($offertUrl) . '">Open offert detail</a>';
+            if ($estimateId > 0) {
+                echo '<a class="button" href="' . esc_url($filteredOffertsUrl) . '" style="margin-left:6px;">Open filtered offert list</a>';
+            }
+            echo '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
     }
 
-    /** @param array<int, array<string, mixed>> $offerts */
-    private function latestOffertByVersion(array $offerts): ?array
+    /** @param array<int, mixed> $rows */
+    private function renderSnapshotLabourTable(array $rows, string $currency): void
     {
-        $latest = null;
-        foreach ($offerts as $offert) {
-            if ($latest === null) {
-                $latest = $offert;
+        if ($rows === []) {
+            $this->renderEmptyState('No labour lines in snapshot.');
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>line_title_ru_snapshot</th><th>line_title_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>speed_profile</th><th>norm_per_hour_snapshot</th><th>calculated_hours</th><th>labour_subtotal_minor</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
                 continue;
             }
 
-            $currentVersion = (int) ($offert['version_no'] ?? 0);
-            $latestVersion = (int) ($latest['version_no'] ?? 0);
-            if ($currentVersion >= $latestVersion) {
-                $latest = $offert;
-            }
+            echo '<tr>';
+            echo '<td>' . esc_html($this->valueOrDash($row['id'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['line_title_ru_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['line_title_sv_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['unit_code_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['quantity'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['speed_profile'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['norm_per_hour_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['calculated_hours'] ?? null)) . '</td>';
+            echo '<td>' . esc_html(is_numeric($row['labour_subtotal_minor'] ?? null) ? $this->formatMinorMoney($row['labour_subtotal_minor'], $currency) : '—') . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, mixed> $rows */
+    private function renderSnapshotMaterialTable(array $rows, string $currency): void
+    {
+        if ($rows === []) {
+            $this->renderEmptyState('No material lines in snapshot.');
+            return;
         }
 
-        return $latest;
+        echo '<table class="widefat striped"><thead><tr><th>id</th><th>material_name_ru_snapshot</th><th>material_name_sv_snapshot</th><th>unit_code_snapshot</th><th>quantity</th><th>coverage_snapshot</th><th>sell_price_minor_snapshot</th><th>subtotal_minor</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            echo '<tr>';
+            echo '<td>' . esc_html($this->valueOrDash($row['id'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['material_name_ru_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['material_name_sv_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['unit_code_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['quantity'] ?? null)) . '</td>';
+            echo '<td>' . esc_html($this->valueOrDash($row['coverage_snapshot'] ?? null)) . '</td>';
+            echo '<td>' . esc_html(is_numeric($row['sell_price_minor_snapshot'] ?? null) ? $this->formatMinorMoney($row['sell_price_minor_snapshot'], $currency) : '—') . '</td>';
+            echo '<td>' . esc_html(is_numeric($row['subtotal_minor'] ?? null) ? $this->formatMinorMoney($row['subtotal_minor'], $currency) : '—') . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function valueOrDash($value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return (string) $value;
     }
 
     /** @param mixed $value */
