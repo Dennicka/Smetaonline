@@ -47,6 +47,10 @@ final class ProjectDossierBuilderTest extends TestCase
                 3003 => [
                     ['id' => 4, 'invoice_id' => 3003, 'amount_minor' => 500],
                 ],
+            ],
+            [
+                ['id' => 9001, 'project_id' => 10, 'document_number' => 'ATA-1'],
+                ['id' => 9002, 'project_id' => 77, 'document_number' => 'ATA-X'],
             ]
         );
 
@@ -54,6 +58,8 @@ final class ProjectDossierBuilderTest extends TestCase
         self::assertCount(1, $dossier['offerts']);
         self::assertCount(2, $dossier['invoices']);
         self::assertCount(3, $dossier['payments']);
+        self::assertCount(1, $dossier['atas']);
+        self::assertSame(1, $dossier['summary']['atas_count']);
 
         self::assertSame(3001, $dossier['invoices'][0]['id']);
         self::assertSame(3002, $dossier['invoices'][1]['id']);
@@ -63,6 +69,7 @@ final class ProjectDossierBuilderTest extends TestCase
     {
         $dossier = $this->builder->build(
             ['id' => 10, 'name' => 'P1', 'code' => 'PR-10', 'property_id' => 0],
+            [],
             [],
             [],
             [],
@@ -100,7 +107,8 @@ final class ProjectDossierBuilderTest extends TestCase
                 3002 => [
                     ['invoice_id' => 3002, 'amount_minor' => 5000],
                 ],
-            ]
+            ],
+            []
         );
 
         self::assertSame(15000, $dossier['summary']['invoiced_total_minor']);

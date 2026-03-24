@@ -95,4 +95,15 @@ final class BusinessEffectFingerprintTest extends TestCase
         $summary['outstanding_minor'] = 1500;
         self::assertNotSame($hashA, $service->reminderForInvoice($invoice, $summary, 1));
     }
+
+    public function testAtaTransitionFingerprintChangesWithTargetStatus(): void
+    {
+        $service = new BusinessEffectFingerprint();
+        $ata = ['id' => 81, 'project_id' => 9, 'document_number' => 'ATA-202603-00008', 'version_no' => 1, 'status' => 'issued', 'snapshot_json' => '{"x":1}', 'total_inc_vat_minor' => 1000];
+
+        $issueHash = $service->ataStatusTransition($ata, 'approved');
+        $rejectHash = $service->ataStatusTransition($ata, 'rejected');
+
+        self::assertNotSame($issueHash, $rejectHash);
+    }
 }

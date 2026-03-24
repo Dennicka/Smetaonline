@@ -106,6 +106,8 @@ final class DocumentPdfArtifactService
             $document = $this->factory->reminders()->find($documentId);
         } elseif ($documentType === 'avtal') {
             $document = $this->factory->avtals()->find($documentId);
+        } elseif ($documentType === 'ata') {
+            $document = $this->factory->atas()->find($documentId);
         } else {
             throw new RuntimeException('Unsupported document type for PDF generation.');
         }

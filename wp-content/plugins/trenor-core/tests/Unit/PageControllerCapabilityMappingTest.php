@@ -52,6 +52,12 @@ final class PageControllerCapabilityMappingTest extends TestCase
             'avtal issue' => [['avtal', 'issue'], 'trn_issue_offerts'],
             'avtal pdf download' => [['avtal', 'download_pdf'], 'trn_issue_offerts'],
             'avtal archive' => [['avtal', 'archive'], 'trn_archive_records'],
+            'ata create' => [['ata', 'create'], 'trn_issue_offerts'],
+            'ata issue' => [['ata', 'issue'], 'trn_issue_offerts'],
+            'ata approve' => [['ata', 'approve'], 'trn_issue_offerts'],
+            'ata reject' => [['ata', 'reject'], 'trn_issue_offerts'],
+            'ata link invoice' => [['ata', 'link_invoice'], 'trn_issue_offerts'],
+            'ata archive' => [['ata', 'archive'], 'trn_archive_records'],
             'document settings save' => [['document_settings', 'save'], 'trn_manage_templates'],
             'document profile save' => [['document_profile_settings', 'save'], 'trn_manage_templates'],
         ];

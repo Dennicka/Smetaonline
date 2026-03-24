@@ -73,6 +73,11 @@ final class Migrator
             $this->runQueries($this->reminderCoreQueries($charsetCollate));
             $this->markMigration('012_reminder_core');
         }
+
+        if (! $this->hasMigration('013_ata_core')) {
+            $this->runQueries($this->ataCoreQueries($charsetCollate));
+            $this->markMigration('013_ata_core');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -696,6 +701,48 @@ final class Migrator
                 KEY status (status),
                 KEY reminder_level (reminder_level),
                 KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function ataCoreQueries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_atas (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                project_id BIGINT UNSIGNED NOT NULL,
+                estimate_id BIGINT UNSIGNED NULL,
+                offert_id BIGINT UNSIGNED NULL,
+                invoice_id BIGINT UNSIGNED NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                title VARCHAR(191) NOT NULL DEFAULT '',
+                scope_change_text LONGTEXT NULL,
+                amount_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                invoice_link_status VARCHAR(32) NOT NULL DEFAULT 'not_invoiced',
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NULL,
+                approved_at DATETIME NULL,
+                archived_at DATETIME NULL,
+                actor_user_id BIGINT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY project_id (project_id),
+                KEY estimate_id (estimate_id),
+                KEY offert_id (offert_id),
+                KEY invoice_id (invoice_id),
+                KEY status (status),
+                KEY invoice_link_status (invoice_link_status)
             ) {$charsetCollate};",
         ];
     }

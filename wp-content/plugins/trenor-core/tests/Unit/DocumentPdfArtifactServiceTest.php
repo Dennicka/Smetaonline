@@ -101,6 +101,19 @@ final class DocumentPdfArtifactServiceTest extends TestCase
         self::assertStringContainsString('REM-2026-010-id1001-v2.pdf', (string) $artifact['storage_path']);
     }
 
+    public function testCreatesAtaPdfArtifactMetadata(): void
+    {
+        $this->seedDocument(1111, 'ATA-2026-011', 4);
+
+        $artifact = $this->service()->getOrCreate('ata', 1111);
+
+        self::assertSame('ata', $artifact['document_type']);
+        self::assertSame(1111, (int) $artifact['document_id']);
+        self::assertSame(4, (int) $artifact['version_no']);
+        self::assertFileExists((string) $artifact['storage_path']);
+        self::assertStringContainsString('ATA-2026-011-id1111-v4.pdf', (string) $artifact['storage_path']);
+    }
+
     public function testRepeatedRequestReusesSingleArtifactPerDocumentVersion(): void
     {
         /** @var WpdbStub $wpdb */
