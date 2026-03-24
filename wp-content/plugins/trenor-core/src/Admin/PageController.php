@@ -483,7 +483,6 @@ final class PageController
             }
             echo '</tbody></table>';
         }
-
     }
 
     /** @param array<int, array<string, mixed>> $rows */
