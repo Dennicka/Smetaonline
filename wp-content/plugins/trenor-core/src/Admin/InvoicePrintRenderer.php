@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Admin;
 
+use Trenor\Core\Domain\Service\DocumentSettings;
+
 final class InvoicePrintRenderer
 {
     private InvoicePrintViewModel $viewModel;
+    private DocumentSettings $documentSettings;
 
-    public function __construct(?InvoicePrintViewModel $viewModel = null)
+    public function __construct(?InvoicePrintViewModel $viewModel = null, ?DocumentSettings $documentSettings = null)
     {
         $this->viewModel = $viewModel ?? new InvoicePrintViewModel();
+        $this->documentSettings = $documentSettings ?? new DocumentSettings();
     }
 
     /**
@@ -34,6 +38,7 @@ final class InvoicePrintRenderer
      */
     public function render(array $invoice, array $snapshot, array $context = []): void
     {
+        $context['document_settings'] = $this->documentSettings->get();
         $view = $this->viewModel->build($invoice, $snapshot, $context);
         $invoiceId = (int) ($invoice['id'] ?? 0);
         $detailUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId);

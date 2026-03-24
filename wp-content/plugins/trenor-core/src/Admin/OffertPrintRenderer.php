@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Admin;
 
+use Trenor\Core\Domain\Service\DocumentSettings;
+
 final class OffertPrintRenderer
 {
     private OffertPrintViewModel $viewModel;
+    private DocumentSettings $documentSettings;
 
-    public function __construct(?OffertPrintViewModel $viewModel = null)
+    public function __construct(?OffertPrintViewModel $viewModel = null, ?DocumentSettings $documentSettings = null)
     {
         $this->viewModel = $viewModel ?? new OffertPrintViewModel();
+        $this->documentSettings = $documentSettings ?? new DocumentSettings();
     }
 
     /**
@@ -31,6 +35,7 @@ final class OffertPrintRenderer
      */
     public function render(array $offert, array $snapshot, array $context = []): void
     {
+        $context['document_settings'] = $this->documentSettings->get();
         $view = $this->viewModel->build($offert, $snapshot, $context);
         $offertId = (int) ($offert['id'] ?? 0);
         $estimateId = (int) ($offert['estimate_id'] ?? 0);

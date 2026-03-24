@@ -128,6 +128,7 @@ final class OffertPrintViewModelTest extends TestCase
             ['document_settings' => [
                 'company_name' => 'ACME AB',
                 'vat_number' => 'SE123',
+                'address_line_1' => 'Main street 1',
                 'iban' => 'SE111',
                 'payment_terms_days' => '20',
                 'offert_intro_text' => 'Hello',
@@ -137,9 +138,34 @@ final class OffertPrintViewModelTest extends TestCase
 
         self::assertSame('ACME AB', $result['issuer']['company_name']);
         self::assertSame('SE123', $result['issuer']['vat_number']);
+        self::assertSame('Main street 1', $result['issuer']['address_line']);
         self::assertSame('SE111', $result['payment']['iban']);
-        self::assertSame('20', $result['terms_notes']['payment_terms_days']);
+        self::assertSame('20', $result['terms_notes']['due_days']);
         self::assertSame('Hello', $result['terms_notes']['offert_intro_text']);
         self::assertSame('Thanks', $result['terms_notes']['offert_footer_text']);
+    }
+
+    public function testBuildNormalizesPartialDocumentSettingsToScalarStrings(): void
+    {
+        $result = $this->viewModel->build(
+            ['estimate_id' => 1],
+            ['header' => [], 'totals' => [], 'lines' => [], 'material_lines' => [], 'metadata' => []],
+            ['document_settings' => [
+                'company_name' => ['invalid'],
+                'moms_number' => 'SE555',
+                'address_line' => '',
+                'address_line_1' => 'Street 5',
+                'bic' => 'NDEASESS',
+                'payment_terms' => ['invalid'],
+                'due_days' => null,
+            ]]
+        );
+
+        self::assertSame('', $result['issuer']['company_name']);
+        self::assertSame('SE555', $result['issuer']['vat_number']);
+        self::assertSame('Street 5', $result['issuer']['address_line']);
+        self::assertSame('NDEASESS', $result['payment']['swift']);
+        self::assertSame('', $result['terms_notes']['payment_terms']);
+        self::assertSame('', $result['terms_notes']['due_days']);
     }
 }
