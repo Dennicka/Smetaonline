@@ -29,9 +29,14 @@ final class EstimateRepository extends BaseRepository
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
+            'rot_requested' => ! empty($data['rot_requested']) ? 1 : 0,
+            'housing_type' => sanitize_key((string) ($data['housing_type'] ?? '')),
+            'rot_is_new_build' => ! empty($data['rot_is_new_build']) ? 1 : 0,
+            'rot_property_reference' => sanitize_text_field((string) ($data['rot_property_reference'] ?? '')),
+            'rot_buyers_json' => (string) ($data['rot_buyers_json'] ?? '[]'),
             'created_at' => $now,
             'updated_at' => $now,
-        ], ['%d', '%s', '%s', '%s', '%f', '%d', '%s', '%s', '%s']);
+        ], ['%d', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']);
         if ($ok === false) {
             return null;
         }
@@ -54,6 +59,11 @@ final class EstimateRepository extends BaseRepository
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
+            'rot_requested' => ! empty($data['rot_requested']) ? 1 : 0,
+            'housing_type' => sanitize_key((string) ($data['housing_type'] ?? '')),
+            'rot_is_new_build' => ! empty($data['rot_is_new_build']) ? 1 : 0,
+            'rot_property_reference' => sanitize_text_field((string) ($data['rot_property_reference'] ?? '')),
+            'rot_buyers_json' => (string) ($data['rot_buyers_json'] ?? '[]'),
             'updated_at' => current_time('mysql', true),
         ];
 

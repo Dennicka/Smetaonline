@@ -92,6 +92,10 @@ final class OffertDetailRenderer
             'subtotal_ex_vat_minor',
             'vat_minor',
             'total_inc_vat_minor',
+            'rot_eligible_labour_minor',
+            'preliminary_rot_minor',
+            'amount_before_rot_minor',
+            'amount_after_preliminary_rot_minor',
         ];
 
         echo '<table class="widefat striped"><tbody>';

@@ -46,6 +46,18 @@ final class InvoiceFromOffertServiceTest extends TestCase
             'lines' => [['id' => 1, 'quantity' => 1.5, 'labour_subtotal_minor' => 90000]],
             'material_lines' => [['id' => 7, 'quantity' => 2.25, 'subtotal_minor' => 30000]],
             'metadata' => [],
+            'rot' => [
+                'rot_requested' => true,
+                'housing_type' => 'smahus',
+                'rot_eligibility_status' => 'preliminary_approved',
+                'rot_eligible_labour_minor' => 90000,
+                'preliminary_rot_minor' => 27000,
+                'amount_after_preliminary_rot_minor' => 123000,
+                'rot_buyer_count' => 1,
+                'rot_buyers' => [['personal_identity' => '19800101-1234', 'share_percent' => 100]],
+                'rot_allocation' => [['personal_identity' => '19800101-1234', 'allocated_rot_minor' => 27000]],
+                'rot_property_reference' => 'FAST-123',
+            ],
         ];
 
         $payload = $service->buildPayload($offert, $snapshot, new DateTimeImmutable('2026-03-11 07:15:00'));
@@ -65,6 +77,8 @@ final class InvoiceFromOffertServiceTest extends TestCase
         self::assertSame(120000, $payload['subtotal_ex_vat_minor']);
         self::assertSame(30000, $payload['vat_minor']);
         self::assertSame(150000, $payload['total_inc_vat_minor']);
+        self::assertSame(27000, $payload['preliminary_rot_minor']);
+        self::assertSame(123000, $payload['total_after_preliminary_rot_minor']);
 
         self::assertSame(17, $versionProvider->receivedOffertId);
         self::assertSame('inv', $documentNumbers->receivedDocType);
@@ -75,6 +89,7 @@ final class InvoiceFromOffertServiceTest extends TestCase
         self::assertSame(1.5, $frozen['lines'][0]['quantity']);
         self::assertSame(2.25, $frozen['material_lines'][0]['quantity']);
         self::assertSame(30000, $frozen['totals']['vat_minor']);
+        self::assertSame(27000, $frozen['rot']['preliminary_rot_minor']);
 
         self::assertSame(17, $frozen['metadata']['source_offert_id']);
         self::assertSame('OFF-202603-00077', $frozen['metadata']['source_offert_document_number']);

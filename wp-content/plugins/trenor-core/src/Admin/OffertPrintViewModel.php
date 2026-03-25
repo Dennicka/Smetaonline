@@ -202,6 +202,10 @@ final class OffertPrintViewModel
             'subtotal_ex_vat' => $this->toScalarString($totals['subtotal_ex_vat_minor'] ?? null),
             'vat' => $this->toScalarString($totals['vat_minor'] ?? null),
             'total_inc_vat' => $this->toScalarString($totals['total_inc_vat_minor'] ?? ($offert['total_inc_vat_minor'] ?? null)),
+            'rot_eligible_labour' => $this->toScalarString($totals['rot_eligible_labour_minor'] ?? null),
+            'preliminary_rot' => $this->toScalarString($totals['preliminary_rot_minor'] ?? null),
+            'amount_before_rot' => $this->toScalarString($totals['amount_before_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? null)),
+            'amount_after_preliminary_rot' => $this->toScalarString($totals['amount_after_preliminary_rot_minor'] ?? null),
         ];
     }
 

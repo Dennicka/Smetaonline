@@ -19,8 +19,8 @@ final class OffertFromEstimateService
         $this->documentSequenceGenerator = $documentSequenceGenerator;
     }
 
-    /** @param array<string,mixed> $estimateHeader @param array<int,array<string,mixed>> $estimateLines @param array<int,array<string,mixed>> $estimateMaterialLines @param array<string,mixed> $totals @return array<string,mixed> */
-    public function buildPayload(array $estimateHeader, array $estimateLines, array $estimateMaterialLines, array $totals, ?DateTimeImmutable $issuedAtUtc = null): array
+    /** @param array<string,mixed> $estimateHeader @param array<int,array<string,mixed>> $estimateLines @param array<int,array<string,mixed>> $estimateMaterialLines @param array<string,mixed> $totals @param array<string,mixed> $rotSummary @return array<string,mixed> */
+    public function buildPayload(array $estimateHeader, array $estimateLines, array $estimateMaterialLines, array $totals, ?DateTimeImmutable $issuedAtUtc = null, array $rotSummary = []): array
     {
         $issuedAtUtc ??= new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $estimateId = (int) ($estimateHeader['id'] ?? 0);
@@ -40,6 +40,7 @@ final class OffertFromEstimateService
                 'document_number' => $documentNumber,
                 'issued_at_utc' => $issuedAtUtc->format('Y-m-d H:i:s'),
             ],
+            'rot' => $rotSummary,
         ]);
 
         return [
@@ -54,6 +55,17 @@ final class OffertFromEstimateService
             'subtotal_ex_vat_minor' => (int) ($totals['subtotal_ex_vat_minor'] ?? 0),
             'vat_minor' => (int) ($totals['vat_minor'] ?? 0),
             'total_inc_vat_minor' => (int) ($totals['total_inc_vat_minor'] ?? 0),
+            'rot_requested' => ! empty($rotSummary['rot_requested']) ? 1 : 0,
+            'housing_type' => (string) ($rotSummary['housing_type'] ?? ''),
+            'rot_eligibility_status' => (string) ($rotSummary['rot_eligibility_status'] ?? 'not_requested'),
+            'rot_ineligibility_reason' => (string) ($rotSummary['rot_ineligibility_reason'] ?? ''),
+            'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
+            'preliminary_rot_minor' => (int) ($rotSummary['preliminary_rot_minor'] ?? 0),
+            'total_after_preliminary_rot_minor' => (int) ($rotSummary['amount_after_preliminary_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+            'rot_buyer_count' => (int) ($rotSummary['rot_buyer_count'] ?? 0),
+            'rot_buyers_json' => (string) wp_json_encode($rotSummary['rot_buyers'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            'rot_allocation_json' => (string) wp_json_encode($rotSummary['rot_allocation'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            'rot_property_reference' => (string) ($rotSummary['rot_property_reference'] ?? ''),
             'snapshot_json' => (string) wp_json_encode($snapshotPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
             'issued_at' => $issuedAtUtc->format('Y-m-d H:i:s'),
         ];
