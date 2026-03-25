@@ -7,6 +7,8 @@ namespace Trenor\Core\Admin;
 use RuntimeException;
 use Trenor\Core\Database\RepositoryFactory;
 use Trenor\Core\Domain\Exception\PaymentRegistrationException;
+use Trenor\Core\Import\PriceImportException;
+use Trenor\Core\Import\PriceListImportService;
 use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 use Trenor\Core\Domain\Exception\EstimateCalculationException;
 use Trenor\Core\Domain\Exception\RotValidationException;
@@ -92,6 +94,14 @@ final class PageController
 
         if ($entity === 'material') {
             $this->handleEntity($this->factory->materials(), 'trn_materials', $action, $id, $this->collectData($postPayload, ['category_id', 'name_ru', 'name_sv', 'unit_code', 'coverage_per_unit', 'buy_price_minor', 'sell_price_minor', 'currency', 'sku', 'is_active']));
+        }
+
+        if ($entity === 'supplier') {
+            $this->handleEntity($this->factory->suppliers(), 'trn_suppliers_prices', $action, $id, $this->collectData($postPayload, ['name', 'code', 'source_type', 'country', 'currency', 'is_active']));
+        }
+
+        if ($entity === 'price_import' && $action === 'import') {
+            $this->handlePriceImport($postPayload);
         }
 
         if ($entity === 'estimate') {
@@ -254,6 +264,47 @@ final class PageController
             }
         }
 
+        echo '</div>';
+    }
+
+    public function renderSuppliersPrices(): void
+    {
+        if (! current_user_can('trn_manage_prices')) {
+            wp_die('Forbidden');
+        }
+
+        $suppliers = $this->factory->suppliers()->all();
+        $batches = $this->factory->priceImportBatches()->latest(20);
+        $prices = $this->factory->materialSupplierPrices()->latest(50);
+
+        echo '<div class="wrap"><h1>Suppliers / Price import</h1>';
+        $this->renderAdminNoticeFromRequest();
+        echo '<h2>Suppliers registry</h2>';
+        echo '<form method="post">';
+        wp_nonce_field('trn_supplier_create');
+        echo '<input type="hidden" name="trn_entity" value="supplier"><input type="hidden" name="trn_action" value="create">';
+        foreach (['name', 'code', 'source_type', 'country', 'currency', 'is_active'] as $field) {
+            echo '<p><label>' . esc_html($field) . '<br><input class="regular-text" name="' . esc_attr($field) . '" value=""></label></p>';
+        }
+        submit_button('Create supplier');
+        echo '</form>';
+        $this->renderSimpleTable(['id', 'name', 'code', 'source_type', 'country', 'currency', 'is_active', 'created_at'], $suppliers);
+
+        echo '<h2>Import price list CSV</h2>';
+        echo '<form method="post" enctype="multipart/form-data">';
+        wp_nonce_field('trn_price_import_import');
+        echo '<input type="hidden" name="trn_entity" value="price_import">';
+        echo '<input type="hidden" name="trn_action" value="import">';
+        echo '<p><label>Supplier ID <input type="number" min="1" name="supplier_id" required></label></p>';
+        echo '<p><label>CSV file <input type="file" name="price_csv" accept=\".csv,text/csv\" required></label></p>';
+        submit_button('Import');
+        echo '</form>';
+
+        echo '<h2>Import batches</h2>';
+        $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
+
+        echo '<h2>Price history (latest rows)</h2>';
+        $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
         echo '</div>';
     }
 
@@ -992,6 +1043,24 @@ final class PageController
         echo '</form>';
     }
 
+    /** @param array<int, string> $columns @param array<int, array<string, mixed>> $rows */
+    private function renderSimpleTable(array $columns, array $rows): void
+    {
+        echo '<table class="widefat striped"><thead><tr>';
+        foreach ($columns as $column) {
+            echo '<th>' . esc_html($column) . '</th>';
+        }
+        echo '</tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr>';
+            foreach ($columns as $column) {
+                echo '<td>' . esc_html((string) ($row[$column] ?? '')) . '</td>';
+            }
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
     private function renderEstimateBuilder(int $estimateId): void
     {
         $estimate = $this->factory->estimates()->find($estimateId);
@@ -1313,6 +1382,14 @@ final class PageController
                     $data['coverage_snapshot'] = (string) $material['coverage_per_unit'];
                     $data['buy_price_minor_snapshot'] = (string) $material['buy_price_minor'];
                     $data['sell_price_minor_snapshot'] = (string) $material['sell_price_minor'];
+
+                    $materialKey = sanitize_text_field((string) ($material['sku'] ?? ''));
+                    if ($materialKey !== '') {
+                        $price = $this->factory->materialSupplierPrices()->findLatestCurrentByMaterialKey($materialKey);
+                        if (is_array($price)) {
+                            $data['buy_price_minor_snapshot'] = (string) ((int) ($price['buy_price_minor'] ?? 0));
+                        }
+                    }
                 }
             }
             $data['subtotal_minor'] = (string) ((int) round((float) ($data['quantity'] ?? 0) * (int) ($data['sell_price_minor_snapshot'] ?? 0)));
@@ -2004,6 +2081,10 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_catalogs';
         }
 
+        if (in_array($entity, ['supplier', 'price_import'], true)) {
+            return 'trn_manage_prices';
+        }
+
         if (in_array($entity, ['estimate', 'estimate_line', 'estimate_material_line', 'estimate_recalculate'], true)) {
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_estimates';
         }
@@ -2045,6 +2126,64 @@ final class PageController
         }
 
         return 'read';
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function handlePriceImport(array $postPayload): void
+    {
+        $supplierId = (int) $this->postValue($postPayload, 'supplier_id');
+        if ($supplierId <= 0) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Missing supplier_id.')));
+            exit;
+        }
+
+        $supplier = $this->factory->suppliers()->find($supplierId);
+        if (! is_array($supplier)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Supplier not found.')));
+            exit;
+        }
+
+        $file = $_FILES['price_csv'] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce validated in handleRequests().
+        if (! is_array($file) || ! isset($file['tmp_name'], $file['name'])) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Invalid file payload.')));
+            exit;
+        }
+
+        $tmpName = (string) $file['tmp_name'];
+        $fileName = (string) $file['name'];
+        if ($tmpName === '' || ! is_readable($tmpName)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Invalid file.')));
+            exit;
+        }
+
+        $content = file_get_contents($tmpName);
+        if (! is_string($content)) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Cannot read uploaded file.')));
+            exit;
+        }
+
+        $service = new PriceListImportService(
+            $this->factory->priceImportBatches(),
+            $this->factory->materialSupplierPrices()
+        );
+
+        try {
+            $result = $service->importCsv($supplierId, $fileName, $content, get_current_user_id());
+            $msg = sprintf(
+                'Import status: %s; imported=%d changed=%d unchanged=%d invalid=%d skipped=%d',
+                (string) ($result['status'] ?? 'unknown'),
+                (int) ($result['imported_rows'] ?? 0),
+                (int) ($result['changed_rows'] ?? 0),
+                (int) ($result['unchanged_rows'] ?? 0),
+                (int) ($result['invalid_rows'] ?? 0),
+                (int) ($result['skipped_rows'] ?? 0)
+            );
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=ok&trn_msg=' . rawurlencode($msg)));
+            exit;
+        } catch (PriceImportException $exception) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+            exit;
+        }
     }
 
     private function renderOffertActionForm(int $offertId, string $action, string $label): void
