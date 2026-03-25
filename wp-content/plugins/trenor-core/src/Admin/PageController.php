@@ -230,7 +230,7 @@ final class PageController
 
     public function renderOperationalReports(): void
     {
-        if (! $this->canViewOperationalReports()) {
+        if (! $this->canAccessOperationalReportsPage()) {
             wp_die('Forbidden');
         }
 
@@ -1909,11 +1909,21 @@ final class PageController
         return false;
     }
 
+    private function canAccessOperationalReportsPage(): bool
+    {
+        return current_user_can('trn_view_operational_reports');
+    }
+
     /** @return array<int, string> */
     private function operationalReportsAccessCaps(): array
     {
         return [
             'trn_view_operational_reports',
+            'trn_issue_invoices',
+            'trn_record_payments',
+            'trn_issue_reminders',
+            'trn_manage_prices',
+            'trn_manage_backups',
         ];
     }
 
