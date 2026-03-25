@@ -26,12 +26,22 @@ final class RoomRepository extends BaseRepository
             [
                 'project_id' => (int) ($data['project_id'] ?? 0),
                 'name' => sanitize_text_field((string) ($data['name'] ?? '')),
+                'room_type' => sanitize_key((string) ($data['room_type'] ?? 'other')),
                 'floor' => sanitize_text_field((string) ($data['floor'] ?? '')),
+                'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
+                'condition_state' => sanitize_key((string) ($data['condition_state'] ?? 'unknown')),
+                'length_m' => (float) ($data['length_m'] ?? 0),
+                'width_m' => (float) ($data['width_m'] ?? 0),
+                'height_m' => (float) ($data['height_m'] ?? 0),
+                'area_m2' => (float) ($data['area_m2'] ?? 0),
+                'window_count' => (int) ($data['window_count'] ?? 0),
+                'door_count' => (int) ($data['door_count'] ?? 0),
+                'work_context' => sanitize_textarea_field((string) ($data['work_context'] ?? '')),
                 'status' => 'active',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            ['%d', '%s', '%s', '%s', '%s', '%s']
+            ['%d', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%d', '%d', '%s', '%s', '%s', '%s']
         );
 
         if ($inserted === false) {
@@ -57,11 +67,21 @@ final class RoomRepository extends BaseRepository
             [
                 'project_id' => (int) ($data['project_id'] ?? 0),
                 'name' => sanitize_text_field((string) ($data['name'] ?? '')),
+                'room_type' => sanitize_key((string) ($data['room_type'] ?? 'other')),
                 'floor' => sanitize_text_field((string) ($data['floor'] ?? '')),
+                'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
+                'condition_state' => sanitize_key((string) ($data['condition_state'] ?? 'unknown')),
+                'length_m' => (float) ($data['length_m'] ?? 0),
+                'width_m' => (float) ($data['width_m'] ?? 0),
+                'height_m' => (float) ($data['height_m'] ?? 0),
+                'area_m2' => (float) ($data['area_m2'] ?? 0),
+                'window_count' => (int) ($data['window_count'] ?? 0),
+                'door_count' => (int) ($data['door_count'] ?? 0),
+                'work_context' => sanitize_textarea_field((string) ($data['work_context'] ?? '')),
                 'updated_at' => current_time('mysql', true),
             ],
             ['id' => $id],
-            ['%d', '%s', '%s', '%s'],
+            ['%d', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%d', '%d', '%s', '%s'],
             ['%d']
         );
 

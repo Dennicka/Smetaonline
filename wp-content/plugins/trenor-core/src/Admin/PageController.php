@@ -88,7 +88,23 @@ final class PageController
         }
 
         if ($entity === 'room') {
-            $this->handleEntity($this->factory->rooms(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['project_id', 'name', 'floor']));
+            $this->handleEntity($this->factory->rooms(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['project_id', 'name', 'room_type', 'floor', 'notes', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context']));
+        }
+
+        if ($entity === 'contact_person') {
+            $this->handleEntity($this->factory->contactPersons(), 'trn_projects', $action, $id, $this->collectData($postPayload, ['client_id', 'property_id', 'project_id', 'name', 'role_title', 'phone', 'email', 'notes', 'is_primary', 'status']));
+        }
+
+        if ($entity === 'attachment') {
+            $data = $this->collectData($postPayload, ['parent_entity_type', 'parent_entity_id', 'file_url', 'file_path', 'original_filename', 'mime_type', 'title', 'caption', 'notes', 'uploaded_by', 'status']);
+            if ((int) ($data['uploaded_by'] ?? 0) <= 0) {
+                $data['uploaded_by'] = (string) get_current_user_id();
+            }
+            $this->handleEntity($this->factory->attachments(), 'trn_projects', $action, $id, $data);
+        }
+
+        if ($entity === 'surface') {
+            $this->handleEntity($this->factory->surfaces(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['room_id', 'surface_type', 'length_m', 'width_m', 'height_m', 'area_m2', 'condition_state', 'notes']));
         }
 
         if ($entity === 'work_item') {
@@ -241,7 +257,7 @@ final class PageController
         if (! current_user_can('trn_manage_clients')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Клиенты', 'client', ['name', 'org_number', 'email', 'phone'], $this->factory->clients()->all());
+        $this->renderClientsWorkspace();
     }
 
     public function renderProperties(): void
@@ -249,7 +265,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Объекты', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $this->factory->properties()->all());
+        $this->renderPropertiesWorkspace();
     }
 
     public function renderProjects(): void
@@ -257,7 +273,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Проекты', 'project', ['property_id', 'name', 'code'], $this->factory->projects()->all());
+        $this->renderProjectsWorkspace();
     }
 
     public function renderRooms(): void
@@ -265,7 +281,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Помещения', 'room', ['project_id', 'name', 'floor'], $this->factory->rooms()->all());
+        $this->renderRoomsWorkspace();
     }
 
     public function renderWorkItems(): void
@@ -1118,6 +1134,180 @@ final class PageController
             $this->renderReminderDetail($reminderId);
         }
         $this->renderAppShellEnd();
+    }
+
+    private function renderClientsWorkspace(): void
+    {
+        $clients = $this->factory->clients()->all();
+        $this->renderAppShellStart('Клиенты', 'Client register with contact adjacency.');
+        echo '<h2>Новый клиент</h2><form method="post">';
+        wp_nonce_field('trn_client_create');
+        echo '<input type="hidden" name="trn_entity" value="client"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>Name<br><input class="regular-text" name="name" value=""></label></p>';
+        echo '<p><label>Company name<br><input class="regular-text" name="company_name" value=""></label></p>';
+        echo '<p><label>Org number<br><input class="regular-text" name="org_number" value=""></label></p>';
+        echo '<p><label>Email<br><input class="regular-text" name="email" value=""></label></p>';
+        echo '<p><label>Phone<br><input class="regular-text" name="phone" value=""></label></p>';
+        submit_button('Create client');
+        echo '</form>';
+
+        echo '<h2>Список клиентов</h2><table class="widefat striped"><thead><tr><th>ID</th><th>Name</th><th>Org</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($clients as $client) {
+            $clientId = (int) ($client['id'] ?? 0);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $clientId) . '</td><td>' . esc_html((string) ($client['name'] ?? '')) . '</td><td>' . esc_html((string) ($client['org_number'] ?? '')) . '</td><td>' . esc_html((string) ($client['email'] ?? '')) . '</td><td>' . esc_html((string) ($client['phone'] ?? '')) . '</td><td>' . esc_html((string) ($client['status'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_properties&client_id=' . $clientId)) . '">Properties</a> <a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects&client_id=' . $clientId)) . '">Projects</a></td>';
+            echo '</tr>';
+            $contacts = $this->factory->contactPersons()->byClient($clientId);
+            echo '<tr><td colspan="7"><strong>Contacts:</strong> ';
+            if ($contacts === []) {
+                echo 'none';
+            } else {
+                foreach ($contacts as $contact) {
+                    echo '<span style="margin-right:12px;">' . esc_html((string) ($contact['name'] ?? '')) . ' (' . esc_html((string) ($contact['role_title'] ?? '')) . ', ' . esc_html((string) ($contact['phone'] ?? '')) . ')</span>';
+                }
+            }
+            echo '</td></tr>';
+        }
+        echo '</tbody></table>';
+        $this->renderContactPersonForm(0, 0, 0);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderPropertiesWorkspace(): void
+    {
+        $clientFilter = (int) filter_input(INPUT_GET, 'client_id', FILTER_VALIDATE_INT);
+        $properties = $this->factory->properties()->all();
+        $this->renderAppShellStart('Объекты', 'Property register with related contacts and projects.');
+        echo '<h2>Новый объект</h2><form method="post">';
+        wp_nonce_field('trn_property_create');
+        echo '<input type="hidden" name="trn_entity" value="property"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>Client ID<br><input class="small-text" name="client_id" value="' . esc_attr((string) $clientFilter) . '"></label></p>';
+        echo '<p><label>Name<br><input class="regular-text" name="name" value=""></label></p>';
+        echo '<p><label>Address<br><input class="regular-text" name="address_line" value=""></label></p>';
+        echo '<p><label>City<br><input class="regular-text" name="city" value=""></label></p>';
+        echo '<p><label>Postal code<br><input class="regular-text" name="postal_code" value=""></label></p>';
+        submit_button('Create property');
+        echo '</form>';
+
+        echo '<h2>Список объектов</h2><table class="widefat striped"><thead><tr><th>ID</th><th>Client</th><th>Name</th><th>Address</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($properties as $property) {
+            $propertyId = (int) ($property['id'] ?? 0);
+            $clientId = (int) ($property['client_id'] ?? 0);
+            if ($clientFilter > 0 && $clientId !== $clientFilter) {
+                continue;
+            }
+            echo '<tr><td>' . esc_html((string) $propertyId) . '</td><td>' . esc_html((string) $clientId) . '</td><td>' . esc_html((string) ($property['name'] ?? '')) . '</td><td>' . esc_html((string) ($property['address_line'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects&property_id=' . $propertyId)) . '">Projects</a></td></tr>';
+            $contacts = $this->factory->contactPersons()->byProperty($propertyId);
+            echo '<tr><td colspan="5"><strong>Contacts:</strong> ' . esc_html((string) count($contacts)) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+        $this->renderContactPersonForm(0, 0, 0);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderProjectsWorkspace(): void
+    {
+        $propertyFilter = (int) filter_input(INPUT_GET, 'property_id', FILTER_VALIDATE_INT);
+        $projects = $this->factory->projects()->all();
+        $this->renderAppShellStart('Проекты', 'Project register with dossier adjacency, contacts and attachments.');
+        echo '<h2>Новый проект</h2><form method="post">';
+        wp_nonce_field('trn_project_create');
+        echo '<input type="hidden" name="trn_entity" value="project"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>Property ID<br><input class="small-text" name="property_id" value="' . esc_attr((string) $propertyFilter) . '"></label></p>';
+        echo '<p><label>Name<br><input class="regular-text" name="name"></label></p>';
+        echo '<p><label>Code<br><input class="regular-text" name="code"></label></p>';
+        submit_button('Create project');
+        echo '</form>';
+
+        echo '<h2>Список проектов</h2><table class="widefat striped"><thead><tr><th>ID</th><th>Property</th><th>Name</th><th>Code</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($projects as $project) {
+            $projectId = (int) ($project['id'] ?? 0);
+            $propertyId = (int) ($project['property_id'] ?? 0);
+            if ($propertyFilter > 0 && $propertyId !== $propertyFilter) {
+                continue;
+            }
+            echo '<tr><td>' . esc_html((string) $projectId) . '</td><td>' . esc_html((string) $propertyId) . '</td><td>' . esc_html((string) ($project['name'] ?? '')) . '</td><td>' . esc_html((string) ($project['code'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_rooms&project_id=' . $projectId)) . '">Rooms</a> <a class="button" href="' . esc_url(admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)) . '">Dossier</a></td></tr>';
+            echo '<tr><td colspan="5"><strong>Contacts:</strong> ' . esc_html((string) count($this->factory->contactPersons()->byProject($projectId))) . ' | <strong>Attachments:</strong> ' . esc_html((string) count($this->factory->attachments()->forParent('project', $projectId))) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+        $this->renderContactPersonForm(0, 0, 0);
+        $this->renderAttachmentForm('project', 0);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderRoomsWorkspace(): void
+    {
+        $projectFilter = (int) filter_input(INPUT_GET, 'project_id', FILTER_VALIDATE_INT);
+        $rooms = $this->factory->rooms()->all();
+        $this->renderAppShellStart('Помещения', 'Rich room model + surface and attachment context.');
+        echo '<h2>Новое помещение</h2><form method="post">';
+        wp_nonce_field('trn_room_create');
+        echo '<input type="hidden" name="trn_entity" value="room"><input type="hidden" name="trn_action" value="create">';
+        foreach (['project_id', 'name', 'room_type', 'floor', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'] as $field) {
+            echo '<p><label>' . esc_html($field) . '<br><input class="regular-text" name="' . esc_attr($field) . '" value="' . ($field === 'project_id' ? esc_attr((string) $projectFilter) : '') . '"></label></p>';
+        }
+        submit_button('Create room');
+        echo '</form>';
+
+        echo '<h2>Список помещений</h2><table class="widefat striped"><thead><tr><th>ID</th><th>Project</th><th>Name</th><th>Type</th><th>Floor</th><th>Condition</th><th>Area</th><th>Openings</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rooms as $room) {
+            $roomId = (int) ($room['id'] ?? 0);
+            $projectId = (int) ($room['project_id'] ?? 0);
+            if ($projectFilter > 0 && $projectId !== $projectFilter) {
+                continue;
+            }
+            echo '<tr><td>' . esc_html((string) $roomId) . '</td><td>' . esc_html((string) $projectId) . '</td><td>' . esc_html((string) ($room['name'] ?? '')) . '</td><td>' . esc_html((string) ($room['room_type'] ?? '')) . '</td><td>' . esc_html((string) ($room['floor'] ?? '')) . '</td><td>' . esc_html((string) ($room['condition_state'] ?? '')) . '</td><td>' . esc_html((string) ($room['area_m2'] ?? '')) . '</td><td>w:' . esc_html((string) ($room['window_count'] ?? '0')) . ' d:' . esc_html((string) ($room['door_count'] ?? '0')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects')) . '">Back to projects</a></td></tr>';
+            echo '<tr><td colspan="9"><strong>Surfaces:</strong> ' . esc_html((string) count($this->factory->surfaces()->byRoom($roomId))) . ' | <strong>Attachments:</strong> ' . esc_html((string) count($this->factory->attachments()->forParent('room', $roomId))) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+        $this->renderSurfaceForm(0);
+        $this->renderAttachmentForm('room', 0);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderContactPersonForm(int $clientId, int $propertyId, int $projectId): void
+    {
+        echo '<h2>Contact person</h2><form method="post">';
+        wp_nonce_field('trn_contact_person_create');
+        echo '<input type="hidden" name="trn_entity" value="contact_person"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>client_id <input class="small-text" name="client_id" value="' . esc_attr((string) $clientId) . '"></label> <label>property_id <input class="small-text" name="property_id" value="' . esc_attr((string) $propertyId) . '"></label> <label>project_id <input class="small-text" name="project_id" value="' . esc_attr((string) $projectId) . '"></label></p>';
+        echo '<p><label>name <input class="regular-text" name="name"></label> <label>role/title <input class="regular-text" name="role_title"></label></p>';
+        echo '<p><label>phone <input class="regular-text" name="phone"></label> <label>email <input class="regular-text" name="email"></label></p>';
+        echo '<p><label>notes<br><textarea name="notes" class="large-text"></textarea></label></p>';
+        echo '<p><label><input type="checkbox" name="is_primary" value="1"> is primary</label></p>';
+        submit_button('Create contact');
+        echo '</form>';
+    }
+
+    private function renderAttachmentForm(string $parentType, int $parentId): void
+    {
+        echo '<h2>Attachment / photo</h2><form method="post">';
+        wp_nonce_field('trn_attachment_create');
+        echo '<input type="hidden" name="trn_entity" value="attachment"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>parent_entity_type <input class="regular-text" name="parent_entity_type" value="' . esc_attr($parentType) . '"></label> <label>parent_entity_id <input class="small-text" name="parent_entity_id" value="' . esc_attr((string) $parentId) . '"></label></p>';
+        echo '<p><label>file_url <input class="regular-text" name="file_url"></label> <label>file_path <input class="regular-text" name="file_path"></label></p>';
+        echo '<p><label>original filename <input class="regular-text" name="original_filename"></label> <label>mime_type <input class="regular-text" name="mime_type"></label></p>';
+        echo '<p><label>title <input class="regular-text" name="title"></label> <label>caption <input class="regular-text" name="caption"></label></p>';
+        echo '<p><label>notes<br><textarea name="notes" class="large-text"></textarea></label></p>';
+        submit_button('Add attachment');
+        echo '</form>';
+    }
+
+    private function renderSurfaceForm(int $roomId): void
+    {
+        echo '<h2>Surface</h2><form method="post">';
+        wp_nonce_field('trn_surface_create');
+        echo '<input type="hidden" name="trn_entity" value="surface"><input type="hidden" name="trn_action" value="create">';
+        echo '<p><label>room_id <input class="small-text" name="room_id" value="' . esc_attr((string) $roomId) . '"></label> <label>surface_type <input class="regular-text" name="surface_type" value="wall"></label></p>';
+        echo '<p><label>length_m <input class="small-text" name="length_m"></label> <label>width_m <input class="small-text" name="width_m"></label> <label>height_m <input class="small-text" name="height_m"></label> <label>area_m2 <input class="small-text" name="area_m2"></label></p>';
+        echo '<p><label>condition_state <input class="regular-text" name="condition_state" value="unknown"></label></p>';
+        echo '<p><label>notes<br><textarea name="notes" class="large-text"></textarea></label></p>';
+        submit_button('Create surface');
+        echo '</form>';
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
@@ -2960,7 +3150,7 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_clients';
         }
 
-        if (in_array($entity, ['property', 'project', 'room'], true)) {
+        if (in_array($entity, ['property', 'project', 'room', 'attachment', 'surface', 'contact_person'], true)) {
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_projects';
         }
 
