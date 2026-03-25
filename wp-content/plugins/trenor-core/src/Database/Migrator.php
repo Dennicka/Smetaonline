@@ -93,6 +93,11 @@ final class Migrator
             $this->runQueries($this->suppliersPriceHistoryV1Queries($charsetCollate));
             $this->markMigration('016_suppliers_price_history_v1');
         }
+
+        if (! $this->hasMigration('017_backup_restore_v1')) {
+            $this->runQueries($this->backupRestoreV1Queries($charsetCollate));
+            $this->markMigration('017_backup_restore_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -1081,6 +1086,31 @@ final class Migrator
                 KEY batch_id (batch_id),
                 KEY effective_from (effective_from),
                 KEY effective_to (effective_to)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function backupRestoreV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_backup_manifests (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                backup_type VARCHAR(64) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'started',
+                created_at DATETIME NOT NULL,
+                completed_at DATETIME NULL,
+                created_by_user_id BIGINT UNSIGNED NULL,
+                manifest_json LONGTEXT NOT NULL,
+                db_snapshot_path TEXT NOT NULL,
+                artifact_bundle_path TEXT NULL,
+                checksum_sha256 CHAR(64) NOT NULL,
+                error_message TEXT NULL,
+                PRIMARY KEY (id),
+                KEY status (status),
+                KEY created_at (created_at)
             ) {$charsetCollate};",
         ];
     }

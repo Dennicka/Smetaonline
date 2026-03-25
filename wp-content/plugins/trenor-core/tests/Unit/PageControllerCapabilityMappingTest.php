@@ -60,6 +60,8 @@ final class PageControllerCapabilityMappingTest extends TestCase
             'ata archive' => [['ata', 'archive'], 'trn_archive_records'],
             'document settings save' => [['document_settings', 'save'], 'trn_manage_templates'],
             'document profile save' => [['document_profile_settings', 'save'], 'trn_manage_templates'],
+            'backup create' => [['backup', 'create'], 'trn_manage_backups'],
+            'backup restore' => [['backup', 'restore'], 'trn_manage_backups'],
         ];
     }
 }

@@ -83,6 +83,13 @@ if (! function_exists('wp_upload_dir')) {
     }
 }
 
+if (! function_exists('wp_mkdir_p')) {
+    function wp_mkdir_p(string $target): bool
+    {
+        return @mkdir($target, 0775, true) || is_dir($target);
+    }
+}
+
 if (! function_exists('get_current_user_id')) {
     function get_current_user_id(): int
     {

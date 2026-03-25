@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
+use Trenor\Core\Backup\BackupManifestRepository;
+
 final class RepositoryFactory
 {
     public function clients(): ClientRepository
@@ -121,6 +123,11 @@ final class RepositoryFactory
     public function atas(): AtaRepository
     {
         return new AtaRepository();
+    }
+
+    public function backupManifests(): BackupManifestRepository
+    {
+        return new BackupManifestRepository();
     }
 
     /** @return array<int, array<string, mixed>> */
