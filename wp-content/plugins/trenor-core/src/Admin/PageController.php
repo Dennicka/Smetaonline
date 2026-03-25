@@ -1513,7 +1513,7 @@ final class PageController
                     ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
                     ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
                     ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
-                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'cap' => 'trn_view_operational_reports'],
+                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'caps' => $this->operationalReportsAccessCaps()],
                 ],
             ],
             [
@@ -1674,13 +1674,17 @@ final class PageController
         }
         echo '</ul>';
 
-        echo '<div class="trn-shell__actions">';
-        $this->renderOperationalLinkBar([
+        $readinessLinks = [
             ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_backups'],
             ['label' => 'Open document settings', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_templates'],
             ['label' => 'Open suppliers / imports', 'url' => admin_url('admin.php?page=trn_suppliers_prices'), 'cap' => 'trn_manage_prices'],
-            ['label' => 'Open operational reports', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'trn_view_operational_reports'],
-        ]);
+        ];
+        if ($this->canViewOperationalReports()) {
+            $readinessLinks[] = ['label' => 'Open operational reports', 'url' => admin_url('admin.php?page=trn_operational_reports')];
+        }
+
+        echo '<div class="trn-shell__actions">';
+        $this->renderOperationalLinkBar($readinessLinks);
         echo '</div>';
         echo '</section>';
     }
@@ -1713,7 +1717,7 @@ final class PageController
         $this->renderUatPathChecklist(
             'Operational control',
             [
-                ['label' => 'Operational reports / export', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'trn_view_operational_reports'],
+                ['label' => 'Operational reports / export', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'caps' => $this->operationalReportsAccessCaps()],
                 ['label' => 'Dossier / timeline', 'url' => admin_url('admin.php?page=trn_dossier'), 'cap' => 'trn_manage_estimates'],
             ]
         );
@@ -1722,14 +1726,26 @@ final class PageController
         echo '</section>';
     }
 
-    /** @param array<int,array{label:string,url:string,cap:string}> $steps */
+    /** @param array<int,array{label:string,url:string,cap?:string,caps?:array<int,string>}> $steps */
     private function renderUatPathChecklist(string $title, array $steps): void
     {
         echo '<h3>' . esc_html($title) . '</h3>';
         $visible = false;
         echo '<ul>';
         foreach ($steps as $step) {
-            if (! current_user_can((string) ($step['cap'] ?? 'read'))) {
+            $capabilities = $step['caps'] ?? [];
+            if (is_array($capabilities) && $capabilities !== []) {
+                $allowed = false;
+                foreach ($capabilities as $candidateCapability) {
+                    if (is_string($candidateCapability) && $candidateCapability !== '' && current_user_can($candidateCapability)) {
+                        $allowed = true;
+                        break;
+                    }
+                }
+                if (! $allowed) {
+                    continue;
+                }
+            } elseif (! current_user_can((string) ($step['cap'] ?? 'read'))) {
                 continue;
             }
             $visible = true;
@@ -1884,7 +1900,26 @@ final class PageController
 
     private function canViewOperationalReports(): bool
     {
-        return current_user_can('trn_view_operational_reports');
+        foreach ($this->operationalReportsAccessCaps() as $capability) {
+            if (current_user_can($capability)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return array<int, string> */
+    private function operationalReportsAccessCaps(): array
+    {
+        return [
+            'trn_view_operational_reports',
+            'trn_issue_invoices',
+            'trn_record_payments',
+            'trn_issue_reminders',
+            'trn_manage_prices',
+            'trn_manage_backups',
+        ];
     }
 
 
