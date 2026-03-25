@@ -90,5 +90,37 @@ final class AdminWorkspaceShellTest extends TestCase
         self::assertContains('trn_suppliers_prices', $GLOBALS['trn_test_submenu_pages']);
         self::assertContains('trn_settings', $GLOBALS['trn_test_submenu_pages']);
     }
+
+    public function testQuickActionsAreCapabilityAware(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_issue_invoices' => true,
+            'trn_record_payments' => false,
+            'trn_issue_offerts' => false,
+            'trn_manage_templates' => false,
+            'trn_manage_prices' => false,
+            'trn_manage_estimates' => false,
+            'trn_issue_credit_notes' => false,
+            'trn_issue_reminders' => false,
+            'trn_archive_records' => false,
+            'trn_manage_backups' => false,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+        $method = new ReflectionMethod($controller, 'renderWorkspaceQuickActions');
+        $method->setAccessible(true);
+
+        ob_start();
+        $method->invoke($controller);
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Open invoices', $output);
+        self::assertStringContainsString('Operational reports', $output);
+        self::assertStringNotContainsString('Open payments', $output);
+        self::assertStringNotContainsString('Open offerts', $output);
+        self::assertStringNotContainsString('Price imports', $output);
+        self::assertStringNotContainsString('Backup / Restore', $output);
+    }
 }
 }

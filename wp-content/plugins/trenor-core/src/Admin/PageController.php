@@ -1249,21 +1249,33 @@ final class PageController
 
     private function renderWorkspaceQuickActions(): void
     {
-        echo '<section class="trn-shell__panel"><h2>Quick actions</h2><div class="trn-shell__actions">';
-        $actions = [
-            ['label' => 'Create estimate', 'url' => 'admin.php?page=trn_estimates'],
-            ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts'],
-            ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices'],
-            ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments'],
-            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports'],
-            ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices'],
-            ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings'],
-        ];
+        $actions = array_values(array_filter(
+            $this->workspaceQuickActionRegistry(),
+            static fn (array $action): bool => current_user_can((string) ($action['capability'] ?? 'read'))
+        ));
 
+        echo '<section class="trn-shell__panel"><h2>Quick actions</h2><div class="trn-shell__actions">';
         foreach ($actions as $action) {
             echo '<a class="button button-secondary" href="' . esc_url(admin_url((string) $action['url'])) . '">' . esc_html((string) $action['label']) . '</a>';
         }
+        if ($actions === []) {
+            $this->renderEmptyState('No quick actions available for your current capability set.');
+        }
         echo '</div></section>';
+    }
+
+    /** @return array<int, array{label:string,url:string,capability:string}> */
+    private function workspaceQuickActionRegistry(): array
+    {
+        return [
+            ['label' => 'Create estimate', 'url' => 'admin.php?page=trn_estimates', 'capability' => 'trn_manage_estimates'],
+            ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts', 'capability' => 'trn_issue_offerts'],
+            ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices', 'capability' => 'trn_issue_invoices'],
+            ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments', 'capability' => 'trn_record_payments'],
+            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports', 'capability' => 'read'],
+            ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices', 'capability' => 'trn_manage_prices'],
+            ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings', 'capability' => 'trn_manage_backups'],
+        ];
     }
 
     /** @param array<int, array{label:string,url:string,cap?:string}> $links */
