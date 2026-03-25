@@ -1144,7 +1144,11 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderCrmWorkspaceHero('Clients', 'Start the CRM chain by creating or updating client profiles with tax and contact context.');
+        $this->renderCrmWorkspaceHero(
+            'Clients',
+            'Start the CRM chain by creating or updating client profiles with tax and contact context.',
+            [['label' => 'Next: Property', 'url' => admin_url('admin.php?page=trn_properties')]]
+        );
         $this->renderEntityPage('Clients', 'client', ['name', 'company_name', 'customer_type', 'org_number', 'vat_number', 'email', 'phone'], $clients, 'status', false, 'property');
         $this->renderAppShellEnd();
     }
@@ -1158,7 +1162,11 @@ final class PageController
             ['label' => 'Clients workspace', 'url' => admin_url('admin.php?page=trn_clients')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderCrmWorkspaceHero('Properties', 'Map client addresses into operational properties to keep project and estimate context connected.');
+        $this->renderCrmWorkspaceHero(
+            'Properties',
+            'Map client addresses into operational properties to keep project and estimate context connected.',
+            [['label' => 'Next: Project', 'url' => admin_url('admin.php?page=trn_projects')]]
+        );
         $this->renderEntityPage('Properties', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $properties, 'status', false, 'project');
         $this->renderAppShellEnd();
     }
@@ -1171,7 +1179,11 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Rooms workspace', 'url' => admin_url('admin.php?page=trn_rooms')],
         ]);
-        $this->renderCrmWorkspaceHero('Projects', 'Projects are operational dossiers: estimate, document chain, room plan and attachment context.');
+        $this->renderCrmWorkspaceHero(
+            'Projects',
+            'Projects are operational dossiers: estimate, document chain, room plan and attachment context.',
+            [['label' => 'Open dossier', 'url' => admin_url('admin.php?page=trn_dossier')]]
+        );
         $this->renderEntityPage('Projects', 'project', ['property_id', 'name', 'code'], $projects, 'status', false, 'room');
 
         $selectedProjectId = $this->queryInt('project_id');
@@ -1188,7 +1200,11 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderCrmWorkspaceHero('Rooms', 'Rooms connect surfaces, attachment evidence and line-level estimate context.');
+        $this->renderCrmWorkspaceHero(
+            'Rooms',
+            'Rooms connect surfaces, attachment evidence and line-level estimate context.',
+            [['label' => 'Open room context', 'url' => admin_url('admin.php?page=trn_rooms')]]
+        );
         $this->renderEntityPage('Rooms', 'room', ['project_id', 'name', 'floor', 'room_type', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'], $rooms, 'status', false, 'estimate');
 
         $selectedRoomId = $this->queryInt('room_id');
@@ -1301,7 +1317,8 @@ final class PageController
         echo '</tbody></table>';
     }
 
-    private function renderCrmWorkspaceHero(string $title, string $subtitle): void
+    /** @param array<int, array{label:string,url:string}> $contextActions */
+    private function renderCrmWorkspaceHero(string $title, string $subtitle, array $contextActions = []): void
     {
         echo '<section class="trn-shell__hero">';
         echo '<div><h2>' . esc_html($title) . '</h2><p>' . esc_html($subtitle) . '</p></div>';
@@ -1310,6 +1327,14 @@ final class PageController
         echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_properties')) . '">Properties</a>';
         echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_projects')) . '">Projects</a>';
         echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_rooms')) . '">Rooms</a>';
+        foreach ($contextActions as $action) {
+            $label = (string) ($action['label'] ?? '');
+            $url = (string) ($action['url'] ?? '');
+            if ($label === '' || $url === '') {
+                continue;
+            }
+            echo '<a class="button button-primary" href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
+        }
         echo '</div></section>';
     }
 
