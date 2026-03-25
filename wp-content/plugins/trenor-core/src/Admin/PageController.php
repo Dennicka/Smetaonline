@@ -1169,11 +1169,8 @@ final class PageController
         ]);
         $this->renderEntityPage('Projects', 'project', ['property_id', 'name', 'code'], $projects, 'status', false);
 
-        $selectedProjectId = filter_input(INPUT_GET, 'project_id', FILTER_VALIDATE_INT);
-        $selectedProjectId = $selectedProjectId !== false && $selectedProjectId !== null ? (int) $selectedProjectId : 0;
-        if ($selectedProjectId > 0) {
-            $this->renderProjectAdjacencyDossier($selectedProjectId);
-        }
+        $selectedProjectId = $this->queryInt('project_id');
+        $this->renderProjectAdjacencyDossier($selectedProjectId);
 
         $this->renderAppShellEnd();
     }
@@ -1188,23 +1185,24 @@ final class PageController
         ]);
         $this->renderEntityPage('Rooms', 'room', ['project_id', 'name', 'floor', 'room_type', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'], $rooms, 'status', false);
 
-        $selectedRoomId = filter_input(INPUT_GET, 'room_id', FILTER_VALIDATE_INT);
-        $selectedRoomId = $selectedRoomId !== false && $selectedRoomId !== null ? (int) $selectedRoomId : 0;
-        if ($selectedRoomId > 0) {
-            $this->renderRoomAdjacencyContext($selectedRoomId);
-        }
+        $selectedRoomId = $this->queryInt('room_id');
+        $this->renderRoomAdjacencyContext($selectedRoomId);
 
         $this->renderAppShellEnd();
     }
 
     private function renderProjectAdjacencyDossier(int $projectId): void
     {
-        $contacts = $this->factory->contacts()->byProject($projectId);
-        $attachments = $this->factory->attachments()->byParent('project', $projectId);
-        $rooms = $this->factory->rooms()->byProject($projectId);
+        $contacts = $projectId > 0 ? $this->factory->contacts()->byProject($projectId) : [];
+        $attachments = $projectId > 0 ? $this->factory->attachments()->byParent('project', $projectId) : [];
+        $rooms = $projectId > 0 ? $this->factory->rooms()->byProject($projectId) : [];
 
         echo '<h2>Project dossier adjacency</h2>';
-        echo '<p><strong>project_id:</strong> ' . esc_html((string) $projectId) . '</p>';
+        if ($projectId > 0) {
+            echo '<p><strong>project_id:</strong> ' . esc_html((string) $projectId) . '</p>';
+        } else {
+            echo '<p>Select a project to manage project-specific adjacency data. Sections stay visible for operator context.</p>';
+        }
 
         echo '<h3>Create contact person</h3><form method="post">';
         wp_nonce_field('trn_contact_person_create');
@@ -1213,7 +1211,7 @@ final class PageController
         echo '<p><label>role_title<br><input class="regular-text" name="role_title" value=""></label></p>';
         echo '<p><label>phone<br><input class="regular-text" name="phone" value=""></label></p>';
         echo '<p><label>email<br><input class="regular-text" name="email" value=""></label></p>';
-        submit_button('Add contact person');
+        submit_button('Add contact person', 'primary', 'submit', false, ['disabled' => $projectId <= 0]);
         echo '</form>';
 
         echo '<h3>Create attachment/photo</h3><form method="post">';
@@ -1222,7 +1220,7 @@ final class PageController
         echo '<p><label>title<br><input class="regular-text" name="title" value=""></label></p>';
         echo '<p><label>file_url<br><input class="regular-text" name="file_url" value=""></label></p>';
         echo '<p><label>mime_type<br><input class="regular-text" name="mime_type" value=""></label></p>';
-        submit_button('Add attachment');
+        submit_button('Add attachment', 'primary', 'submit', false, ['disabled' => $projectId <= 0]);
         echo '</form>';
 
         $this->renderSimpleRowsTable('Contacts', ['id', 'name', 'role_title', 'phone', 'email', 'is_primary', 'status'], $contacts);
@@ -1232,15 +1230,21 @@ final class PageController
 
     private function renderRoomAdjacencyContext(int $roomId): void
     {
-        $surfaces = $this->factory->surfaces()->byRoom($roomId);
-        $attachments = $this->factory->attachments()->byParent('room', $roomId);
-        $room = $this->factory->rooms()->find($roomId);
+        $surfaces = $roomId > 0 ? $this->factory->surfaces()->byRoom($roomId) : [];
+        $attachments = $roomId > 0 ? $this->factory->attachments()->byParent('room', $roomId) : [];
+        $room = $roomId > 0 ? $this->factory->rooms()->find($roomId) : null;
         $projectId = (int) ($room['project_id'] ?? 0);
 
         echo '<h2>Room adjacency context</h2>';
-        echo '<p><strong>room_id:</strong> ' . esc_html((string) $roomId) . '</p>';
+        if ($roomId > 0) {
+            echo '<p><strong>room_id:</strong> ' . esc_html((string) $roomId) . '</p>';
+        } else {
+            echo '<p>Select a room to manage room-specific surfaces and attachments. Context sections remain visible by design.</p>';
+        }
         if ($projectId > 0) {
             echo '<p><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects&project_id=' . $projectId)) . '">Return to project workspace</a></p>';
+        } else {
+            echo '<p>Return to project workspace link appears when selected room is linked to a project.</p>';
         }
 
         echo '<h3>Create surface</h3><form method="post">';
@@ -1250,7 +1254,7 @@ final class PageController
         echo '<p><label>length_m<br><input class="regular-text" name="length_m" value="0"></label></p>';
         echo '<p><label>width_m<br><input class="regular-text" name="width_m" value="0"></label></p>';
         echo '<p><label>area_m2<br><input class="regular-text" name="area_m2" value="0"></label></p>';
-        submit_button('Add surface');
+        submit_button('Add surface', 'primary', 'submit', false, ['disabled' => $roomId <= 0]);
         echo '</form>';
 
         echo '<h3>Create room attachment/photo</h3><form method="post">';
@@ -1258,7 +1262,7 @@ final class PageController
         echo '<input type="hidden" name="trn_entity" value="attachment"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="parent_entity_type" value="room"><input type="hidden" name="parent_entity_id" value="' . esc_attr((string) $roomId) . '">';
         echo '<p><label>title<br><input class="regular-text" name="title" value=""></label></p>';
         echo '<p><label>file_url<br><input class="regular-text" name="file_url" value=""></label></p>';
-        submit_button('Add attachment');
+        submit_button('Add attachment', 'primary', 'submit', false, ['disabled' => $roomId <= 0]);
         echo '</form>';
 
         $this->renderSimpleRowsTable('Surfaces', ['id', 'surface_type', 'length_m', 'width_m', 'area_m2', 'condition_state', 'notes'], $surfaces);
@@ -3096,6 +3100,16 @@ final class PageController
             $data[$field] = $this->postValue($postPayload, $field);
         }
         return $data;
+    }
+
+    private function queryInt(string $field): int
+    {
+        $value = $_GET[$field] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only workspace filters.
+        if (is_string($value) && $value !== '' && is_numeric($value)) {
+            return max(0, (int) $value);
+        }
+
+        return 0;
     }
 
     /** @param array<string, mixed> $postPayload */

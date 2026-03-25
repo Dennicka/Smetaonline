@@ -38,7 +38,7 @@ namespace {
     }
 
     if (! function_exists('submit_button')) {
-        function submit_button(string $text, string $type = 'primary', string $name = 'submit', bool $wrap = true): void
+        function submit_button(string $text, string $type = 'primary', string $name = 'submit', bool $wrap = true, array $otherAttributes = []): void
         {
             echo '<button type="submit">' . esc_html($text) . '</button>';
         }
