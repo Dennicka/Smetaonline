@@ -29,6 +29,12 @@ final class DocumentSettings
         'bankgiro',
         'swish',
         'payment_terms_days',
+        'sequence_prefix_offert',
+        'sequence_prefix_avtal',
+        'sequence_prefix_invoice',
+        'sequence_prefix_reminder',
+        'sequence_prefix_credit_note',
+        'sequence_number_padding',
     ];
 
     /** @var array<int, string> */
@@ -95,6 +101,42 @@ final class DocumentSettings
         }
 
         return trim(sanitize_text_field((string) $value));
+    }
+
+    public function resolveSequencePrefix(string $docType): string
+    {
+        $normalizedDocType = strtolower(trim($docType));
+        $settings = $this->get();
+
+        $prefixByType = [
+            'off' => (string) ($settings['sequence_prefix_offert'] ?? ''),
+            'avt' => (string) ($settings['sequence_prefix_avtal'] ?? ''),
+            'inv' => (string) ($settings['sequence_prefix_invoice'] ?? ''),
+            'rem' => (string) ($settings['sequence_prefix_reminder'] ?? ''),
+            'crn' => (string) ($settings['sequence_prefix_credit_note'] ?? ''),
+        ];
+        $fallbackByType = [
+            'off' => 'OFF',
+            'avt' => 'AVT',
+            'inv' => 'INV',
+            'rem' => 'REM',
+            'crn' => 'CRN',
+        ];
+
+        $configured = strtoupper(trim((string) ($prefixByType[$normalizedDocType] ?? '')));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return (string) ($fallbackByType[$normalizedDocType] ?? strtoupper($normalizedDocType));
+    }
+
+    public function resolveSequencePadding(): int
+    {
+        $settings = $this->get();
+        $padding = (int) ($settings['sequence_number_padding'] ?? 5);
+
+        return max(3, min(9, $padding));
     }
 
     private function normalizeTextarea(mixed $value): string

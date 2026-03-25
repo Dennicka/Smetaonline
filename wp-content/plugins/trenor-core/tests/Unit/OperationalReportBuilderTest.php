@@ -69,4 +69,26 @@ final class OperationalReportBuilderTest extends TestCase
         self::assertSame(1, $visibility['rot_documents']);
         self::assertSame(2, $visibility['reverse_charge_documents']);
     }
+
+    public function testReminderRowsIncludeSourceReferenceMetadata(): void
+    {
+        $builder = new OperationalReportBuilder();
+        $rows = $builder->reminders([
+            [
+                'id' => 1,
+                'status' => 'issued',
+                'document_number' => 'REM-1',
+                'issued_at' => '2026-03-20 11:00:00',
+                'snapshot_json' => json_encode([
+                    'metadata' => [
+                        'source_invoice_document_number' => 'INV-99',
+                        'source_estimate_title' => 'Kitchen',
+                    ],
+                ]),
+            ],
+        ], ['status' => '', 'date_from' => '', 'date_to' => '', 'period' => '']);
+
+        self::assertSame('INV-99', $rows[0]['source_invoice_document_number']);
+        self::assertSame('Kitchen', $rows[0]['source_estimate_title']);
+    }
 }

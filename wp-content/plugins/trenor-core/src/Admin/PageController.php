@@ -488,6 +488,15 @@ final class PageController
                 'payment_terms_days' => 'Payment terms days',
             ], $settings);
 
+            $this->renderDocumentSettingsFieldset('Numbering / sequence', [
+                'sequence_prefix_offert' => 'Offert prefix',
+                'sequence_prefix_avtal' => 'Avtal prefix',
+                'sequence_prefix_invoice' => 'Invoice prefix',
+                'sequence_prefix_reminder' => 'Reminder prefix',
+                'sequence_prefix_credit_note' => 'Credit note prefix',
+                'sequence_number_padding' => 'Numeric padding (3-9)',
+            ], $settings);
+
             $this->renderDocumentSettingsTextareaFieldset('Default document text blocks', [
                 'offert_intro_text' => 'Offert intro text',
                 'offert_footer_text' => 'Offert footer text',
@@ -2089,7 +2098,7 @@ final class PageController
                 'label' => 'Reminders report',
                 'capability' => 'trn_issue_reminders',
                 'payload_key' => 'reminders',
-                'headers' => ['id', 'invoice_id', 'document_number', 'status', 'reminder_level', 'issued_at', 'total_inc_vat_minor', 'currency'],
+                'headers' => ['id', 'invoice_id', 'document_number', 'status', 'reminder_level', 'source_invoice_document_number', 'source_estimate_title', 'reference_context', 'issued_at', 'total_inc_vat_minor', 'currency'],
             ],
             'suppliers_imports' => [
                 'label' => 'Suppliers / Imports report',

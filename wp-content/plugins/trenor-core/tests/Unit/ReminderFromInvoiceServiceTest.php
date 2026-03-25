@@ -45,6 +45,7 @@ final class ReminderFromInvoiceServiceTest extends TestCase
         $payload = $service->buildPayload([
             'id' => 5,
             'status' => 'issued',
+            'document_number' => 'INV-202603-00003',
             'offert_id' => 2,
             'estimate_id' => 1,
             'total_inc_vat_minor' => 5000,
@@ -63,6 +64,8 @@ final class ReminderFromInvoiceServiceTest extends TestCase
         self::assertSame(1, $payload['reminder_level']);
         self::assertSame(77, $payload['project_id']);
         self::assertSame(88, $payload['client_id']);
+        $snapshot = json_decode((string) $payload['snapshot_json'], true);
+        self::assertSame('INV-202603-00003', $snapshot['metadata']['source_invoice_document_number']);
     }
 
     public function testFullyPaidInvoiceCannotIssueReminder(): void

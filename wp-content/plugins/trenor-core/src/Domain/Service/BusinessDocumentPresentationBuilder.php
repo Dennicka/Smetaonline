@@ -57,8 +57,16 @@ final class BusinessDocumentPresentationBuilder
         $references = [
             ['label' => 'Estimate reference', 'value' => $this->first([$document['estimate_id'] ?? null, $metadata['source_estimate_id'] ?? null])],
             ['label' => 'Estimate title', 'value' => $this->first([$metadata['source_estimate_title'] ?? null, $snapshot['estimate_title'] ?? null])],
-            ['label' => 'Offert reference', 'value' => $this->string($document['offert_id'] ?? null)],
-            ['label' => 'Invoice reference', 'value' => $this->string($document['invoice_id'] ?? ($metadata['source_invoice_document_number'] ?? null))],
+            ['label' => 'Offert reference', 'value' => $this->first([
+                $metadata['source_offert_document_number'] ?? null,
+                $context['source_offert_document_number'] ?? null,
+                $this->idFallback('OFFERT', $document['offert_id'] ?? null),
+            ])],
+            ['label' => 'Invoice reference', 'value' => $this->first([
+                $metadata['source_invoice_document_number'] ?? null,
+                $context['source_invoice_document_number'] ?? null,
+                $this->idFallback('INVOICE', $document['invoice_id'] ?? null),
+            ])],
             ['label' => 'Project', 'value' => $context['project']['name'] ?? null],
             ['label' => 'Property', 'value' => $context['property']['name'] ?? null],
             ['label' => 'Property address', 'value' => $context['property']['address_line'] ?? null],
@@ -235,6 +243,15 @@ final class BusinessDocumentPresentationBuilder
     private function string(mixed $value): string
     {
         return is_scalar($value) ? trim((string) $value) : '';
+    }
+
+    private function idFallback(string $label, mixed $id): string
+    {
+        if (! is_numeric($id) || (int) $id <= 0) {
+            return '';
+        }
+
+        return sprintf('%s#%d', strtoupper($label), (int) $id);
     }
 
     /** @return array<string,mixed> */

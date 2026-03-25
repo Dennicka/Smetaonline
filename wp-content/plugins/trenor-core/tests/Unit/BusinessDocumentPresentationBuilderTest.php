@@ -111,4 +111,26 @@ final class BusinessDocumentPresentationBuilderTest extends TestCase
             self::assertNotEmpty($presentation['totals']);
         }
     }
+
+    public function testPrefersDocumentNumbersForSourceReferencesOverRawIds(): void
+    {
+        $presentation = $this->builder->build('credit_note', [
+            'invoice_id' => 77,
+            'offert_id' => 55,
+            'document_number' => 'CRN-2026-7',
+            'version_no' => 1,
+            'status' => 'issued',
+            'issued_at' => '2026-03-24 10:00:00',
+        ], [
+            'metadata' => [
+                'source_invoice_document_number' => 'INV-2026-55',
+                'source_offert_document_number' => 'OFF-2026-12',
+            ],
+        ]);
+
+        $referencesJson = json_encode($presentation['references']) ?: '';
+        self::assertStringContainsString('INV-2026-55', $referencesJson);
+        self::assertStringContainsString('OFF-2026-12', $referencesJson);
+        self::assertStringNotContainsString('INVOICE#77', $referencesJson);
+    }
 }

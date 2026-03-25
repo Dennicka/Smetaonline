@@ -45,6 +45,7 @@ final class CreditNoteDetailRenderer
             'property_name' => $property['name'] ?? '',
             'client_name' => $client['name'] ?? '',
             'credit_note_version_no' => $metadata['credit_note_version_no'] ?? '',
+            'correction_semantics' => 'Credit note reverses/corrects source invoice identity.',
             'issued_at_utc' => $metadata['issued_at_utc'] ?? '',
             'source_offert_document_number' => $sourceOffert['document_number'] ?? '',
         ]);

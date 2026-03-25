@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Trenor\Core\Domain\Service\DocumentSettings;
 use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 
 final class DocumentSequenceGeneratorTest extends TestCase
@@ -70,5 +71,38 @@ final class DocumentSequenceGeneratorTest extends TestCase
 
         self::assertSame('INV-202603-00001', $first);
         self::assertSame('INV-202603-00002', $second);
+    }
+
+    public function testUsesConfiguredPrefixAndPadding(): void
+    {
+        $GLOBALS['trn_test_options'] = [];
+        $settings = new DocumentSettings();
+        $settings->save([
+            'sequence_prefix_invoice' => 'fak',
+            'sequence_number_padding' => '6',
+        ]);
+
+        $wpdb = new class {
+            public string $prefix = 'wp_';
+            private int $lastInsertId = 0;
+            public function prepare(string $query, ...$args): string
+            {
+                return vsprintf(str_replace(['%s', '%d'], ['%s', '%d'], $query), array_map(static fn ($value): string => "'" . addslashes((string) $value) . "'", $args));
+            }
+            public function query(string $query)
+            {
+                if (str_contains($query, 'UPDATE')) {
+                    $this->lastInsertId = 1;
+                }
+                return 1;
+            }
+            public function get_var(string $query)
+            {
+                return $query === 'SELECT LAST_INSERT_ID()' ? $this->lastInsertId : null;
+            }
+        };
+
+        $generator = new DocumentSequenceGenerator($wpdb, 'trn_document_sequences', $settings);
+        self::assertSame('FAK-202603-000001', $generator->next('inv', new \DateTimeImmutable('2026-03-01')));
     }
 }
