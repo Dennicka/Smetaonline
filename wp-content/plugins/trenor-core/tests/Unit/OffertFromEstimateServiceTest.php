@@ -38,7 +38,7 @@ final class OffertFromEstimateServiceTest extends TestCase
 
         $service = new OffertFromEstimateService($versionProvider, $documentNumbers);
 
-        $header = ['id' => 44, 'title' => 'Kitchen refresh', 'currency' => 'SEK', 'vat_rate_percent' => 25.0];
+        $header = ['id' => 44, 'title' => 'Kitchen refresh', 'currency' => 'SEK', 'tax_mode' => 'business_reverse_charge', 'reverse_charge_note' => 'RC applies', 'client_company_name' => 'Client AB', 'client_org_number' => '556677-8899', 'client_vat_number' => 'SE556677889901', 'vat_rate_percent' => 25.0];
         $lines = [['id' => 1, 'quantity' => 1.5, 'labour_subtotal_minor' => 90000]];
         $materials = [['id' => 7, 'quantity' => 2.25, 'subtotal_minor' => 30000]];
         $totals = ['labour_total_minor' => 90000, 'materials_total_minor' => 30000, 'subtotal_ex_vat_minor' => 120000, 'vat_minor' => 30000, 'total_inc_vat_minor' => 150000];
@@ -74,6 +74,8 @@ final class OffertFromEstimateServiceTest extends TestCase
         self::assertSame(150000, $payload['total_inc_vat_minor']);
         self::assertSame(27000, $payload['preliminary_rot_minor']);
         self::assertSame(123000, $payload['total_after_preliminary_rot_minor']);
+        self::assertSame('business_reverse_charge', $payload['tax_mode']);
+        self::assertSame('Client AB', $payload['client_company_name']);
 
         self::assertSame(44, $versionProvider->receivedEstimateId);
         self::assertSame('off', $documentNumbers->receivedDocType);

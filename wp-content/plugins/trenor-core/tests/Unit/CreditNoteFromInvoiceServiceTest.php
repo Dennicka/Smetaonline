@@ -38,6 +38,11 @@ final class CreditNoteFromInvoiceServiceTest extends TestCase
             'status' => 'issued',
             'document_number' => 'INV-202603-00088',
             'currency' => 'SEK',
+            'tax_mode' => 'business_reverse_charge',
+            'reverse_charge_note' => 'Reverse charge',
+            'client_company_name' => 'Client AB',
+            'client_org_number' => '556677-8899',
+            'client_vat_number' => 'SE556677889901',
             'vat_rate_percent' => 25.0,
             'snapshot_json' => json_encode([
                 'header' => ['title' => 'Bathroom redo'],
@@ -54,6 +59,7 @@ final class CreditNoteFromInvoiceServiceTest extends TestCase
         self::assertSame(11, $payload['offert_id']);
         self::assertSame(9, $payload['estimate_id']);
         self::assertSame(3750, $payload['total_inc_vat_minor']);
+        self::assertSame('business_reverse_charge', $payload['tax_mode']);
     }
 
     public function testCreatesImmutableSnapshotMetadata(): void

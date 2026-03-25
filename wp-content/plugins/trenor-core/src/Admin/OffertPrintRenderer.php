@@ -73,6 +73,8 @@ final class OffertPrintRenderer
             'issued_at' => 'Issued at',
             'offert_valid_until' => 'Offert valid until',
             'currency' => 'Currency',
+            'tax_mode' => 'Tax mode',
+            'reverse_charge_note' => 'Reverse charge note',
             'vat_rate_percent' => 'VAT rate (%)',
         ]);
 
@@ -98,7 +100,9 @@ final class OffertPrintRenderer
         echo '<h3>3. Recipient block</h3>';
         $this->renderKeyValueTable($view['recipient'], [
             'client_name' => 'Client name',
+            'client_company_name' => 'Client company name',
             'client_org_number' => 'Client org number',
+            'client_vat_number' => 'Client VAT number',
             'client_email' => 'Client email',
             'client_phone' => 'Client phone',
         ]);
@@ -167,6 +171,7 @@ final class OffertPrintRenderer
             'materials_total' => 'Materials total',
             'subtotal_ex_vat' => 'Subtotal (ex VAT)',
             'vat' => 'VAT',
+            'tax_mode' => 'Tax mode',
             'total_inc_vat' => 'Total (inc VAT)',
             'rot_eligible_labour' => 'ROT eligible labour',
             'preliminary_rot' => 'Preliminary ROT',

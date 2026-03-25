@@ -29,4 +29,24 @@ final class EstimateTotalsCalculatorTest extends TestCase
         self::assertSame(22500, $totals['vat_minor']);
         self::assertSame(112500, $totals['total_inc_vat_minor']);
     }
+
+    public function testCalculatesReverseChargeTotalsWithoutVat(): void
+    {
+        $totals = (new EstimateTotalsCalculator())->calculate(
+            [
+                ['labour_subtotal_minor' => 50000],
+                ['labour_subtotal_minor' => 20000],
+            ],
+            [
+                ['subtotal_minor' => 15000],
+                ['subtotal_minor' => 5000],
+            ],
+            25.0,
+            'business_reverse_charge'
+        );
+
+        self::assertSame(90000, $totals['subtotal_ex_vat_minor']);
+        self::assertSame(0, $totals['vat_minor']);
+        self::assertSame(90000, $totals['total_inc_vat_minor']);
+    }
 }

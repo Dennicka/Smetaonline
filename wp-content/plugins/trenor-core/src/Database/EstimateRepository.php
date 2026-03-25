@@ -26,6 +26,8 @@ final class EstimateRepository extends BaseRepository
             'title' => sanitize_text_field((string) ($data['title'] ?? '')),
             'status' => sanitize_key((string) ($data['status'] ?? 'draft')),
             'currency' => strtoupper(sanitize_text_field((string) ($data['currency'] ?? 'SEK'))),
+            'tax_mode' => sanitize_key((string) ($data['tax_mode'] ?? 'private_consumer')),
+            'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
@@ -36,7 +38,7 @@ final class EstimateRepository extends BaseRepository
             'rot_buyers_json' => (string) ($data['rot_buyers_json'] ?? '[]'),
             'created_at' => $now,
             'updated_at' => $now,
-        ], ['%d', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']);
+        ], ['%d', '%s', '%s', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']);
         if ($ok === false) {
             return null;
         }
@@ -56,6 +58,8 @@ final class EstimateRepository extends BaseRepository
             'title' => sanitize_text_field((string) ($data['title'] ?? '')),
             'status' => sanitize_key((string) ($data['status'] ?? 'draft')),
             'currency' => strtoupper(sanitize_text_field((string) ($data['currency'] ?? 'SEK'))),
+            'tax_mode' => sanitize_key((string) ($data['tax_mode'] ?? 'private_consumer')),
+            'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),

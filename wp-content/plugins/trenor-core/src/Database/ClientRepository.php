@@ -26,14 +26,19 @@ final class ClientRepository extends BaseRepository
             $this->table(),
             [
                 'name' => sanitize_text_field((string) ($data['name'] ?? '')),
+                'company_name' => sanitize_text_field((string) ($data['company_name'] ?? ($data['name'] ?? ''))),
+                'customer_type' => sanitize_key((string) ($data['customer_type'] ?? 'private_consumer')),
                 'org_number' => sanitize_text_field((string) ($data['org_number'] ?? '')),
+                'vat_number' => sanitize_text_field((string) ($data['vat_number'] ?? '')),
+                'reverse_charge_applicable' => ! empty($data['reverse_charge_applicable']) ? 1 : 0,
+                'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
                 'email' => sanitize_email((string) ($data['email'] ?? '')),
                 'phone' => sanitize_text_field((string) ($data['phone'] ?? '')),
                 'status' => 'active',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s']
         );
 
         if ($inserted === false) {
@@ -58,13 +63,18 @@ final class ClientRepository extends BaseRepository
             $this->table(),
             [
                 'name' => sanitize_text_field((string) ($data['name'] ?? '')),
+                'company_name' => sanitize_text_field((string) ($data['company_name'] ?? ($data['name'] ?? ''))),
+                'customer_type' => sanitize_key((string) ($data['customer_type'] ?? 'private_consumer')),
                 'org_number' => sanitize_text_field((string) ($data['org_number'] ?? '')),
+                'vat_number' => sanitize_text_field((string) ($data['vat_number'] ?? '')),
+                'reverse_charge_applicable' => ! empty($data['reverse_charge_applicable']) ? 1 : 0,
+                'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
                 'email' => sanitize_email((string) ($data['email'] ?? '')),
                 'phone' => sanitize_text_field((string) ($data['phone'] ?? '')),
                 'updated_at' => current_time('mysql', true),
             ],
             ['id' => $id],
-            ['%s', '%s', '%s', '%s', '%s'],
+            ['%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s'],
             ['%d']
         );
 

@@ -111,6 +111,8 @@ final class OffertPrintViewModel
             'issued_at' => $issuedAt,
             'offert_valid_until' => $this->dateCalculator->addDays($issuedAt, $offertValidDays),
             'currency' => $currency,
+            'tax_mode' => $this->firstScalarString([$offert['tax_mode'] ?? null, $header['tax_mode'] ?? null]),
+            'reverse_charge_note' => $this->firstScalarString([$offert['reverse_charge_note'] ?? null, $header['reverse_charge_note'] ?? null]),
             'vat_rate_percent' => $this->firstScalarString([
                 $offert['vat_rate_percent'] ?? null,
                 $header['vat_rate_percent'] ?? null,
@@ -157,7 +159,9 @@ final class OffertPrintViewModel
             'property_city' => $this->firstScalarString([$property['city'] ?? null]),
             'property_postal_code' => $this->firstScalarString([$property['postal_code'] ?? null]),
             'client_name' => $this->firstScalarString([$client['name'] ?? null]),
-            'client_org_number' => $this->firstScalarString([$client['org_number'] ?? null]),
+            'client_company_name' => $this->firstScalarString([$offert['client_company_name'] ?? null, $client['company_name'] ?? null]),
+            'client_org_number' => $this->firstScalarString([$offert['client_org_number'] ?? null, $client['org_number'] ?? null]),
+            'client_vat_number' => $this->firstScalarString([$offert['client_vat_number'] ?? null, $client['vat_number'] ?? null]),
             'client_email' => $this->firstScalarString([$client['email'] ?? null]),
             'client_phone' => $this->firstScalarString([$client['phone'] ?? null]),
         ];
@@ -168,7 +172,9 @@ final class OffertPrintViewModel
     {
         return [
             'client_name' => $contextSection['client_name'] ?? '',
+            'client_company_name' => $contextSection['client_company_name'] ?? '',
             'client_org_number' => $contextSection['client_org_number'] ?? '',
+            'client_vat_number' => $contextSection['client_vat_number'] ?? '',
             'client_email' => $contextSection['client_email'] ?? '',
             'client_phone' => $contextSection['client_phone'] ?? '',
         ];
@@ -201,6 +207,7 @@ final class OffertPrintViewModel
             'materials_total' => $this->toScalarString($totals['materials_total_minor'] ?? null),
             'subtotal_ex_vat' => $this->toScalarString($totals['subtotal_ex_vat_minor'] ?? null),
             'vat' => $this->toScalarString($totals['vat_minor'] ?? null),
+            'tax_mode' => $this->firstScalarString([$offert['tax_mode'] ?? null, $totals['tax_mode'] ?? null]),
             'total_inc_vat' => $this->toScalarString($totals['total_inc_vat_minor'] ?? ($offert['total_inc_vat_minor'] ?? null)),
             'rot_eligible_labour' => $this->toScalarString($totals['rot_eligible_labour_minor'] ?? null),
             'preliminary_rot' => $this->toScalarString($totals['preliminary_rot_minor'] ?? null),
