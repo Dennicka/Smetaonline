@@ -1388,6 +1388,7 @@ final class PageController
     {
         echo '<section class="trn-shell__panel"><h2>Final acceptance operator paths</h2>';
         echo '<p>Use these paths for UAT and cutover checks. Items are shown only when current role can open the target area.</p>';
+        echo '<p>This panel is route guidance only. Final pass/fail must come from manual staging evidence, not from dashboard wording.</p>';
 
         $this->renderUatPathChecklist(
             'First-run / setup baseline',
@@ -1415,6 +1416,7 @@ final class PageController
                 ['label' => 'Dossier / timeline', 'url' => admin_url('admin.php?page=trn_dossier'), 'cap' => 'read'],
             ]
         );
+        echo '<p><strong>Reminder:</strong> after this stage, only blocker fixes found in real staging/UAT should change these flows.</p>';
 
         echo '</section>';
     }

@@ -38,6 +38,13 @@ if (! function_exists('sanitize_textarea_field')) {
     }
 }
 
+if (! function_exists('esc_textarea')) {
+    function esc_textarea(string $text): string
+    {
+        return $text;
+    }
+}
+
 if (! function_exists('get_option')) {
     function get_option(string $option, mixed $default = false): mixed
     {

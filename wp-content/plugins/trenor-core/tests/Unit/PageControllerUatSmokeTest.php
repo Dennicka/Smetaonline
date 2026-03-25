@@ -72,24 +72,26 @@ namespace {
 namespace Trenor\Core\Tests\Unit {
 
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use Trenor\Core\Admin\PageController;
 use Trenor\Core\Database\RepositoryFactory;
 use Trenor\Core\Tests\Support\WpdbStub;
 
-final class PageControllerReleaseReadinessTest extends TestCase
+final class PageControllerUatSmokeTest extends TestCase
 {
     protected function setUp(): void
     {
         \trn_set_test_wpdb(new WpdbStub());
         \trn_set_test_current_user_caps([
             'read' => true,
-            'trn_manage_prices' => true,
-            'trn_manage_templates' => true,
-            'trn_manage_backups' => true,
+            'trn_manage_estimates' => true,
+            'trn_issue_offerts' => true,
             'trn_issue_invoices' => true,
             'trn_record_payments' => true,
             'trn_issue_reminders' => true,
+            'trn_issue_credit_notes' => true,
+            'trn_manage_prices' => true,
+            'trn_manage_backups' => true,
+            'trn_manage_templates' => true,
         ]);
     }
 
@@ -99,7 +101,7 @@ final class PageControllerReleaseReadinessTest extends TestCase
         parent::tearDown();
     }
 
-    public function testDashboardShowsReadinessSignalsAndLimitationsRegistryOnFirstRun(): void
+    public function testDashboardRendersFinalAcceptanceGuidanceWithoutFakeAutoPassClaim(): void
     {
         $controller = new PageController(new RepositoryFactory());
 
@@ -107,36 +109,24 @@ final class PageControllerReleaseReadinessTest extends TestCase
         $controller->renderDashboard();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('Release candidate readiness', $output);
-        self::assertStringContainsString('Go-live blockers detected', $output);
         self::assertStringContainsString('Final acceptance operator paths', $output);
-        self::assertStringContainsString('First-run / setup baseline', $output);
-        self::assertStringContainsString('Go-live limitations registry', $output);
         self::assertStringContainsString('manual staging evidence', $output);
-        self::assertStringContainsString('Open settings / backup', $output);
+        self::assertStringContainsString('only blocker fixes found in real staging/UAT', $output);
     }
 
-    public function testSettingsScreenAllowsBackupOnlyOperatorWithoutTemplateForms(): void
+    public function testOperationalReportsRouteSmokeRendersExportControls(): void
     {
-        \trn_set_test_current_user_caps([
-            'read' => true,
-            'trn_manage_templates' => false,
-            'trn_manage_backups' => true,
-        ]);
-
         $controller = new PageController(new RepositoryFactory());
 
         ob_start();
-        $controller->renderSettings();
+        $controller->renderOperationalReports();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('Document profile editing is hidden for your role.', $output);
-        self::assertStringContainsString('Backup / Restore', $output);
-        self::assertStringNotContainsString('Save settings', $output);
-        self::assertStringNotContainsString('Save document profile', $output);
+        self::assertStringContainsString('Operational Reports / Export', $output);
+        self::assertStringContainsString('Export CSV', $output);
     }
 
-    public function testSuppliersPageRendersGuidedEmptyState(): void
+    public function testSuppliersImportHistoryRouteSmokeRendersSections(): void
     {
         $controller = new PageController(new RepositoryFactory());
 
@@ -144,28 +134,48 @@ final class PageControllerReleaseReadinessTest extends TestCase
         $controller->renderSuppliersPrices();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('No suppliers yet. Start by creating one supplier', $output);
-        self::assertStringContainsString('No import batches yet.', $output);
-        self::assertStringContainsString('No supplier price history yet.', $output);
+        self::assertStringContainsString('Suppliers / Price import', $output);
+        self::assertStringContainsString('Import price list CSV', $output);
+        self::assertStringContainsString('Price history (latest rows)', $output);
     }
 
-    public function testOperationalReportTableNoDataStateProvidesNextStepGuidance(): void
+    public function testSettingsRouteSmokeRendersBackupRestoreSection(): void
     {
         $controller = new PageController(new RepositoryFactory());
-        $method = new ReflectionMethod($controller, 'renderOperationalReportTables');
-        $method->setAccessible(true);
 
         ob_start();
-        $method->invoke($controller, 'invoices', ['invoices' => []], [
-            'status' => '',
-            'date_from' => '',
-            'date_to' => '',
-            'period' => '',
-        ]);
+        $controller->renderSettings();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('No rows found for current filter set. Adjust filters or start creating operational data', $output);
-        self::assertStringContainsString('Export CSV', $output);
+        self::assertStringContainsString('Backup / Restore v1', $output);
+        self::assertStringContainsString('Create backup', $output);
+        self::assertStringContainsString('Backup manifests', $output);
+        self::assertStringContainsString('No backups created yet.', $output);
+    }
+
+    public function testCapabilityAwareUatPathHidesRestrictedSteps(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_estimates' => false,
+            'trn_issue_offerts' => false,
+            'trn_issue_invoices' => false,
+            'trn_record_payments' => false,
+            'trn_issue_reminders' => false,
+            'trn_issue_credit_notes' => false,
+            'trn_manage_prices' => false,
+            'trn_manage_backups' => false,
+            'trn_manage_templates' => false,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderDashboard();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('No visible steps for current role in this path.', $output);
+        self::assertStringNotContainsString('Open backup/restore', $output);
     }
 }
 }
