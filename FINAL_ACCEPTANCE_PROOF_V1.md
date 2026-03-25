@@ -4,129 +4,90 @@ Date of this proof run: 2026-03-25 (UTC).
 Branch intent: final operational verification + blocker-only hardening, no feature expansion.
 
 ## 1) Scope and method
-This proof run is **verification + hardening** for already delivered contours. It intentionally avoids new feature work, redesign, or broad refactors.
+This proof run is **verification + truth-alignment**, not feature delivery.  
+No new modules, redesign, or broad refactor were introduced.
 
-Evidence classes used in this run:
-- **Code-grounded proof** (bootstrap/migration/backup/restore/controller checks in source).
-- **Automated command proof** (`composer validate`, `lint`, `phpcs`, `test`).
-- **Runtime/staging proof** (browser/wp-admin path) — marked explicitly when not executable in this environment.
+Evidence classes for this run:
+- **Code-grounded proof** (bootstrap/migration/backup/restore/controller/capability paths in source).
+- **Automated command proof** (`composer validate`, `lint`, `phpcs`, `test`) executed from plugin directory.
+- **Runtime/browser proof** is explicitly marked when not executable in this container.
 
 ## 2) Root-cause findings during proof
-No install/update/backup/restore runtime blocker was found in plugin source contour.
+No product-code install/update/backup/restore blocker was identified in inspected plugin source contours.
 
-Observed operational limitation in this environment:
-- Dev dependency installation from Packagist is blocked (`curl error 56 ... CONNECT tunnel failed, response 403`), therefore phpunit binary is unavailable and `composer run test` cannot execute end-to-end here.
+Environment blocker found:
+- Dev dependency installation from Packagist failed (`curl error 56 ... CONNECT tunnel failed, response 403`), which prevented installation of tools required by `composer run phpcs` and `composer run test`.
 
 Classification:
-- type: **verification-environment limitation** (non-product blocker)
-- impact: prevents full local automated regression execution in this container
-- scope: does **not** indicate plugin runtime defect by itself
+- type: **verification-environment blocker**
+- impact: blocks full local PHPCS/PHPUnit acceptance execution in this container
+- product impact: does **not** by itself prove a runtime defect
 
 ## 3) Fresh install proof
-### 3.1 What was proven
-Code path for fresh activation is in place:
-- activation hook is registered,
-- activation runs migrator,
-- roles are registered,
-- plugin version option is written.
+### 3.1 What was checked
+- Activation hook wiring.
+- Activation migration trigger.
+- Role registration on activation.
+- Plugin version option update.
 
-### 3.2 Evidence
-- `Plugin::boot()` registers activation/deactivation hooks and `plugins_loaded` lifecycle hook.
-- `Plugin::activate()` calls `Migrator::migrate()`, `RoleRegistrar::register()`, and updates `trn_core_version`.
-
-### 3.3 Runtime status
-- **Not runtime-proven in this container** (no running WordPress browser/staging target attached in this task).
-- Proven at code level; requires manual wp-admin activation check in staging for final sign-off.
+### 3.2 Evidence status
+- **Code-proven** via `Trenor\Core\Bootstrap\Plugin` activation and lifecycle logic.
+- **Runtime/browser-proven:** no (WordPress staging/browser session not available in this container).
 
 ## 4) Update / migration proof
-### 4.1 What was proven
-Version-gated migration path exists and is deterministic:
-- on each plugin load, stored version is compared with `Plugin::VERSION`.
-- when stored version is lower, migrations are executed and version option is updated.
+### 4.1 What was checked
+- Version-gated migration on `plugins_loaded`.
+- Post-migration version writeback.
 
-### 4.2 Evidence
-- `Plugin::onPluginsLoaded()` performs version comparison and conditional `Migrator::migrate()` + version update.
-
-### 4.3 Runtime status
-- **Not runtime-proven in this container**.
-- Code-level and architecture-level proof present; staging upgrade pass remains manual-only.
+### 4.2 Evidence status
+- **Code-proven** in plugin bootstrap lifecycle.
+- **Runtime/browser-proven:** no (update path not executable against live WP instance in this container).
 
 ## 5) Backup proof
-### 5.1 What was proven
-Backup implementation includes:
-- manifest lifecycle (`started` -> `completed`/`failed`),
-- plugin-table snapshot export,
-- artifact capture,
-- combined checksum persisted with manifest.
+### 5.1 What was checked
+- Manifest lifecycle (`started/completed/failed`).
+- Plugin-owned table snapshot export.
+- Artifact bundle inclusion.
+- Checksum persistence and integrity constraints.
 
-### 5.2 What is included/excluded (verified)
-Included:
-- plugin-owned `trn_*` table set listed in exporter,
-- artifact files referenced by `trn_document_artifacts`.
-
-Excluded:
-- full WordPress/site backup scope (core/themes/other plugin tables/infrastructure).
-
-### 5.3 Runtime status
-- **Not runtime-executed in this container**.
-- Backup behavior and constraints validated in source and docs consistency check.
+### 5.2 Evidence status
+- **Code-proven** in backup services and docs.
+- **Runtime/browser-proven:** no (no live WP admin runtime in this container).
 
 ## 6) Restore proof
-### 6.1 What was proven
-Restore implementation enforces:
-- strict confirmation phrase `RESTORE <manifest_id>`,
-- manifest status `completed`,
-- snapshot/artifact read checks,
-- checksum integrity checks,
-- destructive table replace inside DB transaction,
-- artifact file re-copy to original storage,
-- audit log entries for start/completion.
+### 6.1 What was checked
+- Mandatory confirmation phrase `RESTORE <manifest_id>`.
+- Completed-manifest requirement.
+- Checksum verification.
+- Destructive restore semantics for plugin-owned tables.
+- Artifact restore and audit logging path.
 
-### 6.2 Runtime status
-- **Not runtime-executed in this container**.
-- Restore safety semantics are code-grounded and documented consistently.
+### 6.2 Evidence status
+- **Code-proven** in restore services and docs.
+- **Runtime/browser-proven:** no (no live WP admin runtime in this container).
 
-## 7) Operational smoke proof matrix
-Legend:
-- `RUNTIME`: verified by real wp-admin/staging interaction in this run
-- `CODE/TEST`: verified by source inspection and/or automated checks only
-- `NOT VERIFIED`: no evidence in this run
+## 7) Workflow / role / document / reporting / responsive proof status
+This run could only provide **code/test topology proof** for:
+- workflow chain services (estimate -> offert -> avtal -> invoice -> payment -> reminder/credit note),
+- numbering/reference/idempotency services,
+- role/capability mapping contours,
+- document/PDF generation services,
+- reporting/import/backup/settings screen controller contours.
 
-| Contour | Status | Evidence mode | Notes |
-|---|---|---|---|
-| dashboard/workspace | PARTIAL | CODE/TEST | PageController/menu routes present; no live wp-admin execution in this run |
-| clients/properties/projects/rooms | PARTIAL | CODE/TEST | Repositories/controller contour exists; runtime interaction pending |
-| estimate list/detail | PARTIAL | CODE/TEST | Render/filter/detail services present; runtime pending |
-| offert list/detail/PDF | PARTIAL | CODE/TEST | Service/renderer/tests exist; runtime pending |
-| avtal list/detail/PDF | PARTIAL | CODE/TEST | Service/filter/repository/tests exist; runtime pending |
-| invoice list/detail/PDF | PARTIAL | CODE/TEST | Service/view-model/repository/tests exist; runtime pending |
-| payment register/record payment | PARTIAL | CODE/TEST | Payment services/tests exist; runtime pending |
-| reminder list/detail/PDF | PARTIAL | CODE/TEST | Reminder services/tests exist; runtime pending |
-| credit note list/detail/PDF | PARTIAL | CODE/TEST | Credit note services/tests exist; runtime pending |
-| suppliers/import/history | PARTIAL | CODE/TEST | Import repositories/service/tests exist; runtime pending |
-| reporting/export | PARTIAL | CODE/TEST | Report filter/builder/exporter/tests exist; runtime pending |
-| backup/restore screens | PARTIAL | CODE/TEST | Controller + backup services present; runtime pending |
-| settings/document settings | PARTIAL | CODE/TEST | DocumentSettings/service tests exist; runtime pending |
-| numbering/reference visibility | PARTIAL | CODE/TEST | Sequence + issue-chain services/tests exist; runtime pending |
-| role/capability-sensitive screens | PARTIAL | CODE/TEST | Capability mapping tests exist; runtime pending |
+Runtime browser interaction for end-to-end workflow, role acceptance, PDF opening, and responsive sanity was **not executed** in this environment.
 
-## 8) Regression proof
-Regression-sensitive contours confirmed at code/test topology level:
-- document route/render and business document services remain present,
-- numbering/reference/idempotency services and tables are unchanged in this proof run,
-- capability mapping/role registration contour present,
-- CRM/object/room repositories remain present,
-- import/reporting contours remain present,
-- backup/restore contour remains present with validation safeguards.
+## 8) Commands executed and results
+Executed from `wp-content/plugins/trenor-core`:
+1. `composer validate --strict` → **PASS**
+2. `composer run lint` → **PASS**
+3. `composer run phpcs` → **FAIL** (`./vendor/bin/phpcs: No such file or directory`)
+4. `composer run test` → **FAIL** (`phpunit: not found`)
 
-Automated checks run in this environment:
-- `composer validate --strict`: PASS
-- `composer run lint`: PASS
-- `composer run phpcs`: PASS (changed-file mode script)
-- `composer run test`: NOT PASS due to missing phpunit binary caused by dependency-install network restriction
+Attempted remediation:
+- `composer install` → **FAIL** due to Packagist access restriction (`curl error 56 ... response 403`).
 
-## 9) Docs-to-runtime consistency result
-Reviewed and aligned documents:
+## 9) Docs-to-runtime truth alignment
+Reviewed target docs for consistency with current code contour:
 - `INSTALL.md`
 - `UPDATE_MIGRATION.md`
 - `BACKUP_RESTORE.md`
@@ -134,26 +95,21 @@ Reviewed and aligned documents:
 - `CURRENT_ARCHITECTURE.md`
 - `DATA_MODEL.md`
 
-Result for this run:
-- No blocker-level contradiction found between these documents and inspected code paths.
-- Backup/restore docs correctly state plugin-owned scope and destructive restore semantics.
-- Update docs correctly state version-gated migration behavior.
+Result in this run:
+- No blocker-level contradiction detected between these docs and inspected source flows.
+- Backup/restore docs remain explicit about plugin-owned scope and destructive restore semantics.
 
-## 10) Known limitations (honest)
-### Blockers
-- None found in product source during this proof run.
+## 10) Honest limitation summary
+### Blockers found in product code
+- None identified in this run.
 
-### Non-blockers
-- This container could not perform full phpunit run due to dependency fetch restriction.
-- This task environment did not include a live staging/browser wp-admin session, so runtime UAT proof remains pending.
+### Execution blockers in this environment
+- External package fetch is blocked, therefore PHPCS/PHPUnit tooling could not be installed/executed.
+- No attached live WordPress staging/browser environment, so runtime acceptance remains pending.
 
-### Deferred / manual-only
-- Final runtime acceptance for install/update/backup/restore/smoke must be executed in a real WordPress staging environment and attached as operator evidence.
+## 11) Honest verdict for this run
+Against the requested acceptance bar (runtime/staging-backed install/update/backup/restore/workflow/roles/documents/responsive proof), this run is **NOT sufficient to claim 100% complete**.
 
-## 11) Pass/fail summary
-- Fresh install path: **CODE-PASS / RUNTIME-PENDING**
-- Update/migration path: **CODE-PASS / RUNTIME-PENDING**
-- Backup path: **CODE-PASS / RUNTIME-PENDING**
-- Restore path: **CODE-PASS / RUNTIME-PENDING**
-- Operational smoke matrix: **PARTIAL (code/test evidence only)**
-- Regression checks: **PARTIAL PASS** (commands pass except phpunit environment limitation)
+Current status is:
+- **Code-level acceptance evidence:** substantial/available.
+- **Runtime/staging acceptance evidence:** pending (not executable in this container).
