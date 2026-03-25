@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Admin;
 
 use RuntimeException;
+use Trenor\Core\Backup\BackupManifestRepository;
 use Trenor\Core\Backup\BackupExporter;
 use Trenor\Core\Backup\BackupRestorer;
 use Trenor\Core\Database\RepositoryFactory;
@@ -183,6 +184,55 @@ final class PageController
         $this->renderAppShellEnd();
     }
 
+    public function renderOperationalReports(): void
+    {
+        if (! $this->canViewOperationalReports()) {
+            wp_die('Forbidden');
+        }
+
+        $rawFilters = [
+            'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
+            'date_from' => filter_input(INPUT_GET, 'date_from', FILTER_UNSAFE_RAW),
+            'date_to' => filter_input(INPUT_GET, 'date_to', FILTER_UNSAFE_RAW),
+            'period' => filter_input(INPUT_GET, 'period', FILTER_UNSAFE_RAW),
+        ];
+        $selectedReport = sanitize_key((string) filter_input(INPUT_GET, 'report', FILTER_UNSAFE_RAW));
+        if ($selectedReport === '') {
+            $selectedReport = 'invoices';
+        }
+        $exportFormat = sanitize_key((string) filter_input(INPUT_GET, 'trn_export', FILTER_UNSAFE_RAW));
+
+        $filterResult = (new OperationalReportFilter())->normalize($rawFilters);
+        $filters = $filterResult['filters'];
+        $errors = $filterResult['errors'];
+
+        if ($exportFormat === 'csv') {
+            $this->renderOperationalReportsCsvExport($selectedReport, $filters, $errors);
+            exit;
+        }
+
+        $reportPayload = $this->buildOperationalReportPayload($filters);
+
+        $this->renderAppShellStart('Operational Reports / Export', 'Read-only operational reporting for finance, due visibility, tax, imports and backup activity.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open invoices', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open payments', 'url' => admin_url('admin.php?page=trn_payments')],
+            ['label' => 'Open reminders', 'url' => admin_url('admin.php?page=trn_reminders')],
+        ]);
+
+        foreach ($errors as $error) {
+            echo '<div class="notice notice-warning"><p>' . esc_html($error) . '</p></div>';
+        }
+
+        $this->renderOperationalReportsFilterForm($selectedReport, $filters);
+        $this->renderOperationalReportsSummary($reportPayload);
+        $this->renderOperationalReportOverviewPanels($reportPayload);
+        $this->renderOperationalReportTables($selectedReport, $reportPayload, $filters);
+
+        $this->renderAppShellEnd();
+    }
+
     public function renderClients(): void
     {
         if (! current_user_can('trn_manage_clients')) {
@@ -241,14 +291,35 @@ final class PageController
         $selectedEstimateId = $selectedEstimateId !== false && $selectedEstimateId !== null ? (int) $selectedEstimateId : 0;
         $selectedSnapshotId = filter_input(INPUT_GET, 'snapshot_id', FILTER_VALIDATE_INT);
         $selectedSnapshotId = $selectedSnapshotId !== false && $selectedSnapshotId !== null ? (int) $selectedSnapshotId : 0;
-        $estimates = $this->factory->estimates()->all();
+        $estimateFilters = [
+            'project_id' => filter_input(INPUT_GET, 'project_id', FILTER_UNSAFE_RAW),
+            'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
+            'title' => filter_input(INPUT_GET, 'title', FILTER_UNSAFE_RAW),
+        ];
+        $allEstimates = $this->factory->estimates()->all();
+        $estimates = $this->filterEstimateRows($allEstimates, $estimateFilters);
 
         $this->renderAppShellStart('Сметы', 'Estimate register and build workspace.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open offerts', 'url' => admin_url('admin.php?page=trn_offerts')],
+            ['label' => 'Open dossier', 'url' => admin_url('admin.php?page=trn_dossier')],
+        ]);
         $this->renderCreateEstimateForm();
+        $this->renderEstimateFilterForm($estimateFilters);
+
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($estimates));
+        if ($this->hasEstimateFilters($estimateFilters)) {
+            echo ' <em>(filtered results)</em>';
+        }
+        echo '</p>';
 
         echo '<h2>Список смет</h2><table class="widefat striped"><thead><tr><th>ID</th><th>project_id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
         foreach ($estimates as $estimate) {
-            $url = admin_url('admin.php?page=trn_estimates&estimate_id=' . (int) $estimate['id']);
+            $estimateId = (int) ($estimate['id'] ?? 0);
+            $projectId = (int) ($estimate['project_id'] ?? 0);
+            $url = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $offertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
             echo '<tr>';
             echo '<td>' . esc_html((string) $estimate['id']) . '</td>';
             echo '<td>' . esc_html((string) $estimate['project_id']) . '</td>';
@@ -258,7 +329,12 @@ final class PageController
             echo '<td>' . esc_html((string) $estimate['vat_rate_percent']) . '</td>';
             echo '<td>' . esc_html((string) $estimate['labour_rate_minor']) . '</td>';
             echo '<td>' . esc_html((string) $estimate['calculated_at']) . '</td>';
-            echo '<td><a class="button" href="' . esc_url($url) . '">Открыть</a></td>';
+            echo '<td><a class="button" href="' . esc_url($url) . '">Открыть</a>';
+            echo '<a class="button" href="' . esc_url($offertsUrl) . '" style="margin-left:6px;">Offerts</a>';
+            if ($projectId > 0) {
+                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)) . '" style="margin-left:6px;">Dossier</a>';
+            }
+            echo '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -286,9 +362,16 @@ final class PageController
             wp_die('Forbidden');
         }
 
-        $suppliers = $this->factory->suppliers()->all();
-        $batches = $this->factory->priceImportBatches()->latest(20);
-        $prices = $this->factory->materialSupplierPrices()->latest(50);
+        $rawSuppliers = $this->factory->suppliers()->all();
+        $supplierFilters = [
+            'supplier_query' => filter_input(INPUT_GET, 'supplier_query', FILTER_UNSAFE_RAW),
+            'supplier_status' => filter_input(INPUT_GET, 'supplier_status', FILTER_UNSAFE_RAW),
+            'batch_status' => filter_input(INPUT_GET, 'batch_status', FILTER_UNSAFE_RAW),
+            'material_key' => filter_input(INPUT_GET, 'material_key', FILTER_UNSAFE_RAW),
+        ];
+        $suppliers = $this->filterSupplierRows($rawSuppliers, $supplierFilters);
+        $batches = $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters);
+        $prices = $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters);
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
         $this->renderOperationalLinkBar([
@@ -296,6 +379,9 @@ final class PageController
             ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings')],
             ['label' => 'Open audit log', 'url' => admin_url('admin.php?page=trn_audit_log')],
         ]);
+            ['label' => 'Clear filters', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
+        ]);
+        $this->renderSuppliersFilterForm($supplierFilters);
         echo '<h2>Suppliers registry</h2>';
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
@@ -475,6 +561,11 @@ final class PageController
             || $filter->isDocumentNumberFilterActive($documentNumberFilter);
 
         $this->renderAppShellStart('Offerter / Offerts / Оферты', 'Offert, Avtal, and ÄTA registers with operational actions.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open invoices', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open estimates', 'url' => admin_url('admin.php?page=trn_estimates')],
+        ]);
         $this->renderOffertFilterForm($estimateFilter, $statusFilter, $documentNumberFilter);
         echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($offerts));
         if ($hasActiveFilters) {
@@ -596,6 +687,11 @@ final class PageController
         $summary = $summaryBuilder->build($registerRows);
 
         $this->renderAppShellStart('Fakturor / Invoices / Фактуры', 'Invoice register, issuance, and payment status tracking.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open payments', 'url' => admin_url('admin.php?page=trn_payments')],
+            ['label' => 'Open reminders', 'url' => admin_url('admin.php?page=trn_reminders')],
+        ]);
         $this->renderInvoiceFilterForm($formFilters);
         echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($registerRows));
         if ($hasActiveFilters) {
@@ -873,6 +969,11 @@ final class PageController
         $formFilters = $filter->normalizedForForm($rawFilters);
 
         $this->renderAppShellStart('Kreditnotor / Credit Notes / Кредит-ноты', 'Credit note register and source links.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open invoices', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open reminders', 'url' => admin_url('admin.php?page=trn_reminders')],
+        ]);
         $this->renderCreditNoteFilterForm($formFilters);
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
@@ -949,6 +1050,11 @@ final class PageController
         $formFilters = $filter->normalizedForForm($rawFilters);
 
         $this->renderAppShellStart('Påminnelser / Reminders / Напоминания', 'Reminder register and follow-up actions.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open invoices', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open credit notes', 'url' => admin_url('admin.php?page=trn_credit_notes')],
+        ]);
         $this->renderReminderFilterForm($formFilters);
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>reminder_level</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
@@ -1100,6 +1206,7 @@ final class PageController
                     ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
                     ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
                     ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
+                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'cap' => 'read'],
                 ],
             ],
             [
@@ -1149,6 +1256,7 @@ final class PageController
             ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts'],
             ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices'],
             ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments'],
+            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports'],
             ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices'],
             ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings'],
         ];
@@ -1218,6 +1326,315 @@ final class PageController
             echo '<tr><td>Invoice</td><td>' . esc_html((string) $id) . '</td><td>' . esc_html((string) ($invoice['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $id)) . '">Open</a></td></tr>';
         }
         echo '</tbody></table></section>';
+    }
+
+    private function canViewOperationalReports(): bool
+    {
+        return current_user_can('trn_issue_invoices')
+            || current_user_can('trn_record_payments')
+            || current_user_can('trn_issue_reminders')
+            || current_user_can('trn_manage_prices')
+            || current_user_can('trn_manage_backups');
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters @return array<string, mixed> */
+    private function buildOperationalReportPayload(array $filters): array
+    {
+        $builder = new OperationalReportBuilder();
+        $paymentTermsDays = (int) ((new DocumentSettings())->get()['payment_terms_days'] ?? 30);
+        $paymentTermsDays = $paymentTermsDays > 0 ? $paymentTermsDays : 30;
+
+        $invoices = $builder->invoices(
+            $this->factory->invoices()->all(),
+            fn (int $invoiceId): array => $this->factory->invoicePayments()->byInvoice($invoiceId),
+            $filters,
+            $paymentTermsDays
+        );
+        $payments = $builder->payments($this->factory->invoicePayments()->all(), $filters);
+        $reminders = $builder->reminders($this->factory->reminders()->all(), $filters);
+        $creditNotes = $builder->creditNotes($this->factory->creditNotes()->all(), $filters);
+        $supplierImportActivity = $builder->supplierImportActivity(
+            $this->factory->priceImportBatches()->latest(100),
+            $this->factory->materialSupplierPrices()->latest(100),
+            $filters
+        );
+        $backupActivity = $builder->backupActivity((new BackupManifestRepository())->latest(100), $filters);
+
+        return [
+            'invoices' => $invoices,
+            'payments' => $payments,
+            'payment_totals' => $builder->paymentTotals($payments),
+            'reminders' => $reminders,
+            'credit_notes' => $creditNotes,
+            'tax_visibility' => $builder->taxVisibility($this->factory->invoices()->all(), $this->factory->creditNotes()->all()),
+            'supplier_import_activity' => $supplierImportActivity,
+            'imports' => $supplierImportActivity['imports'] ?? [],
+            'price_changes' => $supplierImportActivity['price_changes'] ?? [],
+            'backup_activity' => $backupActivity,
+        ];
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters */
+    private function renderOperationalReportsFilterForm(string $selectedReport, array $filters): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Filters</h2><form method="get" class="trn-inline-form">';
+        echo '<input type="hidden" name="page" value="trn_operational_reports">';
+        echo '<label>Report <select name="report">';
+        foreach ($this->operationalReportRegistry() as $reportKey => $reportMeta) {
+            if (! current_user_can((string) ($reportMeta['capability'] ?? 'read'))) {
+                continue;
+            }
+            $selected = $reportKey === $selectedReport ? ' selected' : '';
+            echo '<option value="' . esc_attr($reportKey) . '"' . $selected . '>' . esc_html((string) ($reportMeta['label'] ?? $reportKey)) . '</option>';
+        }
+        echo '</select></label> ';
+        echo '<label>Status/method <input type="text" name="status" value="' . esc_attr($filters['status']) . '" placeholder="issued / paid / completed"></label> ';
+        echo '<label>Date from <input type="date" name="date_from" value="' . esc_attr($filters['date_from']) . '"></label> ';
+        echo '<label>Date to <input type="date" name="date_to" value="' . esc_attr($filters['date_to']) . '"></label> ';
+        echo '<label>Period <select name="period">';
+        $periods = [
+            '' => 'custom',
+            'today' => 'today',
+            '7d' => '7d',
+            '30d' => '30d',
+            'month' => 'month',
+        ];
+        foreach ($periods as $periodValue => $periodLabel) {
+            $selected = $periodValue === $filters['period'] ? ' selected' : '';
+            echo '<option value="' . esc_attr($periodValue) . '"' . $selected . '>' . esc_html($periodLabel) . '</option>';
+        }
+        echo '</select></label> ';
+        submit_button('Apply filters', 'secondary', 'submit', false);
+        echo '</form></section>';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function renderOperationalReportsSummary(array $payload): void
+    {
+        $invoiceRows = is_array($payload['invoices'] ?? null) ? $payload['invoices'] : [];
+        $overdueCount = 0;
+        $dueCount = 0;
+        $receivablesMinor = 0;
+        foreach ($invoiceRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ((string) ($row['due_state'] ?? '') === 'overdue') {
+                ++$overdueCount;
+            } elseif ((string) ($row['due_state'] ?? '') === 'due') {
+                ++$dueCount;
+            }
+            $receivablesMinor += (int) ($row['outstanding_minor'] ?? 0);
+        }
+        $taxVisibility = is_array($payload['tax_visibility'] ?? null) ? $payload['tax_visibility'] : [];
+        $paymentTotals = is_array($payload['payment_totals'] ?? null) ? $payload['payment_totals'] : [];
+        $supplierActivity = is_array($payload['supplier_import_activity'] ?? null) ? $payload['supplier_import_activity'] : [];
+        $backupActivity = is_array($payload['backup_activity'] ?? null) ? $payload['backup_activity'] : [];
+
+        echo '<section class="trn-shell__panel"><h2>Operational summary</h2><div class="trn-shell__stats">';
+        echo '<article class="trn-shell__stat"><h3>Overdue invoices</h3><p>' . esc_html((string) $overdueCount) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Due invoices</h3><p>' . esc_html((string) $dueCount) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Receivables</h3><p>' . esc_html($this->formatMinorMoney($receivablesMinor, 'SEK')) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Payments total</h3><p>' . esc_html($this->formatMinorMoney((int) ($paymentTotals['total_minor'] ?? 0), 'SEK')) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>ROT docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['rot_documents'] ?? 0))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Reverse charge docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['reverse_charge_documents'] ?? 0))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Latest imports</h3><p>' . esc_html((string) count((array) ($supplierActivity['imports'] ?? []))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Backup events</h3><p>' . esc_html((string) count((array) $backupActivity)) . '</p></article>';
+        echo '</div></section>';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function renderOperationalReportOverviewPanels(array $payload): void
+    {
+        $creditNotes = array_slice(is_array($payload['credit_notes'] ?? null) ? $payload['credit_notes'] : [], 0, 5);
+        $reminders = is_array($payload['reminders'] ?? null) ? $payload['reminders'] : [];
+        $backupRows = array_slice(is_array($payload['backup_activity'] ?? null) ? $payload['backup_activity'] : [], 0, 5);
+        $priceChanges = array_slice(is_array($payload['price_changes'] ?? null) ? $payload['price_changes'] : [], 0, 5);
+        $unresolvedReminders = array_values(array_filter($reminders, static fn (array $row): bool => sanitize_key((string) ($row['status'] ?? '')) !== 'archived'));
+        $unresolvedReminders = array_slice($unresolvedReminders, 0, 5);
+
+        echo '<section class="trn-shell__panel"><h2>Credit notes (latest)</h2>';
+        if ($creditNotes === []) {
+            $this->renderEmptyState('No credit notes found.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>document_number</th><th>status</th><th>issued_at</th></tr></thead><tbody>';
+            foreach ($creditNotes as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Unresolved reminders</h2>';
+        if ($unresolvedReminders === []) {
+            $this->renderEmptyState('No unresolved reminders.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>status</th><th>issued_at</th></tr></thead><tbody>';
+            foreach ($unresolvedReminders as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['invoice_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Price changes (latest)</h2>';
+        if ($priceChanges === []) {
+            $this->renderEmptyState('No recent supplier price changes.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>supplier_id</th><th>material_key</th><th>buy_price_minor</th><th>created_at</th></tr></thead><tbody>';
+            foreach ($priceChanges as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['supplier_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['material_key'] ?? '')) . '</td><td>' . esc_html($this->formatMinorMoney((int) ($row['buy_price_minor'] ?? 0), (string) ($row['currency'] ?? 'SEK'))) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Backup / restore activity</h2>';
+        if ($backupRows === []) {
+            $this->renderEmptyState('No backup activity rows found.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>backup_type</th><th>status</th><th>created_at</th><th>completed_at</th></tr></thead><tbody>';
+            foreach ($backupRows as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['backup_type'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td><td>' . esc_html((string) ($row['completed_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+    }
+
+    /** @param array<string, mixed> $payload @param array{status:string,date_from:string,date_to:string,period:string} $filters */
+    private function renderOperationalReportTables(string $selectedReport, array $payload, array $filters): void
+    {
+        $registry = $this->operationalReportRegistry();
+        $activeMeta = $registry[$selectedReport] ?? $registry['invoices'];
+        if (! current_user_can((string) ($activeMeta['capability'] ?? 'read'))) {
+            wp_die('Forbidden');
+        }
+        $activeKey = (string) ($activeMeta['payload_key'] ?? 'invoices');
+        $activeRows = $payload[$activeKey] ?? [];
+        if (! is_array($activeRows)) {
+            $activeRows = [];
+        }
+
+        echo '<section class="trn-shell__panel"><h2>' . esc_html((string) ($activeMeta['label'] ?? 'Report')) . '</h2>';
+        $exportUrl = add_query_arg([
+            'page' => 'trn_operational_reports',
+            'report' => $selectedReport,
+            'status' => $filters['status'],
+            'date_from' => $filters['date_from'],
+            'date_to' => $filters['date_to'],
+            'period' => $filters['period'],
+            'trn_export' => 'csv',
+        ], admin_url('admin.php'));
+        echo '<p><a class="button button-secondary" href="' . esc_url($exportUrl) . '">Export CSV</a></p>';
+
+        if ($activeRows === []) {
+            $this->renderEmptyState('No rows found for current filter set.');
+            echo '</section>';
+
+            return;
+        }
+
+        $headers = (array) ($activeMeta['headers'] ?? []);
+        echo '<table class="widefat striped"><thead><tr>';
+        foreach ($headers as $header) {
+            echo '<th>' . esc_html((string) $header) . '</th>';
+        }
+        echo '</tr></thead><tbody>';
+
+        foreach ($activeRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            echo '<tr>';
+            foreach ($headers as $header) {
+                $value = $row[(string) $header] ?? '';
+                if (is_int($value) && str_ends_with((string) $header, '_minor')) {
+                    $currency = (string) ($row['currency'] ?? 'SEK');
+                    $value = $this->formatMinorMoney($value, $currency);
+                } elseif (is_bool($value)) {
+                    $value = $value ? 'yes' : 'no';
+                }
+                echo '<td>' . esc_html((string) $value) . '</td>';
+            }
+            echo '</tr>';
+        }
+        echo '</tbody></table></section>';
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters @param array<int,string> $errors */
+    private function renderOperationalReportsCsvExport(string $reportKey, array $filters, array $errors): void
+    {
+        if ($errors !== []) {
+            wp_die(esc_html('Invalid filter input for CSV export.'));
+        }
+
+        $registry = $this->operationalReportRegistry();
+        if (! isset($registry[$reportKey])) {
+            wp_die(esc_html('Unknown report export requested.'));
+        }
+        $meta = $registry[$reportKey];
+        $capability = (string) ($meta['capability'] ?? 'read');
+        if (! current_user_can($capability)) {
+            wp_die(esc_html('You do not have permissions to export this report.'));
+        }
+
+        $payload = $this->buildOperationalReportPayload($filters);
+        $payloadKey = (string) ($meta['payload_key'] ?? 'invoices');
+        $rows = $payload[$payloadKey] ?? [];
+        if (! is_array($rows)) {
+            wp_die(esc_html('Invalid report payload for export.'));
+        }
+
+        $headers = (array) ($meta['headers'] ?? []);
+        $normalizedRows = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $normalizedRows[] = $row;
+        }
+
+        $csv = (new OperationalCsvExporter())->build($headers, $normalizedRows);
+        if ($csv === '') {
+            wp_die(esc_html('Unable to produce export file.'));
+        }
+
+        nocache_headers();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="trn_' . $reportKey . '_report.csv"');
+        echo $csv;
+    }
+
+    /** @return array<string, array{label:string,capability:string,payload_key:string,headers:array<int,string>}> */
+    private function operationalReportRegistry(): array
+    {
+        return [
+            'invoices' => [
+                'label' => 'Invoices report',
+                'capability' => 'trn_issue_invoices',
+                'payload_key' => 'invoices',
+                'headers' => ['id', 'document_number', 'issued_at', 'status', 'due_date', 'due_state', 'invoice_total_minor', 'paid_total_minor', 'outstanding_minor', 'currency', 'tax_mode', 'rot_requested'],
+            ],
+            'payments' => [
+                'label' => 'Payments report',
+                'capability' => 'trn_record_payments',
+                'payload_key' => 'payments',
+                'headers' => ['id', 'invoice_id', 'payment_date', 'amount_minor', 'currency', 'method', 'reference'],
+            ],
+            'reminders' => [
+                'label' => 'Reminders report',
+                'capability' => 'trn_issue_reminders',
+                'payload_key' => 'reminders',
+                'headers' => ['id', 'invoice_id', 'document_number', 'status', 'reminder_level', 'issued_at', 'total_inc_vat_minor', 'currency'],
+            ],
+            'suppliers_imports' => [
+                'label' => 'Suppliers / Imports report',
+                'capability' => 'trn_manage_prices',
+                'payload_key' => 'imports',
+                'headers' => ['id', 'supplier_id', 'source_name', 'source_format', 'status', 'imported_at'],
+            ],
+        ];
     }
 
     private function renderCreateEstimateForm(): void
@@ -3145,6 +3562,134 @@ final class PageController
         echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     }
 
+
+    /** @param array<string, mixed> $filters */
+    private function renderEstimateFilterForm(array $filters): void
+    {
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_estimates">';
+        echo '<label style="margin-right:8px;">project_id <input type="text" name="project_id" value="' . esc_attr((string) ($filters['project_id'] ?? '')) . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">status <select name="status">';
+        echo '<option value=""></option>';
+        foreach (['draft', 'calculated', 'issued', 'accepted', 'rejected', 'archived'] as $allowedStatus) {
+            echo '<option value="' . esc_attr($allowedStatus) . '"' . selected((string) ($filters['status'] ?? ''), $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">title <input type="text" name="title" value="' . esc_attr((string) ($filters['title'] ?? '')) . '" class="regular-text"></label>';
+        submit_button('Filter', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '" style="margin-left:6px;">Clear filters</a>';
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */
+    private function filterEstimateRows(array $rows, array $filters): array
+    {
+        $projectId = is_scalar($filters['project_id'] ?? null) ? (int) $filters['project_id'] : 0;
+        $status = is_scalar($filters['status'] ?? null) ? sanitize_key((string) $filters['status']) : '';
+        $title = is_scalar($filters['title'] ?? null) ? trim((string) $filters['title']) : '';
+
+        $filtered = [];
+        foreach ($rows as $row) {
+            if ($projectId > 0 && (int) ($row['project_id'] ?? 0) !== $projectId) {
+                continue;
+            }
+            if ($status !== '' && sanitize_key((string) ($row['status'] ?? '')) !== $status) {
+                continue;
+            }
+            if ($title !== '' && stripos((string) ($row['title'] ?? ''), $title) === false) {
+                continue;
+            }
+            $filtered[] = $row;
+        }
+
+        return $filtered;
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function hasEstimateFilters(array $filters): bool
+    {
+        return trim((string) ($filters['project_id'] ?? '')) !== ''
+            || trim((string) ($filters['status'] ?? '')) !== ''
+            || trim((string) ($filters['title'] ?? '')) !== '';
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function renderSuppliersFilterForm(array $filters): void
+    {
+        echo '<form method="get" style="margin:10px 0;">';
+        echo '<input type="hidden" name="page" value="trn_suppliers_prices">';
+        echo '<label style="margin-right:8px;">supplier (id/code/name) <input type="text" name="supplier_query" value="' . esc_attr((string) ($filters['supplier_query'] ?? '')) . '" class="regular-text"></label>';
+        echo '<label style="margin-right:8px;">supplier_status <select name="supplier_status">';
+        echo '<option value=""></option>';
+        foreach (['active', 'inactive'] as $status) {
+            echo '<option value="' . esc_attr($status) . '"' . selected((string) ($filters['supplier_status'] ?? ''), $status, false) . '>' . esc_html($status) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label style="margin-right:8px;">batch_status <input type="text" name="batch_status" value="' . esc_attr((string) ($filters['batch_status'] ?? '')) . '" class="small-text"></label>';
+        echo '<label style="margin-right:8px;">material_key <input type="text" name="material_key" value="' . esc_attr((string) ($filters['material_key'] ?? '')) . '" class="small-text"></label>';
+        submit_button('Filter', 'secondary', 'submit', false);
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */
+    private function filterSupplierRows(array $rows, array $filters): array
+    {
+        $query = strtolower(trim((string) ($filters['supplier_query'] ?? '')));
+        $status = (string) ($filters['supplier_status'] ?? '');
+
+        return array_values(array_filter($rows, static function (array $row) use ($query, $status): bool {
+            if ($status === 'active' && (int) ($row['is_active'] ?? 0) !== 1) {
+                return false;
+            }
+            if ($status === 'inactive' && (int) ($row['is_active'] ?? 0) !== 0) {
+                return false;
+            }
+            if ($query === '') {
+                return true;
+            }
+
+            $haystack = strtolower((string) ($row['id'] ?? '') . ' ' . (string) ($row['code'] ?? '') . ' ' . (string) ($row['name'] ?? ''));
+
+            return strpos($haystack, $query) !== false;
+        }));
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */
+    private function filterImportBatchRows(array $rows, array $filters): array
+    {
+        $status = trim((string) ($filters['batch_status'] ?? ''));
+        $query = trim((string) ($filters['supplier_query'] ?? ''));
+
+        return array_values(array_filter($rows, static function (array $row) use ($status, $query): bool {
+            if ($status !== '' && stripos((string) ($row['status'] ?? ''), $status) === false) {
+                return false;
+            }
+            if ($query !== '' && stripos((string) ($row['supplier_id'] ?? ''), $query) === false) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */
+    private function filterPriceHistoryRows(array $rows, array $filters): array
+    {
+        $materialKey = trim((string) ($filters['material_key'] ?? ''));
+        $query = trim((string) ($filters['supplier_query'] ?? ''));
+
+        return array_values(array_filter($rows, static function (array $row) use ($materialKey, $query): bool {
+            if ($materialKey !== '' && stripos((string) ($row['material_key'] ?? ''), $materialKey) === false) {
+                return false;
+            }
+            if ($query !== '' && stripos((string) ($row['supplier_id'] ?? ''), $query) === false) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
     /** @param array<int, array<string, mixed>> $offerts */
     private function renderOffertsForEstimateTable(array $offerts, int $estimateId = 0): void
     {
@@ -3299,6 +3844,7 @@ final class PageController
         echo '</select></label>';
         echo '<label style="margin-right:8px;">avtal_document_number <input type="text" name="avtal_document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
         submit_button('Filter avtals', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_offerts')) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';
     }
 
@@ -3372,6 +3918,7 @@ final class PageController
         echo '</select></label>';
         echo '<label style="margin-right:8px;">ata_document_number <input type="text" name="ata_document_number" value="' . esc_attr($documentNumberValue) . '" class="regular-text"></label>';
         submit_button('Filter ÄTA', 'secondary', 'submit', false);
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_offerts')) . '" style="margin-left:6px;">Clear filters</a>';
         echo '</form>';
     }
 
