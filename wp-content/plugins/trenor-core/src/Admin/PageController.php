@@ -434,6 +434,11 @@ final class PageController
         $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
 
         echo '<h2>Price history (latest rows)</h2>';
+        echo '<p>Operator adjacency: each imported material_key should map to catalog_material (SKU) so pricing decisions can be validated against catalog_sell_price_minor.</p>';
+        $this->renderOperationalLinkBar([
+            ['label' => 'Open materials catalog', 'url' => admin_url('admin.php?page=trn_materials')],
+            ['label' => 'Open work items catalog', 'url' => admin_url('admin.php?page=trn_work_items')],
+        ]);
         if ($prices === []) {
             $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
         }
