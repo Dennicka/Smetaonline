@@ -17,24 +17,6 @@ namespace {
         }
     }
 
-    if (! function_exists('sanitize_key')) {
-        function sanitize_key(string $value): string
-        {
-            return strtolower(trim($value));
-        }
-    }
-
-    if (! function_exists('current_user_can')) {
-        function current_user_can(string $capability): bool
-        {
-            $map = $GLOBALS['trn_test_current_user_caps'] ?? [];
-            if (! is_array($map)) {
-                return false;
-            }
-
-            return (bool) ($map[$capability] ?? false);
-        }
-    }
 }
 
 namespace Trenor\Core\Tests\Unit {
@@ -46,6 +28,12 @@ use Trenor\Core\Database\RepositoryFactory;
 
 final class OperationalWorkflowLinkBarTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        unset($GLOBALS['trn_test_current_user_caps']);
+        parent::tearDown();
+    }
+
     public function testOperationalLinkBarRendersDenseActionLayoutAndSkipsInvalidRows(): void
     {
         $controller = new PageController(new RepositoryFactory());

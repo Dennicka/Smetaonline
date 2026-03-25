@@ -97,6 +97,18 @@ if (! function_exists('get_current_user_id')) {
     }
 }
 
+if (! function_exists('current_user_can')) {
+    function current_user_can(string $capability): bool
+    {
+        $capabilityMap = $GLOBALS['trn_test_current_user_caps'] ?? null;
+        if (! is_array($capabilityMap)) {
+            return false;
+        }
+
+        return (bool) ($capabilityMap[$capability] ?? false);
+    }
+}
+
 if (! function_exists('trn_set_test_wpdb')) {
     function trn_set_test_wpdb(object $wpdb): void
     {
