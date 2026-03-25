@@ -103,6 +103,11 @@ final class Migrator
             $this->runQueries($this->crmObjectRoomRichDataV1Queries($charsetCollate));
             $this->markMigration('018_crm_object_room_rich_data_v1');
         }
+
+        if (! $this->hasMigration('019_estimate_pricing_completion_v1')) {
+            $this->runQueries($this->estimatePricingCompletionV1Queries($charsetCollate));
+            $this->markMigration('019_estimate_pricing_completion_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -1116,6 +1121,46 @@ final class Migrator
                 PRIMARY KEY (id),
                 KEY status (status),
                 KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function estimatePricingCompletionV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_estimates (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                project_id BIGINT UNSIGNED NOT NULL,
+                title VARCHAR(191) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                tax_mode VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_rate_minor BIGINT NOT NULL DEFAULT 0,
+                consumables_minor BIGINT NOT NULL DEFAULT 0,
+                travel_minor BIGINT NOT NULL DEFAULT 0,
+                waste_disposal_minor BIGINT NOT NULL DEFAULT 0,
+                equipment_rental_minor BIGINT NOT NULL DEFAULT 0,
+                other_costs_minor BIGINT NOT NULL DEFAULT 0,
+                margin_percent DECIMAL(8,4) NOT NULL DEFAULT 0,
+                discount_minor BIGINT NOT NULL DEFAULT 0,
+                deposit_requested_minor BIGINT NOT NULL DEFAULT 0,
+                notes TEXT NULL,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_is_new_build TINYINT(1) NOT NULL DEFAULT 0,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                rot_buyers_json LONGTEXT NULL,
+                calculated_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY project_id (project_id),
+                KEY status (status)
             ) {$charsetCollate};",
         ];
     }
