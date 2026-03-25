@@ -3,15 +3,6 @@
 declare(strict_types=1);
 
 namespace {
-    if (! function_exists('current_user_can')) {
-        function current_user_can(string $capability): bool
-        {
-            $caps = $GLOBALS['trn_test_caps'] ?? ['read' => true];
-
-            return (bool) ($caps[$capability] ?? false);
-        }
-    }
-
     if (! function_exists('admin_url')) {
         function admin_url(string $path = ''): string
         {
@@ -46,14 +37,20 @@ final class AdminWorkspaceShellTest extends TestCase
 {
     protected function setUp(): void
     {
-        $GLOBALS['trn_test_caps'] = ['read' => true];
+        \trn_set_test_current_user_caps(['read' => true]);
         $GLOBALS['trn_test_menu_pages'] = [];
         $GLOBALS['trn_test_submenu_pages'] = [];
     }
 
+    protected function tearDown(): void
+    {
+        \trn_reset_test_current_user_caps();
+        parent::tearDown();
+    }
+
     public function testNavigationRespectsCapabilities(): void
     {
-        $GLOBALS['trn_test_caps'] = [
+        \trn_set_test_current_user_caps([
             'read' => true,
             'trn_issue_invoices' => true,
             'trn_record_payments' => false,
@@ -64,7 +61,7 @@ final class AdminWorkspaceShellTest extends TestCase
             'trn_issue_credit_notes' => false,
             'trn_issue_reminders' => false,
             'trn_archive_records' => false,
-        ];
+        ]);
 
         $controller = new PageController(new RepositoryFactory());
         $method = new ReflectionMethod($controller, 'workspaceNavigationSections');
