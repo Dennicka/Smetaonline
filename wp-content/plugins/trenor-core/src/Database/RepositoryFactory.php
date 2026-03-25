@@ -46,6 +46,21 @@ final class RepositoryFactory
         return new MaterialRepository();
     }
 
+    public function suppliers(): SupplierRepository
+    {
+        return new SupplierRepository();
+    }
+
+    public function priceImportBatches(): PriceImportBatchRepository
+    {
+        return new PriceImportBatchRepository();
+    }
+
+    public function materialSupplierPrices(): MaterialSupplierPriceRepository
+    {
+        return new MaterialSupplierPriceRepository();
+    }
+
     public function estimates(): EstimateRepository
     {
         return new EstimateRepository();

@@ -88,6 +88,11 @@ final class Migrator
             $this->runQueries($this->b2bReverseChargeV1Queries($charsetCollate));
             $this->markMigration('015_b2b_reverse_charge_v1');
         }
+
+        if (! $this->hasMigration('016_suppliers_price_history_v1')) {
+            $this->runQueries($this->suppliersPriceHistoryV1Queries($charsetCollate));
+            $this->markMigration('016_suppliers_price_history_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -1011,6 +1016,71 @@ final class Migrator
                 KEY offert_id (offert_id),
                 KEY estimate_id (estimate_id),
                 KEY status (status)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function suppliersPriceHistoryV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_suppliers (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                name VARCHAR(191) NOT NULL,
+                code VARCHAR(64) NOT NULL,
+                source_type VARCHAR(64) NOT NULL DEFAULT 'catalog',
+                country CHAR(2) NOT NULL DEFAULT 'SE',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY code (code),
+                KEY is_active (is_active)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_price_import_batches (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                supplier_id BIGINT UNSIGNED NOT NULL,
+                source_name VARCHAR(191) NOT NULL,
+                source_format VARCHAR(32) NOT NULL DEFAULT 'csv',
+                imported_at DATETIME NOT NULL,
+                imported_by_user_id BIGINT UNSIGNED NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'processing',
+                source_checksum CHAR(64) NOT NULL,
+                source_metadata_json LONGTEXT NOT NULL,
+                result_summary_json LONGTEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY supplier_checksum (supplier_id, source_checksum),
+                KEY supplier_id (supplier_id),
+                KEY status (status),
+                KEY imported_at (imported_at)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_material_supplier_prices (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                supplier_id BIGINT UNSIGNED NOT NULL,
+                batch_id BIGINT UNSIGNED NOT NULL,
+                material_key VARCHAR(191) NOT NULL,
+                supplier_item_code VARCHAR(128) NULL,
+                title VARCHAR(255) NOT NULL,
+                unit VARCHAR(32) NOT NULL,
+                buy_price_minor BIGINT NOT NULL,
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                effective_from DATETIME NOT NULL,
+                effective_to DATETIME NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY supplier_material_active (supplier_id, material_key, is_active),
+                KEY material_key (material_key),
+                KEY batch_id (batch_id),
+                KEY effective_from (effective_from),
+                KEY effective_to (effective_to)
             ) {$charsetCollate};",
         ];
     }
