@@ -291,6 +291,11 @@ final class PageController
         $prices = $this->factory->materialSupplierPrices()->latest(50);
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings')],
+            ['label' => 'Open audit log', 'url' => admin_url('admin.php?page=trn_audit_log')],
+        ]);
         echo '<h2>Suppliers registry</h2>';
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
@@ -1154,6 +1159,26 @@ final class PageController
         echo '</div></section>';
     }
 
+    /** @param array<int, array{label:string,url:string}> $links */
+    private function renderOperationalLinkBar(array $links): void
+    {
+        if ($links === []) {
+            return;
+        }
+
+        echo '<section class="trn-shell__panel trn-shell__panel--compact"><div class="trn-shell__actions trn-shell__actions--dense">';
+        foreach ($links as $link) {
+            $label = (string) ($link['label'] ?? '');
+            $url = (string) ($link['url'] ?? '');
+            if ($label === '' || $url === '') {
+                continue;
+            }
+
+            echo '<a class="button button-secondary" href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
+        }
+        echo '</div></section>';
+    }
+
     private function renderWorkspaceStatusCards(): void
     {
         $cards = [
@@ -1247,12 +1272,20 @@ final class PageController
         $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
 
         echo '<h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
-        echo '<p><strong>title:</strong> ' . esc_html((string) $estimate['title']) . ' | <strong>labour_rate_minor:</strong> ' . esc_html((string) $estimate['labour_rate_minor']) . ' | <strong>vat_rate_percent:</strong> ' . esc_html((string) $estimate['vat_rate_percent']) . '</p>';
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        $actionLinks = [
+            ['label' => 'Back to estimates list', 'url' => admin_url('admin.php?page=trn_estimates')],
+            ['label' => 'Open offerts for this estimate', 'url' => admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId)],
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+        ];
+        if ($projectId > 0) {
+            $actionLinks[] = ['label' => 'Open project dossier', 'url' => admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)];
+        }
+        $this->renderOperationalLinkBar($actionLinks);
 
         $project = null;
         $property = null;
         $client = null;
-        $projectId = (int) ($estimate['project_id'] ?? 0);
         if ($projectId > 0) {
             $project = $this->factory->projects()->find($projectId);
         }
@@ -1307,6 +1340,17 @@ final class PageController
                 'phone' => $client['phone'] ?? '',
             ]);
         }
+
+        echo '<h3>Operational summary</h3>';
+        $this->renderKeyValueTable([
+            'status' => (string) ($estimate['status'] ?? ''),
+            'title' => (string) ($estimate['title'] ?? ''),
+            'document_identity' => 'Estimate #' . $estimateId,
+            'project_id' => (string) $projectId,
+            'currency' => (string) ($estimate['currency'] ?? 'SEK'),
+            'labour_rate_minor' => (string) ($estimate['labour_rate_minor'] ?? ''),
+            'vat_rate_percent' => (string) ($estimate['vat_rate_percent'] ?? ''),
+        ]);
 
         echo '<h3>Commercial summary</h3>';
         $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
@@ -2487,16 +2531,27 @@ final class PageController
         $estimateId = (int) ($offert['estimate_id'] ?? 0);
         $printUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&view=print');
         $pdfUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId . '&view=pdf');
-        echo '<p><a href="' . esc_url($offertsUrl) . '">Back to offerts list</a>';
-        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
-        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        $actionLinks = [
+            ['label' => 'Back to offerts list', 'url' => $offertsUrl],
+            ['label' => 'Print / Printable view', 'url' => $printUrl],
+            ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
+            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices')],
+        ];
         if ($estimateId > 0) {
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
             $estimateOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
-            echo ' | <a href="' . esc_url($estimateUrl) . '">Open source estimate</a>';
-            echo ' | <a href="' . esc_url($estimateOffertsUrl) . '">View all offerts for this estimate</a>';
+            $actionLinks[] = ['label' => 'Open source estimate', 'url' => $estimateUrl];
+            $actionLinks[] = ['label' => 'View all offerts for this estimate', 'url' => $estimateOffertsUrl];
         }
-        echo '</p>';
+        $this->renderOperationalLinkBar($actionLinks);
+        $this->renderKeyValueTable([
+            'status' => (string) ($offert['status'] ?? ''),
+            'document_number' => (string) ($offert['document_number'] ?? ''),
+            'version_no' => (string) ($offert['version_no'] ?? ''),
+            'estimate_id' => (string) ($offert['estimate_id'] ?? ''),
+            'project_id' => (string) ($offert['project_id'] ?? ''),
+            'total_inc_vat' => $this->formatMinorMoney($offert['total_inc_vat_minor'] ?? null, (string) ($offert['currency'] ?? 'SEK')),
+        ]);
 
         if ((string) ($offert['status'] ?? '') === 'accepted' && current_user_can('trn_issue_invoices')) {
             echo '<form method="post" style="margin:10px 0;">';
@@ -2568,16 +2623,27 @@ final class PageController
         $offertId = (int) ($invoice['offert_id'] ?? 0);
         $printUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&view=print');
         $pdfUrl = admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId . '&view=pdf');
-        echo '<p><a href="' . esc_url($invoicesUrl) . '">Back to invoices list</a>';
-        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
-        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        $actionLinks = [
+            ['label' => 'Back to invoices list', 'url' => $invoicesUrl],
+            ['label' => 'Print / Printable view', 'url' => $printUrl],
+            ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
+            ['label' => 'Open payments register', 'url' => admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceId)],
+            ['label' => 'View all credit notes for this invoice', 'url' => admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)],
+            ['label' => 'View all reminders for this invoice', 'url' => admin_url('admin.php?page=trn_reminders&invoice_id=' . $invoiceId)],
+        ];
         if ($offertId > 0) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
-            echo ' | <a href="' . esc_url($offertUrl) . '">Open source offert</a>';
+            $actionLinks[] = ['label' => 'Open source offert', 'url' => $offertUrl];
         }
-        echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)) . '">View all credit notes for this invoice</a>';
-        echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_reminders&invoice_id=' . $invoiceId)) . '">View all reminders for this invoice</a>';
-        echo '</p>';
+        $this->renderOperationalLinkBar($actionLinks);
+        $this->renderKeyValueTable([
+            'status' => (string) ($invoice['status'] ?? ''),
+            'document_number' => (string) ($invoice['document_number'] ?? ''),
+            'version_no' => (string) ($invoice['version_no'] ?? ''),
+            'offert_id' => (string) ($invoice['offert_id'] ?? ''),
+            'estimate_id' => (string) ($invoice['estimate_id'] ?? ''),
+            'total_inc_vat' => $this->formatMinorMoney($invoice['total_inc_vat_minor'] ?? null, (string) ($invoice['currency'] ?? 'SEK')),
+        ]);
 
         if (current_user_can('trn_issue_credit_notes') && (string) ($invoice['status'] ?? '') !== 'archived') {
             echo '<form method="post" style="margin:10px 0;">';
@@ -2618,20 +2684,29 @@ final class PageController
 
         $printUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&view=print');
         $pdfUrl = admin_url('admin.php?page=trn_credit_notes&credit_note_id=' . $creditNoteId . '&view=pdf');
-        echo '<p><a href="' . esc_url($creditNotesUrl) . '">Back to credit notes list</a>';
-        echo ' | <a href="' . esc_url($printUrl) . '">Print / Printable view</a>';
-        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        $actionLinks = [
+            ['label' => 'Back to credit notes list', 'url' => $creditNotesUrl],
+            ['label' => 'Print / Printable view', 'url' => $printUrl],
+            ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
+        ];
         if ($invoiceId > 0) {
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) . '">Open source invoice</a>';
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)) . '">View all credit notes for this invoice</a>';
+            $actionLinks[] = ['label' => 'Open source invoice', 'url' => admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)];
+            $actionLinks[] = ['label' => 'View all credit notes for this invoice', 'url' => admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)];
         }
         if ($offertId > 0) {
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId)) . '">Open source offert</a>';
+            $actionLinks[] = ['label' => 'Open source offert', 'url' => admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId)];
         }
         if ($estimateId > 0) {
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId)) . '">Open source estimate</a>';
+            $actionLinks[] = ['label' => 'Open source estimate', 'url' => admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId)];
         }
-        echo '</p>';
+        $this->renderOperationalLinkBar($actionLinks);
+        $this->renderKeyValueTable([
+            'status' => (string) ($creditNote['status'] ?? ''),
+            'document_number' => (string) ($creditNote['document_number'] ?? ''),
+            'version_no' => (string) ($creditNote['version_no'] ?? ''),
+            'invoice_id' => (string) ($creditNote['invoice_id'] ?? ''),
+            'total_inc_vat' => $this->formatMinorMoney($creditNote['total_inc_vat_minor'] ?? null, (string) ($creditNote['currency'] ?? 'SEK')),
+        ]);
 
         $snapshot = (new CreditNoteSnapshotReader())->read($creditNote);
         (new CreditNoteDetailRenderer())->render($creditNote, $snapshot, $this->loadCreditNoteContext($creditNote));
@@ -2649,12 +2724,23 @@ final class PageController
         $remindersUrl = admin_url('admin.php?page=trn_reminders');
         $invoiceId = (int) ($reminder['invoice_id'] ?? 0);
         $pdfUrl = admin_url('admin.php?page=trn_reminders&reminder_id=' . $reminderId . '&view=pdf');
-        echo '<p><a href="' . esc_url($remindersUrl) . '">Back to reminders list</a>';
-        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        $actionLinks = [
+            ['label' => 'Back to reminders list', 'url' => $remindersUrl],
+            ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
+            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices')],
+        ];
         if ($invoiceId > 0) {
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)) . '">Open source invoice</a>';
+            $actionLinks[] = ['label' => 'Open source invoice', 'url' => admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)];
         }
-        echo '</p>';
+        $this->renderOperationalLinkBar($actionLinks);
+        $this->renderKeyValueTable([
+            'status' => (string) ($reminder['status'] ?? ''),
+            'document_number' => (string) ($reminder['document_number'] ?? ''),
+            'version_no' => (string) ($reminder['version_no'] ?? ''),
+            'invoice_id' => (string) ($reminder['invoice_id'] ?? ''),
+            'reminder_level' => (string) ($reminder['reminder_level'] ?? ''),
+            'total_inc_vat' => $this->formatMinorMoney($reminder['total_inc_vat_minor'] ?? null, (string) ($reminder['currency'] ?? 'SEK')),
+        ]);
 
         $snapshot = (new ReminderSnapshotReader())->read($reminder);
         (new ReminderDetailRenderer())->render($reminder, $snapshot);
@@ -2724,6 +2810,11 @@ final class PageController
         $selectedBackupId = $selectedBackupId !== false && $selectedBackupId !== null ? (int) $selectedBackupId : 0;
 
         echo '<h2>Backup / Restore v1</h2>';
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Back to settings top', 'url' => admin_url('admin.php?page=trn_settings')],
+            ['label' => 'Open suppliers / imports', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
+        ]);
         echo '<p>Operational plugin-owned backup with manifest, DB snapshot and document artifact payload baseline.</p>';
         echo '<form method="post">';
         wp_nonce_field('trn_backup_create');
@@ -3157,12 +3248,15 @@ final class PageController
         $listUrl = admin_url('admin.php?page=trn_offerts');
         $sourceOffertId = (int) ($avtal['offert_id'] ?? 0);
         $pdfUrl = admin_url('admin.php?page=trn_offerts&avtal_id=' . $avtalId . '&view=avtal_pdf');
-        echo '<h2>Avtal detail</h2><p><a href="' . esc_url($listUrl) . '">Back to offerts + avtals register</a>';
-        echo ' | <a href="' . esc_url($pdfUrl) . '">Generate / Download PDF</a>';
+        echo '<h2>Avtal detail</h2>';
+        $actionLinks = [
+            ['label' => 'Back to offerts + avtals register', 'url' => $listUrl],
+            ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
+        ];
         if ($sourceOffertId > 0) {
-            echo ' | <a href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $sourceOffertId)) . '">Open source offert</a>';
+            $actionLinks[] = ['label' => 'Open source offert', 'url' => admin_url('admin.php?page=trn_offerts&offert_id=' . $sourceOffertId)];
         }
-        echo '</p>';
+        $this->renderOperationalLinkBar($actionLinks);
 
         $snapshot = (new OffertSnapshotReader())->read($avtal);
         $this->renderKeyValueTable([

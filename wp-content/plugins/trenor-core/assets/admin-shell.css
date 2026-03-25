@@ -56,10 +56,18 @@
   margin-bottom: 12px;
 }
 
+.trn-shell .trn-shell__panel--compact {
+  padding: 8px 12px;
+}
+
 .trn-shell .trn-shell__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.trn-shell .trn-shell__actions--dense {
+  gap: 6px;
 }
 
 .trn-shell .trn-shell__stats {
