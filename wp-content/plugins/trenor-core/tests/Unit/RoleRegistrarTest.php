@@ -22,6 +22,7 @@ final class RoleRegistrarTest extends TestCase
         self::assertArrayHasKey('trn_archive_records', $capabilities);
         self::assertArrayHasKey('trn_manage_templates', $capabilities);
         self::assertArrayHasKey('trn_manage_backups', $capabilities);
+        self::assertArrayHasKey('trn_view_operational_reports', $capabilities);
     }
 
     public function testRoleCapabilityMatrixIsHardenedForWorkerAndViewer(): void
@@ -49,6 +50,7 @@ final class RoleRegistrarTest extends TestCase
 
         self::assertArrayHasKey('trn_issue_invoices', $map['trn_accountant']);
         self::assertArrayHasKey('trn_record_payments', $map['trn_accountant']);
+        self::assertArrayHasKey('trn_view_operational_reports', $map['trn_accountant']);
         self::assertArrayHasKey('trn_issue_credit_notes', $map['trn_accountant']);
         self::assertArrayHasKey('trn_issue_reminders', $map['trn_accountant']);
         self::assertArrayNotHasKey('trn_issue_offerts', $map['trn_accountant']);
@@ -56,6 +58,7 @@ final class RoleRegistrarTest extends TestCase
         self::assertArrayNotHasKey('trn_archive_records', $map['trn_accountant']);
 
         self::assertArrayHasKey('trn_issue_offerts', $map['trn_manager']);
+        self::assertArrayHasKey('trn_view_operational_reports', $map['trn_manager']);
         self::assertArrayHasKey('trn_archive_records', $map['trn_manager']);
         self::assertArrayHasKey('trn_manage_templates', $map['trn_manager']);
         self::assertArrayNotHasKey('trn_manage_backups', $map['trn_manager']);
