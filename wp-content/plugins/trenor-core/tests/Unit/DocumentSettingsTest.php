@@ -64,4 +64,14 @@ final class DocumentSettingsTest extends TestCase
         self::assertSame(7, $settings->resolveSequencePadding());
         self::assertSame('OFF', $settings->resolveSequencePrefix('off'));
     }
+
+    public function testSequencePaddingFallsBackToHistoricalDefaultWhenUnset(): void
+    {
+        $settings = new DocumentSettings();
+        $settings->save([
+            'sequence_number_padding' => '',
+        ]);
+
+        self::assertSame(5, $settings->resolveSequencePadding());
+    }
 }

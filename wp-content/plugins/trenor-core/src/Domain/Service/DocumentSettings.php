@@ -134,7 +134,12 @@ final class DocumentSettings
     public function resolveSequencePadding(): int
     {
         $settings = $this->get();
-        $padding = (int) ($settings['sequence_number_padding'] ?? 5);
+        $rawPadding = trim((string) ($settings['sequence_number_padding'] ?? ''));
+        if ($rawPadding === '' || ! ctype_digit($rawPadding)) {
+            return 5;
+        }
+
+        $padding = (int) $rawPadding;
 
         return max(3, min(9, $padding));
     }
