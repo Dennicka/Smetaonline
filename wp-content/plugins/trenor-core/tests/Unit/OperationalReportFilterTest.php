@@ -9,7 +9,19 @@ use Trenor\Core\Admin\OperationalReportFilter;
 
 final class OperationalReportFilterTest extends TestCase
 {
-    public function testNormalizeResolvesQuickPeriodAndClearsDateRangeErrors(): void
+    public function testNormalizeResolvesValidQuickPeriodWithoutManualDates(): void
+    {
+        $result = (new OperationalReportFilter())->normalize([
+            'period' => '7d',
+        ]);
+
+        self::assertSame('7d', $result['filters']['period']);
+        self::assertNotSame('', $result['filters']['date_from']);
+        self::assertNotSame('', $result['filters']['date_to']);
+        self::assertSame([], $result['errors']);
+    }
+
+    public function testNormalizeResolvesQuickPeriodAndClearsStaleManualDateErrors(): void
     {
         $result = (new OperationalReportFilter())->normalize([
             'status' => ' issued ',
@@ -22,10 +34,23 @@ final class OperationalReportFilterTest extends TestCase
         self::assertSame('7d', $result['filters']['period']);
         self::assertNotSame('', $result['filters']['date_from']);
         self::assertNotSame('', $result['filters']['date_to']);
-        self::assertCount(1, $result['errors']);
+        self::assertSame([], $result['errors']);
     }
 
-    public function testNormalizeRejectsInvalidDateWindow(): void
+    public function testNormalizeValidManualRangeWithoutQuickPeriod(): void
+    {
+        $result = (new OperationalReportFilter())->normalize([
+            'date_from' => '2026-02-01',
+            'date_to' => '2026-02-10',
+        ]);
+
+        self::assertSame('', $result['filters']['period']);
+        self::assertSame('2026-02-01', $result['filters']['date_from']);
+        self::assertSame('2026-02-10', $result['filters']['date_to']);
+        self::assertSame([], $result['errors']);
+    }
+
+    public function testNormalizeInvalidManualRangeWithoutQuickPeriod(): void
     {
         $result = (new OperationalReportFilter())->normalize([
             'date_from' => '2026-02-10',
@@ -35,5 +60,19 @@ final class OperationalReportFilterTest extends TestCase
         self::assertSame('', $result['filters']['date_from']);
         self::assertSame('', $result['filters']['date_to']);
         self::assertNotEmpty($result['errors']);
+    }
+
+    public function testNormalizeInvalidQuickPeriodKeepsExplicitErrorAndUsesManualDates(): void
+    {
+        $result = (new OperationalReportFilter())->normalize([
+            'period' => 'last_14d',
+            'date_from' => '2026-03-01',
+            'date_to' => '2026-03-10',
+        ]);
+
+        self::assertSame('', $result['filters']['period']);
+        self::assertSame('2026-03-01', $result['filters']['date_from']);
+        self::assertSame('2026-03-10', $result['filters']['date_to']);
+        self::assertSame(['Invalid period value.'], $result['errors']);
     }
 }

@@ -15,27 +15,34 @@ final class OperationalReportFilter
     public function normalize(array $raw): array
     {
         $status = $this->scalarText($raw['status'] ?? '');
-        $period = $this->normalizePeriod($raw['period'] ?? '');
-        $dateFrom = $this->normalizeDate($raw['date_from'] ?? '');
-        $dateTo = $this->normalizeDate($raw['date_to'] ?? '');
+        $rawPeriod = $this->scalarText($raw['period'] ?? '');
+        $period = $this->normalizePeriod($rawPeriod);
+        $rawDateFrom = $this->scalarText($raw['date_from'] ?? '');
+        $rawDateTo = $this->scalarText($raw['date_to'] ?? '');
+        $dateFrom = $this->normalizeDate($rawDateFrom);
+        $dateTo = $this->normalizeDate($rawDateTo);
         $errors = [];
+
+        if ($rawPeriod !== '' && $period === '') {
+            $errors[] = 'Invalid period value.';
+        }
 
         if ($period !== '') {
             [$dateFrom, $dateTo] = $this->periodRange($period);
-        }
+        } else {
+            if ($rawDateFrom !== '' && $dateFrom === '') {
+                $errors[] = 'Invalid date_from value.';
+            }
 
-        if ($dateFrom !== '' && $dateTo !== '' && strcmp($dateFrom, $dateTo) > 0) {
-            $errors[] = 'Date range is invalid: date_from is after date_to.';
-            $dateFrom = '';
-            $dateTo = '';
-        }
+            if ($rawDateTo !== '' && $dateTo === '') {
+                $errors[] = 'Invalid date_to value.';
+            }
 
-        if ($this->scalarText($raw['date_from'] ?? '') !== '' && $dateFrom === '') {
-            $errors[] = 'Invalid date_from value.';
-        }
-
-        if ($this->scalarText($raw['date_to'] ?? '') !== '' && $dateTo === '') {
-            $errors[] = 'Invalid date_to value.';
+            if ($dateFrom !== '' && $dateTo !== '' && strcmp($dateFrom, $dateTo) > 0) {
+                $errors[] = 'Date range is invalid: date_from is after date_to.';
+                $dateFrom = '';
+                $dateTo = '';
+            }
         }
 
         return [
