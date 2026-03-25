@@ -1211,6 +1211,7 @@ final class PageController
     {
         $propertyFilter = (int) filter_input(INPUT_GET, 'property_id', FILTER_VALIDATE_INT);
         $projects = $this->factory->projects()->all();
+        $visibleProjectIds = [];
         $this->renderAppShellStart('Проекты', 'Project register with dossier adjacency, contacts and attachments.');
         echo '<h2>Новый проект</h2><form method="post">';
         wp_nonce_field('trn_project_create');
@@ -1228,11 +1229,13 @@ final class PageController
             if ($propertyFilter > 0 && $propertyId !== $propertyFilter) {
                 continue;
             }
+            $visibleProjectIds[] = $projectId;
             echo '<tr><td>' . esc_html((string) $projectId) . '</td><td>' . esc_html((string) $propertyId) . '</td><td>' . esc_html((string) ($project['name'] ?? '')) . '</td><td>' . esc_html((string) ($project['code'] ?? '')) . '</td>';
             echo '<td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_rooms&project_id=' . $projectId)) . '">Rooms</a> <a class="button" href="' . esc_url(admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)) . '">Dossier</a></td></tr>';
             echo '<tr><td colspan="5"><strong>Contacts:</strong> ' . esc_html((string) count($this->factory->contactPersons()->byProject($projectId))) . ' | <strong>Attachments:</strong> ' . esc_html((string) count($this->factory->attachments()->forParent('project', $projectId))) . '</td></tr>';
         }
         echo '</tbody></table>';
+        $this->renderProjectRoomAdjacencySection($visibleProjectIds);
         $this->renderContactPersonForm(0, 0, 0);
         $this->renderAttachmentForm('project', 0);
         $this->renderAppShellEnd();
@@ -1308,6 +1311,46 @@ final class PageController
         echo '<p><label>notes<br><textarea name="notes" class="large-text"></textarea></label></p>';
         submit_button('Create surface');
         echo '</form>';
+    }
+
+    /** @param array<int, int> $projectIds */
+    private function renderProjectRoomAdjacencySection(array $projectIds): void
+    {
+        echo '<h2>Project → Rooms adjacency</h2>';
+        if ($projectIds === []) {
+            echo '<p>No projects selected yet. Create a project to attach Rooms.</p>';
+            return;
+        }
+
+        $roomsByProject = [];
+        foreach ($this->factory->rooms()->all() as $room) {
+            $projectId = (int) ($room['project_id'] ?? 0);
+            if ($projectId <= 0 || ! in_array($projectId, $projectIds, true)) {
+                continue;
+            }
+
+            if (! isset($roomsByProject[$projectId])) {
+                $roomsByProject[$projectId] = [];
+            }
+            $roomsByProject[$projectId][] = $room;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>Project ID</th><th>Rooms</th><th>Action</th></tr></thead><tbody>';
+        foreach ($projectIds as $projectId) {
+            $rooms = $roomsByProject[$projectId] ?? [];
+            echo '<tr><td>' . esc_html((string) $projectId) . '</td><td>';
+            if ($rooms === []) {
+                echo 'No rooms linked yet.';
+            } else {
+                $roomLabels = [];
+                foreach ($rooms as $room) {
+                    $roomLabels[] = '#' . (string) ($room['id'] ?? '') . ' ' . (string) ($room['name'] ?? '');
+                }
+                echo esc_html(implode(', ', $roomLabels));
+            }
+            echo '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_rooms&project_id=' . $projectId)) . '">Open Rooms</a></td></tr>';
+        }
+        echo '</tbody></table>';
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */

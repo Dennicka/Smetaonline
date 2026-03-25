@@ -38,6 +38,13 @@ if (! function_exists('sanitize_textarea_field')) {
     }
 }
 
+if (! function_exists('sanitize_email')) {
+    function sanitize_email(string $email): string
+    {
+        return trim(strtolower($email));
+    }
+}
+
 if (! function_exists('esc_url_raw')) {
     function esc_url_raw(string $url): string
     {

@@ -36,8 +36,10 @@ final class AttachmentRepositoryTest extends TestCase
         ]);
 
         self::assertSame(1, $id);
-        self::assertSame('wp_trn_attachments', $wpdb->insertedTable);
-        self::assertSame('project', $wpdb->insertHistory[0]['data']['parent_entity_type']);
+        $attachmentInsert = $this->findInsertByTable($wpdb, 'wp_trn_attachments');
+        self::assertNotNull($attachmentInsert);
+        self::assertSame('project', $attachmentInsert['data']['parent_entity_type'] ?? null);
+        self::assertSame('f.jpg', $attachmentInsert['data']['original_filename'] ?? null);
 
         self::assertTrue($repository->updateEntity(1, ['title' => 'After', 'status' => 'active']));
         self::assertSame('After', $wpdb->updatedRows[0]['data']['title']);
@@ -57,5 +59,17 @@ final class AttachmentRepositoryTest extends TestCase
         $reflection->setAccessible(true);
 
         return $reflection->invoke($subject);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findInsertByTable(WpdbStub $wpdb, string $table): ?array
+    {
+        foreach ($wpdb->insertHistory as $insert) {
+            if ((string) ($insert['table'] ?? '') === $table) {
+                return $insert;
+            }
+        }
+
+        return null;
     }
 }

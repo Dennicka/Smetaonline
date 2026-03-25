@@ -34,7 +34,10 @@ final class SurfaceRepositoryTest extends TestCase
         ]);
 
         self::assertSame(1, $id);
-        self::assertSame('wp_trn_surfaces', $wpdb->insertedTable);
+        $surfaceInsert = $this->findInsertByTable($wpdb, 'wp_trn_surfaces');
+        self::assertNotNull($surfaceInsert);
+        self::assertSame('wall', $surfaceInsert['data']['surface_type'] ?? null);
+        self::assertSame(9, $surfaceInsert['data']['room_id'] ?? null);
 
         self::assertTrue($repository->updateEntity(1, ['room_id' => '9', 'surface_type' => 'ceiling']));
         self::assertSame('ceiling', $wpdb->updatedRows[0]['data']['surface_type']);
@@ -54,5 +57,17 @@ final class SurfaceRepositoryTest extends TestCase
         $reflection->setAccessible(true);
 
         return $reflection->invoke($subject);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findInsertByTable(WpdbStub $wpdb, string $table): ?array
+    {
+        foreach ($wpdb->insertHistory as $insert) {
+            if ((string) ($insert['table'] ?? '') === $table) {
+                return $insert;
+            }
+        }
+
+        return null;
     }
 }

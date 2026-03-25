@@ -36,8 +36,10 @@ final class ContactPersonRepositoryTest extends TestCase
         ]);
 
         self::assertSame(1, $id);
-        self::assertSame('wp_trn_contact_persons', $wpdb->insertedTable);
-        self::assertSame('Anna Contact', $wpdb->insertHistory[0]['data']['name']);
+        $contactInsert = $this->findInsertByTable($wpdb, 'wp_trn_contact_persons');
+        self::assertNotNull($contactInsert);
+        self::assertSame('Anna Contact', $contactInsert['data']['name'] ?? null);
+        self::assertSame('a@example.com', $contactInsert['data']['email'] ?? null);
 
         self::assertTrue($repository->updateEntity(1, ['name' => 'Anna Updated', 'status' => 'archived']));
         self::assertSame('Anna Updated', $wpdb->updatedRows[0]['data']['name']);
@@ -57,5 +59,17 @@ final class ContactPersonRepositoryTest extends TestCase
         $reflection->setAccessible(true);
 
         return $reflection->invoke($subject);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findInsertByTable(WpdbStub $wpdb, string $table): ?array
+    {
+        foreach ($wpdb->insertHistory as $insert) {
+            if ((string) ($insert['table'] ?? '') === $table) {
+                return $insert;
+            }
+        }
+
+        return null;
     }
 }
