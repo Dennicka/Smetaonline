@@ -32,6 +32,7 @@ final class DocumentSettingsTest extends TestCase
         self::assertSame('SE5566', $result['vat_number']);
         self::assertSame('Intro text', $result['offert_intro_text']);
         self::assertContains('credit_note_footer_text', array_keys($result));
+        self::assertContains('sequence_prefix_invoice', array_keys($result));
     }
 
     public function testSaveAndGetRoundtripNormalizedSettings(): void
@@ -49,5 +50,28 @@ final class DocumentSettingsTest extends TestCase
         self::assertSame('30', $result['payment_terms_days']);
         self::assertSame('Thank you', $result['invoice_footer_text']);
         self::assertSame('', $result['iban']);
+    }
+
+    public function testResolvesSequencePrefixAndPaddingFromSettings(): void
+    {
+        $settings = new DocumentSettings();
+        $settings->save([
+            'sequence_prefix_invoice' => 'fak',
+            'sequence_number_padding' => '7',
+        ]);
+
+        self::assertSame('FAK', $settings->resolveSequencePrefix('inv'));
+        self::assertSame(7, $settings->resolveSequencePadding());
+        self::assertSame('OFF', $settings->resolveSequencePrefix('off'));
+    }
+
+    public function testSequencePaddingFallsBackToHistoricalDefaultWhenUnset(): void
+    {
+        $settings = new DocumentSettings();
+        $settings->save([
+            'sequence_number_padding' => '',
+        ]);
+
+        self::assertSame(5, $settings->resolveSequencePadding());
     }
 }

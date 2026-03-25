@@ -27,7 +27,11 @@ final class ReminderDetailRenderer
         $this->row('total_inc_vat_minor', $this->formatMinorMoney($reminder['total_inc_vat_minor'] ?? 0, $currency));
         $this->row('issued_at', $reminder['issued_at'] ?? '');
         $this->row('source_invoice_document_number', $metadata['source_invoice_document_number'] ?? '');
+        $this->row('source_offert_id', $metadata['source_offert_id'] ?? '');
+        $this->row('source_estimate_id', $metadata['source_estimate_id'] ?? '');
+        $this->row('source_estimate_title', $metadata['source_estimate_title'] ?? '');
         $this->row('invoice_outstanding_minor', $this->formatMinorMoney($metadata['invoice_outstanding_minor'] ?? null, $currency));
+        $this->row('identity_semantics', 'Reminder references the source invoice and preserves historical numbering.');
         $this->row('issued_at_utc', $metadata['issued_at_utc'] ?? '');
         echo '</tbody></table>';
     }

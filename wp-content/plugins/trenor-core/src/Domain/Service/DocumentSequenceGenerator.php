@@ -11,8 +11,9 @@ final class DocumentSequenceGenerator implements DocumentNumberGenerator
     /** @var object */
     private object $database;
     private string $table;
+    private DocumentSettings $settings;
 
-    public function __construct(?object $database = null, string $table = 'trn_document_sequences')
+    public function __construct(?object $database = null, string $table = 'trn_document_sequences', ?DocumentSettings $settings = null)
     {
         if ($database === null) {
             global $wpdb;
@@ -22,6 +23,7 @@ final class DocumentSequenceGenerator implements DocumentNumberGenerator
         }
 
         $this->table = $this->database->prefix . $table;
+        $this->settings = $settings ?? new DocumentSettings();
     }
 
     public function next(string $docType, ?\DateTimeImmutable $date = null): string
@@ -55,7 +57,12 @@ final class DocumentSequenceGenerator implements DocumentNumberGenerator
             throw $throwable;
         }
 
-        return sprintf('%s-%s-%05d', strtoupper($docType), $yyyymm, $next);
+        return sprintf(
+            '%s-%s-%0' . $this->settings->resolveSequencePadding() . 'd',
+            $this->settings->resolveSequencePrefix($docType),
+            $yyyymm,
+            $next
+        );
     }
 
     private function ensureSequenceRow(string $docType, string $yyyymm): void

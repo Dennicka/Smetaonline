@@ -125,7 +125,7 @@ final class OperationalReportBuilder
      */
     public function reminders(array $reminders, array $filters): array
     {
-        return $this->filterSimpleRows($reminders, 'status', 'issued_at', $filters);
+        return $this->filterReferenceRows($reminders, 'reminder', $filters);
     }
 
     /**
@@ -135,7 +135,7 @@ final class OperationalReportBuilder
      */
     public function creditNotes(array $creditNotes, array $filters): array
     {
-        return $this->filterSimpleRows($creditNotes, 'status', 'issued_at', $filters);
+        return $this->filterReferenceRows($creditNotes, 'credit_note', $filters);
     }
 
     /**
@@ -212,6 +212,63 @@ final class OperationalReportBuilder
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterReferenceRows(array $rows, string $documentType, array $filters): array
+    {
+        $result = [];
+        foreach ($rows as $row) {
+            $normalized = $this->normalizeReferenceRow($row, $documentType);
+
+            if ($filters['status'] !== '' && sanitize_key((string) ($normalized['status'] ?? '')) !== $filters['status']) {
+                continue;
+            }
+
+            if (! $this->matchesDateRange((string) ($normalized['issued_at'] ?? ''), $filters['date_from'], $filters['date_to'])) {
+                continue;
+            }
+
+            $result[] = $normalized;
+        }
+
+        return $result;
+    }
+
+    /** @param array<string, mixed> $row @return array<string, mixed> */
+    private function normalizeReferenceRow(array $row, string $documentType): array
+    {
+        $metadata = $this->decodeSnapshotMetadata((string) ($row['snapshot_json'] ?? ''));
+        $storedStatus = sanitize_key((string) ($row['status'] ?? 'issued'));
+        $row['status'] = $storedStatus === 'archived' ? 'archived' : $storedStatus;
+        $row['source_invoice_document_number'] = (string) ($metadata['source_invoice_document_number'] ?? '');
+        $row['source_offert_document_number'] = (string) ($metadata['source_offert_document_number'] ?? '');
+        $row['source_estimate_title'] = (string) ($metadata['source_estimate_title'] ?? '');
+        $row['reference_context'] = $documentType === 'credit_note'
+            ? 'Correction linked to source invoice'
+            : 'Reminder linked to source invoice';
+
+        return $row;
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeSnapshotMetadata(string $snapshotJson): array
+    {
+        if ($snapshotJson === '') {
+            return [];
+        }
+
+        $decoded = json_decode($snapshotJson, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $metadata = $decoded['metadata'] ?? null;
+
+        return is_array($metadata) ? $metadata : [];
     }
 
     private function matchesStatus(array $invoiceRow, string $requestedStatus): bool

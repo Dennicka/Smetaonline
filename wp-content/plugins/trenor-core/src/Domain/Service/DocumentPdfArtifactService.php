@@ -264,6 +264,7 @@ final class DocumentPdfArtifactService
             $offert = $this->factory->offerts()->find($offertId);
             if (is_array($offert)) {
                 $estimateId = $estimateId > 0 ? $estimateId : (int) ($offert['estimate_id'] ?? 0);
+                $context['source_offert_document_number'] = (string) ($offert['document_number'] ?? '');
             }
         }
 
@@ -272,6 +273,14 @@ final class DocumentPdfArtifactService
             if (is_array($invoice)) {
                 $offertId = $offertId > 0 ? $offertId : (int) ($invoice['offert_id'] ?? 0);
                 $estimateId = $estimateId > 0 ? $estimateId : (int) ($invoice['estimate_id'] ?? 0);
+                $context['source_invoice_document_number'] = (string) ($invoice['document_number'] ?? '');
+            }
+        }
+
+        if ($offertId > 0 && ! isset($context['source_offert_document_number'])) {
+            $offert = $this->factory->offerts()->find($offertId);
+            if (is_array($offert)) {
+                $context['source_offert_document_number'] = (string) ($offert['document_number'] ?? '');
             }
         }
 
