@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Trenor\Core\Admin;
 
 use RuntimeException;
+use Trenor\Core\Backup\BackupExporter;
+use Trenor\Core\Backup\BackupRestorer;
 use Trenor\Core\Database\RepositoryFactory;
 use Trenor\Core\Domain\Exception\PaymentRegistrationException;
 use Trenor\Core\Import\PriceImportException;
@@ -159,6 +161,14 @@ final class PageController
 
         if ($entity === 'document_profile_settings' && $action === 'save') {
             $this->handleDocumentProfileSettingsSave($postPayload);
+        }
+
+        if ($entity === 'backup' && $action === 'create') {
+            $this->handleBackupCreate();
+        }
+
+        if ($entity === 'backup' && $action === 'restore') {
+            $this->handleBackupRestore($postPayload);
         }
     }
 
@@ -399,7 +409,13 @@ final class PageController
         ], $documentProfile);
 
         submit_button('Save document profile');
-        echo '</form></div>';
+        echo '</form>';
+
+        if (current_user_can('trn_manage_backups')) {
+            $this->renderBackupAdminSection();
+        }
+
+        echo '</div>';
     }
 
     public function renderOfferts(): void
@@ -2125,6 +2141,10 @@ final class PageController
             return 'trn_manage_templates';
         }
 
+        if ($entity === 'backup') {
+            return 'trn_manage_backups';
+        }
+
         return 'read';
     }
 
@@ -2540,10 +2560,95 @@ final class PageController
         echo '</form>';
     }
 
+    private function renderBackupAdminSection(): void
+    {
+        $manifests = $this->factory->backupManifests()->latest(30);
+        $selectedBackupId = filter_input(INPUT_GET, 'backup_id', FILTER_VALIDATE_INT);
+        $selectedBackupId = $selectedBackupId !== false && $selectedBackupId !== null ? (int) $selectedBackupId : 0;
+
+        echo '<h2>Backup / Restore v1</h2>';
+        echo '<p>Operational plugin-owned backup with manifest, DB snapshot and document artifact payload baseline.</p>';
+        echo '<form method="post">';
+        wp_nonce_field('trn_backup_create');
+        echo '<input type="hidden" name="trn_entity" value="backup">';
+        echo '<input type="hidden" name="trn_action" value="create">';
+        submit_button('Create backup', 'secondary', 'submit', false);
+        echo '</form>';
+
+        echo '<h3>Backup manifests</h3>';
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th><th>Completed</th><th>User</th><th>DB snapshot</th><th>Artifacts</th><th>Checksum</th><th>Error</th><th>Actions</th></tr></thead><tbody>';
+        if ($manifests === []) {
+            echo '<tr><td colspan="11">No backups created yet.</td></tr>';
+        }
+        foreach ($manifests as $manifest) {
+            $manifestId = (int) ($manifest['id'] ?? 0);
+            $detailUrl = admin_url('admin.php?page=trn_settings&backup_id=' . $manifestId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $manifestId) . '</td>';
+            echo '<td>' . esc_html((string) ($manifest['backup_type'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($manifest['status'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($manifest['created_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($manifest['completed_at'] ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($manifest['created_by_user_id'] ?? '')) . '</td>';
+            echo '<td><code>' . esc_html((string) ($manifest['db_snapshot_path'] ?? '')) . '</code></td>';
+            echo '<td><code>' . esc_html((string) ($manifest['artifact_bundle_path'] ?? '')) . '</code></td>';
+            echo '<td><code>' . esc_html((string) ($manifest['checksum_sha256'] ?? '')) . '</code></td>';
+            echo '<td>' . esc_html((string) ($manifest['error_message'] ?? '')) . '</td>';
+            echo '<td><a class="button" href="' . esc_url($detailUrl) . '">Manifest</a></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+
+        if ($selectedBackupId > 0) {
+            $selected = $this->factory->backupManifests()->find($selectedBackupId);
+            if (is_array($selected)) {
+                echo '<h3>Manifest detail #' . esc_html((string) $selectedBackupId) . '</h3>';
+                echo '<pre style="max-height:320px; overflow:auto;">' . esc_html((string) ($selected['manifest_json'] ?? '{}')) . '</pre>';
+                echo '<form method="post">';
+                wp_nonce_field('trn_backup_restore');
+                echo '<input type="hidden" name="trn_entity" value="backup">';
+                echo '<input type="hidden" name="trn_action" value="restore">';
+                echo '<input type="hidden" name="manifest_id" value="' . esc_attr((string) $selectedBackupId) . '">';
+                echo '<p><label>Type exactly <code>RESTORE ' . esc_html((string) $selectedBackupId) . '</code> to confirm dangerous restore.<br><input class="regular-text" name="restore_confirmation" value=""></label></p>';
+                submit_button('Restore from manifest', 'delete');
+                echo '</form>';
+            }
+        }
+    }
+
     /** @return array<int, array<string, mixed>> */
     private function paymentRowsForList(): array
     {
         return $this->factory->invoicePayments()->all();
+    }
+
+    private function handleBackupCreate(): void
+    {
+        try {
+            $result = (new BackupExporter($this->factory->backupManifests()))->create((int) get_current_user_id());
+            $message = sprintf('Backup #%d created.', (int) ($result['manifest_id'] ?? 0));
+            wp_safe_redirect(admin_url('admin.php?page=trn_settings&backup_id=' . (int) ($result['manifest_id'] ?? 0) . '&trn_result=ok&trn_msg=' . rawurlencode($message)));
+        } catch (RuntimeException $exception) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_settings&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+        }
+
+        exit;
+    }
+
+    /** @param array<string, mixed> $postPayload */
+    private function handleBackupRestore(array $postPayload): void
+    {
+        $manifestId = (int) $this->postValue($postPayload, 'manifest_id');
+        $confirmation = $this->postValue($postPayload, 'restore_confirmation');
+
+        try {
+            (new BackupRestorer($this->factory->backupManifests()))->restore($manifestId, $confirmation);
+            wp_safe_redirect(admin_url('admin.php?page=trn_settings&backup_id=' . $manifestId . '&trn_result=ok&trn_msg=' . rawurlencode('Restore completed successfully.')));
+        } catch (RuntimeException $exception) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_settings&backup_id=' . $manifestId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+        }
+
+        exit;
     }
 
     private function renderAdminNoticeFromRequest(): void
