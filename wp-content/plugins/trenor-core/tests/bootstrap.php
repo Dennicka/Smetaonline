@@ -109,6 +109,21 @@ if (! function_exists('current_user_can')) {
     }
 }
 
+if (! function_exists('trn_set_test_current_user_caps')) {
+    /** @param array<string, bool> $caps */
+    function trn_set_test_current_user_caps(array $caps): void
+    {
+        $GLOBALS['trn_test_current_user_caps'] = $caps;
+    }
+}
+
+if (! function_exists('trn_reset_test_current_user_caps')) {
+    function trn_reset_test_current_user_caps(): void
+    {
+        unset($GLOBALS['trn_test_current_user_caps']);
+    }
+}
+
 if (! function_exists('trn_set_test_wpdb')) {
     function trn_set_test_wpdb(object $wpdb): void
     {

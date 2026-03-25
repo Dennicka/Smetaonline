@@ -30,7 +30,7 @@ final class OperationalWorkflowLinkBarTest extends TestCase
 {
     protected function tearDown(): void
     {
-        unset($GLOBALS['trn_test_current_user_caps']);
+        \trn_reset_test_current_user_caps();
         parent::tearDown();
     }
 
@@ -39,7 +39,7 @@ final class OperationalWorkflowLinkBarTest extends TestCase
         $controller = new PageController(new RepositoryFactory());
         $method = new ReflectionMethod($controller, 'renderOperationalLinkBar');
         $method->setAccessible(true);
-        $GLOBALS['trn_test_current_user_caps'] = ['trn_manage_templates' => true];
+        \trn_set_test_current_user_caps(['trn_manage_templates' => true]);
 
         ob_start();
         $method->invoke($controller, [

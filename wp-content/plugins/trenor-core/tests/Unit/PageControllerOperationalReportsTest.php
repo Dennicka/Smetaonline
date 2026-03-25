@@ -2,17 +2,6 @@
 
 declare(strict_types=1);
 
-namespace {
-    if (! function_exists('current_user_can')) {
-        function current_user_can(string $capability): bool
-        {
-            $caps = $GLOBALS['trn_test_caps'] ?? ['read' => true];
-
-            return (bool) ($caps[$capability] ?? false);
-        }
-    }
-}
-
 namespace Trenor\Core\Tests\Unit {
 
 use PHPUnit\Framework\TestCase;
@@ -24,7 +13,13 @@ final class PageControllerOperationalReportsTest extends TestCase
 {
     protected function setUp(): void
     {
-        $GLOBALS['trn_test_caps'] = ['read' => true];
+        \trn_set_test_current_user_caps(['read' => true]);
+    }
+
+    protected function tearDown(): void
+    {
+        \trn_reset_test_current_user_caps();
+        parent::tearDown();
     }
 
     public function testOperationalReportRegistryUsesCapabilityAwareMapping(): void
@@ -50,10 +45,10 @@ final class PageControllerOperationalReportsTest extends TestCase
         $method = new ReflectionMethod($controller, 'canViewOperationalReports');
         $method->setAccessible(true);
 
-        $GLOBALS['trn_test_caps'] = ['read' => true];
+        \trn_set_test_current_user_caps(['read' => true]);
         self::assertFalse($method->invoke($controller));
 
-        $GLOBALS['trn_test_caps'] = ['read' => true, 'trn_issue_invoices' => true];
+        \trn_set_test_current_user_caps(['read' => true, 'trn_issue_invoices' => true]);
         self::assertTrue($method->invoke($controller));
     }
 }
