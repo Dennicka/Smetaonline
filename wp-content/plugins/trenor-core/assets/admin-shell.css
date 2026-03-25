@@ -39,6 +39,20 @@
   margin-bottom: 12px;
 }
 
+.trn-shell .trn-shell__quick-search {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.trn-shell .trn-shell__quick-search label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .trn-shell .trn-shell__header h1 {
   margin: 0 0 6px;
 }
@@ -54,6 +68,28 @@
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 12px;
+}
+
+.trn-shell .trn-shell__hero {
+  background: linear-gradient(145deg, #1d2327, #3858e9);
+  color: #fff;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trn-shell .trn-shell__hero h2,
+.trn-shell .trn-shell__hero p {
+  margin: 0;
+}
+
+.trn-shell .trn-shell__hero p {
+  margin-top: 6px;
+  color: #f0f6fc;
 }
 
 .trn-shell .trn-shell__panel--compact {
@@ -91,4 +127,41 @@
 .trn-shell .trn-shell__stat p {
   font-size: 22px;
   margin-top: 6px;
+}
+
+.trn-shell .trn-shell__form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.trn-shell .trn-shell__form-grid p {
+  margin: 0;
+}
+
+.trn-shell .trn-shell__form-full {
+  grid-column: 1 / -1;
+}
+
+.trn-shell .trn-shell__inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.trn-shell .trn-shell__inline-form label {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  .trn-shell .trn-shell__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .trn-shell .trn-shell__nav {
+    position: static;
+  }
 }

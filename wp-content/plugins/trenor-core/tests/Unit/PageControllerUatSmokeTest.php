@@ -115,6 +115,7 @@ final class PageControllerUatSmokeTest extends TestCase
 
         self::assertStringContainsString('Clients workspace', $output);
         self::assertStringContainsString('Client registry with CRM adjacency links.', $output);
+        self::assertStringContainsString('Next: Property', $output);
         self::assertStringContainsString('Create', $output);
     }
 
@@ -129,6 +130,7 @@ final class PageControllerUatSmokeTest extends TestCase
 
         self::assertStringContainsString('Projects workspace', $output);
         self::assertStringContainsString('Project dossier adjacency', $output);
+        self::assertStringContainsString('Open dossier', $output);
         self::assertStringContainsString('Contacts', $output);
         self::assertStringContainsString('Rooms adjacency', $output);
     }
@@ -144,8 +146,22 @@ final class PageControllerUatSmokeTest extends TestCase
 
         self::assertStringContainsString('Rooms workspace', $output);
         self::assertStringContainsString('Room adjacency context', $output);
+        self::assertStringContainsString('Open room context', $output);
         self::assertStringContainsString('Surfaces', $output);
         self::assertStringContainsString('Return to project workspace', $output);
+    }
+
+    public function testEstimateWorkspaceSmokeRendersHeroAndRegister(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderEstimates();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Estimate workspace', $output);
+        self::assertStringContainsString('Create estimate', $output);
+        self::assertStringContainsString('Estimate register', $output);
     }
 
     public function testDashboardRendersFinalAcceptanceGuidanceWithoutFakeAutoPassClaim(): void
@@ -223,6 +239,19 @@ final class PageControllerUatSmokeTest extends TestCase
 
         self::assertStringContainsString('No visible steps for current role in this path.', $output);
         self::assertStringNotContainsString('Open backup/restore', $output);
+    }
+
+    public function testClientsWorkspaceRequiresCapability(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_clients' => false,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Forbidden');
+        $controller->renderClients();
     }
 }
 }

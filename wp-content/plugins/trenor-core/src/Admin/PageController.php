@@ -190,6 +190,7 @@ final class PageController
     {
         $this->renderAppShellStart('Workspace / Dashboard', 'Operational workspace for document and finance flows.');
 
+        $this->renderWorkspaceHeroBlock();
         $this->renderWorkspaceQuickActions();
         $this->renderWorkspaceReadinessSection();
         $this->renderUatOperatorPathSection();
@@ -198,6 +199,21 @@ final class PageController
         $this->renderGoLiveLimitationsRegistry();
 
         $this->renderAppShellEnd();
+    }
+
+    private function renderWorkspaceHeroBlock(): void
+    {
+        echo '<section class="trn-shell__hero">';
+        echo '<div><h2>Continue operator work</h2><p>Run daily document production, continue estimate chains and keep finance status visible without raw admin detours.</p></div>';
+        echo '<div class="trn-shell__actions">';
+        if (current_user_can('trn_manage_estimates')) {
+            echo '<a class="button button-primary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '">Create or continue estimate</a>';
+        }
+        if (current_user_can('trn_manage_projects')) {
+            echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_projects')) . '">Open projects workspace</a>';
+        }
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_dossier')) . '">Open dossier timeline</a>';
+        echo '</div></section>';
     }
 
     public function renderOperationalReports(): void
@@ -327,39 +343,10 @@ final class PageController
             ['label' => 'Open offerts', 'url' => admin_url('admin.php?page=trn_offerts')],
             ['label' => 'Open dossier', 'url' => admin_url('admin.php?page=trn_dossier')],
         ]);
+        $this->renderEstimateWorkspaceHero($selectedEstimateId);
         $this->renderCreateEstimateForm();
         $this->renderEstimateFilterForm($estimateFilters);
-
-        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($estimates));
-        if ($this->hasEstimateFilters($estimateFilters)) {
-            echo ' <em>(filtered results)</em>';
-        }
-        echo '</p>';
-
-        echo '<h2>Список смет</h2><table class="widefat striped"><thead><tr><th>ID</th><th>project_id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
-        foreach ($estimates as $estimate) {
-            $estimateId = (int) ($estimate['id'] ?? 0);
-            $projectId = (int) ($estimate['project_id'] ?? 0);
-            $url = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
-            $offertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
-            echo '<tr>';
-            echo '<td>' . esc_html((string) $estimate['id']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['project_id']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['title']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['status']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['currency']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['vat_rate_percent']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['labour_rate_minor']) . '</td>';
-            echo '<td>' . esc_html((string) $estimate['calculated_at']) . '</td>';
-            echo '<td><a class="button" href="' . esc_url($url) . '">Открыть</a>';
-            echo '<a class="button" href="' . esc_url($offertsUrl) . '" style="margin-left:6px;">Offerts</a>';
-            if ($projectId > 0) {
-                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)) . '" style="margin-left:6px;">Dossier</a>';
-            }
-            echo '</td>';
-            echo '</tr>';
-        }
-        echo '</tbody></table>';
+        $this->renderEstimateRegisterTable($estimates, $estimateFilters);
 
         if ($selectedEstimateId > 0) {
             $this->renderEstimateBuilder($selectedEstimateId);
@@ -1157,7 +1144,12 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderEntityPage('Clients', 'client', ['name', 'company_name', 'customer_type', 'org_number', 'vat_number', 'email', 'phone'], $clients, 'status', false);
+        $this->renderCrmWorkspaceHero(
+            'Clients',
+            'Start the CRM chain by creating or updating client profiles with tax and contact context.',
+            [['label' => 'Next: Property', 'url' => admin_url('admin.php?page=trn_properties')]]
+        );
+        $this->renderEntityPage('Clients', 'client', ['name', 'company_name', 'customer_type', 'org_number', 'vat_number', 'email', 'phone'], $clients, 'status', false, 'property');
         $this->renderAppShellEnd();
     }
 
@@ -1170,7 +1162,12 @@ final class PageController
             ['label' => 'Clients workspace', 'url' => admin_url('admin.php?page=trn_clients')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderEntityPage('Properties', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $properties, 'status', false);
+        $this->renderCrmWorkspaceHero(
+            'Properties',
+            'Map client addresses into operational properties to keep project and estimate context connected.',
+            [['label' => 'Next: Project', 'url' => admin_url('admin.php?page=trn_projects')]]
+        );
+        $this->renderEntityPage('Properties', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $properties, 'status', false, 'project');
         $this->renderAppShellEnd();
     }
 
@@ -1182,7 +1179,12 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Rooms workspace', 'url' => admin_url('admin.php?page=trn_rooms')],
         ]);
-        $this->renderEntityPage('Projects', 'project', ['property_id', 'name', 'code'], $projects, 'status', false);
+        $this->renderCrmWorkspaceHero(
+            'Projects',
+            'Projects are operational dossiers: estimate, document chain, room plan and attachment context.',
+            [['label' => 'Open dossier', 'url' => admin_url('admin.php?page=trn_dossier')]]
+        );
+        $this->renderEntityPage('Projects', 'project', ['property_id', 'name', 'code'], $projects, 'status', false, 'room');
 
         $selectedProjectId = $this->queryInt('project_id');
         $this->renderProjectAdjacencyDossier($selectedProjectId);
@@ -1198,7 +1200,12 @@ final class PageController
             ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
             ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
         ]);
-        $this->renderEntityPage('Rooms', 'room', ['project_id', 'name', 'floor', 'room_type', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'], $rooms, 'status', false);
+        $this->renderCrmWorkspaceHero(
+            'Rooms',
+            'Rooms connect surfaces, attachment evidence and line-level estimate context.',
+            [['label' => 'Open room context', 'url' => admin_url('admin.php?page=trn_rooms')]]
+        );
+        $this->renderEntityPage('Rooms', 'room', ['project_id', 'name', 'floor', 'room_type', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'], $rooms, 'status', false, 'estimate');
 
         $selectedRoomId = $this->queryInt('room_id');
         $this->renderRoomAdjacencyContext($selectedRoomId);
@@ -1310,20 +1317,42 @@ final class PageController
         echo '</tbody></table>';
     }
 
+    /** @param array<int, array{label:string,url:string}> $contextActions */
+    private function renderCrmWorkspaceHero(string $title, string $subtitle, array $contextActions = []): void
+    {
+        echo '<section class="trn-shell__hero">';
+        echo '<div><h2>' . esc_html($title) . '</h2><p>' . esc_html($subtitle) . '</p></div>';
+        echo '<div class="trn-shell__actions">';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_clients')) . '">Clients</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_properties')) . '">Properties</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_projects')) . '">Projects</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_rooms')) . '">Rooms</a>';
+        foreach ($contextActions as $action) {
+            $label = (string) ($action['label'] ?? '');
+            $url = (string) ($action['url'] ?? '');
+            if ($label === '' || $url === '') {
+                continue;
+            }
+            echo '<a class="button button-primary" href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
+        }
+        echo '</div></section>';
+    }
+
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
-    private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status', bool $withShell = true): void
+    private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status', bool $withShell = true, string $nextStepEntity = ''): void
     {
         if ($withShell) {
             $this->renderAppShellStart($title);
         }
-        echo '<h2>Создать</h2><form method="post">';
+        echo '<section class="trn-shell__panel"><h2>Create</h2><form method="post" class="trn-shell__form-grid">';
         wp_nonce_field('trn_' . $entity . '_create');
         echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="create">';
         foreach ($fields as $field) {
             echo '<p><label>' . esc_html($field) . '<br><input class="regular-text" name="' . esc_attr($field) . '" value=""></label></p>';
         }
+        echo '<p class="trn-shell__form-full">';
         submit_button('Create');
-        echo '</form><h2>Список</h2><table class="widefat striped"><thead><tr>';
+        echo '</p></form></section><section class="trn-shell__panel"><h2>List</h2><table class="widefat striped"><thead><tr>';
         foreach (array_merge(['id'], $fields, [$statusField]) as $col) {
             echo '<th>' . esc_html($col) . '</th>';
         }
@@ -1334,23 +1363,34 @@ final class PageController
             foreach (array_merge(['id'], $fields, [$statusField]) as $col) {
                 echo '<td>' . esc_html((string) ($row[$col] ?? '')) . '</td>';
             }
-            echo '<td><form method="post" style="display:inline-block; margin-right:8px;">';
+            echo '<td><div class="trn-shell__actions trn-shell__actions--dense"><form method="post">';
             wp_nonce_field('trn_' . $entity . '_archive');
             echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="archive"><input type="hidden" name="id" value="' . esc_attr((string) $row['id']) . '">';
             submit_button('Archive', 'secondary', 'submit', false);
-            echo '</form></td></tr>';
+            echo '</form>';
+            $detailId = (int) ($row['id'] ?? 0);
+            if ($detailId > 0 && $entity === 'project') {
+                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects&project_id=' . $detailId)) . '">Open dossier</a>';
+            }
+            if ($detailId > 0 && $entity === 'room') {
+                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_rooms&room_id=' . $detailId)) . '">Open room context</a>';
+            }
+            if ($nextStepEntity !== '') {
+                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_' . $nextStepEntity . 's')) . '">Next: ' . esc_html(ucfirst($nextStepEntity)) . '</a>';
+            }
+            echo '</div></td></tr>';
 
-            echo '<tr><td colspan="' . esc_attr((string) (count($fields) + 4)) . '"><form method="post" style="padding:8px 0;">';
+            echo '<tr><td colspan="' . esc_attr((string) (count($fields) + 4)) . '"><form method="post" class="trn-shell__inline-form">';
             wp_nonce_field('trn_' . $entity . '_update');
             echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="update"><input type="hidden" name="id" value="' . esc_attr((string) $row['id']) . '">';
             foreach ($fields as $field) {
-                echo '<label style="margin-right:10px;">' . esc_html($field) . ': <input name="' . esc_attr($field) . '" value="' . esc_attr((string) ($row[$field] ?? '')) . '"></label>';
+                echo '<label>' . esc_html($field) . ': <input name="' . esc_attr($field) . '" value="' . esc_attr((string) ($row[$field] ?? '')) . '"></label>';
             }
             submit_button('Update', 'primary', 'submit', false);
             echo '</form></td></tr>';
         }
 
-        echo '</tbody></table>';
+        echo '</tbody></table></section>';
         if ($withShell) {
             $this->renderAppShellEnd();
         }
@@ -1386,6 +1426,11 @@ final class PageController
         if ($subtitle !== '') {
             echo '<p>' . esc_html($subtitle) . '</p>';
         }
+        echo '<form method="get" class="trn-shell__quick-search">';
+        echo '<input type="hidden" name="page" value="trn_estimates">';
+        echo '<label>Quick estimate search <input type="search" name="title" placeholder="Estimate title"></label>';
+        submit_button('Search', 'secondary', 'submit', false);
+        echo '</form>';
         echo '</header>';
         echo '<section class="trn-shell__notices">';
         $this->renderAdminNoticeFromRequest();
@@ -2111,11 +2156,11 @@ final class PageController
 
     private function renderCreateEstimateForm(): void
     {
-        echo '<h2>Создать смету</h2><form method="post">';
+        echo '<section class="trn-shell__panel"><h2>Create estimate</h2><form method="post" class="trn-shell__form-grid">';
         wp_nonce_field('trn_estimate_create');
         echo '<input type="hidden" name="trn_entity" value="estimate"><input type="hidden" name="trn_action" value="create">';
-        echo '<p><label>project_id<br><input name="project_id" class="regular-text"></label></p>';
-        echo '<p><label>title<br><input name="title" class="regular-text"></label></p>';
+        echo '<p><label>project_id<br><input name="project_id" class="regular-text" required></label></p>';
+        echo '<p><label>title<br><input name="title" class="regular-text" required></label></p>';
         echo '<p><label>currency<br><input name="currency" class="regular-text" value="SEK"></label></p>';
         echo '<p><label>tax_mode (private_consumer|business_standard_vat|business_reverse_charge)<br><input name="tax_mode" class="regular-text" value="private_consumer"></label></p>';
         echo '<p><label>reverse_charge_note<br><input name="reverse_charge_note" class="regular-text" value=""></label></p>';
@@ -2125,9 +2170,65 @@ final class PageController
         echo '<p><label>housing_type (smahus|bostadsratt|agarlagenhet)<br><input name="housing_type" class="regular-text" value=""></label></p>';
         echo '<p><label>rot_is_new_build (0/1)<br><input name="rot_is_new_build" class="regular-text" value="0"></label></p>';
         echo '<p><label>rot_property_reference<br><input name="rot_property_reference" class="regular-text" value=""></label></p>';
-        echo '<p><label>rot_buyers_json<br><textarea name="rot_buyers_json" rows="4" class="large-text">[]</textarea></label></p>';
+        echo '<p class="trn-shell__form-full"><label>rot_buyers_json<br><textarea name="rot_buyers_json" rows="4" class="large-text">[]</textarea></label></p>';
+        echo '<p class="trn-shell__form-full">';
         submit_button('Create estimate');
-        echo '</form>';
+        echo '</p></form></section>';
+    }
+
+    private function renderEstimateWorkspaceHero(int $selectedEstimateId): void
+    {
+        echo '<section class="trn-shell__hero">';
+        echo '<div><h2>Estimate workspace</h2><p>Create, filter and continue calculations from one operator-oriented route.</p></div>';
+        echo '<div class="trn-shell__actions">';
+        echo '<a class="button button-primary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '">Start new estimate</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_offerts')) . '">Open offerts register</a>';
+        if ($selectedEstimateId > 0) {
+            echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_offerts&estimate_id=' . $selectedEstimateId)) . '">Continue estimate flow</a>';
+        }
+        echo '</div></section>';
+    }
+
+    /** @param array<int, array<string,mixed>> $estimates @param array<string,mixed> $filters */
+    private function renderEstimateRegisterTable(array $estimates, array $filters): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Estimate register</h2>';
+        echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($estimates));
+        if ($this->hasEstimateFilters($filters)) {
+            echo ' <em>(filtered results)</em>';
+        }
+        echo '</p>';
+
+        if ($estimates === []) {
+            $this->renderEmptyState('No estimates for current filters. Clear filters or create a new estimate.');
+            echo '</section>';
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>project_id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($estimates as $estimate) {
+            $estimateId = (int) ($estimate['id'] ?? 0);
+            $projectId = (int) ($estimate['project_id'] ?? 0);
+            $url = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
+            $offertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $estimate['id']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['project_id']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['title']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['status']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['currency']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['vat_rate_percent']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['labour_rate_minor']) . '</td>';
+            echo '<td>' . esc_html((string) $estimate['calculated_at']) . '</td>';
+            echo '<td><div class="trn-shell__actions trn-shell__actions--dense"><a class="button" href="' . esc_url($url) . '">Open</a>';
+            echo '<a class="button" href="' . esc_url($offertsUrl) . '">Offerts</a>';
+            if ($projectId > 0) {
+                echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=trn_dossier&project_id=' . $projectId)) . '">Dossier</a>';
+            }
+            echo '</div></td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table></section>';
     }
 
     /** @param array<int, string> $columns @param array<int, array<string, mixed>> $rows */
@@ -2160,7 +2261,7 @@ final class PageController
         $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
         $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
 
-        echo '<h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
+        echo '<section class="trn-shell__panel"><h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
         $projectId = (int) ($estimate['project_id'] ?? 0);
         $actionLinks = [
             ['label' => 'Back to estimates list', 'url' => admin_url('admin.php?page=trn_estimates')],
@@ -2293,50 +2394,56 @@ final class PageController
             $this->renderOffertsForEstimateTable($offerts, $estimateId);
         }
 
-        echo '<h3>Добавить work line</h3><form method="post">';
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h3>Add work line</h3><form method="post" class="trn-shell__form-grid">';
         wp_nonce_field('trn_estimate_line_create');
         echo '<input type="hidden" name="trn_entity" value="estimate_line"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
         foreach (['room_id', 'work_item_id', 'line_title_ru_snapshot', 'line_title_sv_snapshot', 'unit_code_snapshot', 'quantity', 'speed_profile', 'norm_per_hour_snapshot', 'complexity_coeff', 'surface_coeff', 'access_coeff', 'urgency_coeff', 'manual_hours_delta', 'sort_order'] as $field) {
-            echo '<label style="margin-right:10px;">' . esc_html($field) . ': <input name="' . esc_attr($field) . '" value=""></label>';
+            echo '<p><label>' . esc_html($field) . '<br><input name="' . esc_attr($field) . '" value=""></label></p>';
         }
+        echo '<p class="trn-shell__form-full">';
         submit_button('Add work line', 'secondary', 'submit', false);
-        echo '</form>';
+        echo '</p></form></section>';
 
-        echo '<h3>Добавить material line</h3><form method="post">';
+        echo '<section class="trn-shell__panel"><h3>Add material line</h3><form method="post" class="trn-shell__form-grid">';
         wp_nonce_field('trn_estimate_material_line_create');
         echo '<input type="hidden" name="trn_entity" value="estimate_material_line"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
         foreach (['estimate_line_id', 'material_id', 'material_name_ru_snapshot', 'material_name_sv_snapshot', 'unit_code_snapshot', 'quantity', 'coverage_snapshot', 'buy_price_minor_snapshot', 'sell_price_minor_snapshot', 'sort_order'] as $field) {
-            echo '<label style="margin-right:10px;">' . esc_html($field) . ': <input name="' . esc_attr($field) . '" value=""></label>';
+            echo '<p><label>' . esc_html($field) . '<br><input name="' . esc_attr($field) . '" value=""></label></p>';
         }
+        echo '<p class="trn-shell__form-full">';
         submit_button('Add material line', 'secondary', 'submit', false);
-        echo '</form>';
+        echo '</p></form></section>';
 
-        echo '<form method="post" style="margin-top:10px;">';
+        echo '<section class="trn-shell__panel trn-shell__panel--compact"><form method="post" class="trn-shell__actions">';
         wp_nonce_field('trn_estimate_recalculate_recalculate');
         echo '<input type="hidden" name="trn_entity" value="estimate_recalculate"><input type="hidden" name="trn_action" value="recalculate"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
         submit_button('Recalculate');
         echo '</form>';
 
         if (current_user_can('trn_issue_offerts')) {
-            echo '<form method="post" style="margin-top:10px;">';
+            echo '<form method="post" class="trn-shell__actions">';
             wp_nonce_field('trn_offert_issue');
             echo '<input type="hidden" name="trn_entity" value="offert"><input type="hidden" name="trn_action" value="issue"><input type="hidden" name="estimate_id" value="' . esc_attr((string) $estimateId) . '">';
             $this->renderOperationTokenField('issue_offert', $this->issueOffertScope($estimateId));
             submit_button('Issue Offert', 'primary', 'submit', false);
             echo '</form>';
         }
+        echo '</section>';
 
-        echo '<h3>Work lines</h3>';
+        echo '<section class="trn-shell__panel"><h3>Work lines</h3>';
         $this->renderEstimateLinesTable($lines);
         echo '<h3>Material lines</h3>';
         $this->renderMaterialLinesTable($materialLines);
-        echo '<h3>Итоги</h3><ul>';
+        echo '<h3>Totals</h3><ul>';
         foreach ($totals as $key => $value) {
             echo '<li>' . esc_html($key) . ': <strong>' . esc_html((string) $value) . '</strong></li>';
         }
         echo '</ul>';
+        echo '</section>';
 
-        echo '<h3>Recalculation snapshots</h3>';
+        echo '<section class="trn-shell__panel"><h3>Recalculation snapshots</h3>';
         if ($snapshots === []) {
             $this->renderEmptyState('No snapshots yet.');
         } else {
@@ -2356,6 +2463,7 @@ final class PageController
             }
             echo '</tbody></table>';
         }
+        echo '</section>';
     }
 
     /** @param array<string, int> $summary */
@@ -4059,19 +4167,19 @@ final class PageController
     /** @param array<string, mixed> $filters */
     private function renderEstimateFilterForm(array $filters): void
     {
-        echo '<form method="get" style="margin:10px 0;">';
+        echo '<section class="trn-shell__panel trn-shell__panel--compact"><form method="get" class="trn-shell__actions">';
         echo '<input type="hidden" name="page" value="trn_estimates">';
-        echo '<label style="margin-right:8px;">project_id <input type="text" name="project_id" value="' . esc_attr((string) ($filters['project_id'] ?? '')) . '" class="small-text"></label>';
-        echo '<label style="margin-right:8px;">status <select name="status">';
+        echo '<label>project_id <input type="text" name="project_id" value="' . esc_attr((string) ($filters['project_id'] ?? '')) . '" class="small-text"></label>';
+        echo '<label>status <select name="status">';
         echo '<option value=""></option>';
         foreach (['draft', 'calculated', 'issued', 'accepted', 'rejected', 'archived'] as $allowedStatus) {
             echo '<option value="' . esc_attr($allowedStatus) . '"' . selected((string) ($filters['status'] ?? ''), $allowedStatus, false) . '>' . esc_html($allowedStatus) . '</option>';
         }
         echo '</select></label>';
-        echo '<label style="margin-right:8px;">title <input type="text" name="title" value="' . esc_attr((string) ($filters['title'] ?? '')) . '" class="regular-text"></label>';
+        echo '<label>title <input type="text" name="title" value="' . esc_attr((string) ($filters['title'] ?? '')) . '" class="regular-text"></label>';
         submit_button('Filter', 'secondary', 'submit', false);
-        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '" style="margin-left:6px;">Clear filters</a>';
-        echo '</form>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '">Clear filters</a>';
+        echo '</form></section>';
     }
 
     /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */
