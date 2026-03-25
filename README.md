@@ -32,3 +32,14 @@ composer run test
 - admin shell pages
 - CRUD for clients/properties/projects/rooms in custom tables
 - audit log for create/update/archive
+
+## Operations documentation pack v1
+- [AGENTS.md](AGENTS.md)
+- [INSTALL.md](INSTALL.md)
+- [UPDATE_MIGRATION.md](UPDATE_MIGRATION.md)
+- [BACKUP_RESTORE.md](BACKUP_RESTORE.md)
+- [QA_CHECKLIST.md](QA_CHECKLIST.md)
+- [CURRENT_ARCHITECTURE.md](CURRENT_ARCHITECTURE.md)
+- [DATA_MODEL.md](DATA_MODEL.md)
+- [CHANGELOG.md](CHANGELOG.md)
+
