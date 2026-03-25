@@ -77,3 +77,9 @@ Run from `wp-content/plugins/trenor-core`:
 - [ ] Record what was verified by code review only.
 - [ ] Record what was verified by commands/tests.
 - [ ] Record what still requires real staging/browser/operator UAT.
+
+
+## 14) Final acceptance evidence pack linkage
+- [ ] Reference `FINAL_ACCEPTANCE_PROOF_V1.md` in PR/result and keep it synced with real run evidence.
+- [ ] Explicitly separate runtime-proven checks vs code/test-only checks vs not-yet-proven checks.
+- [ ] Keep an honest limitations section (blocker / non-blocker / deferred).
