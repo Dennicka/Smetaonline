@@ -174,9 +174,13 @@ final class PageController
 
     public function renderDashboard(): void
     {
-        echo '<div class="wrap"><h1>Smeta / Dashboard</h1>';
-        $this->renderAdminNoticeFromRequest();
-        echo '<p>Core plugin active.</p></div>';
+        $this->renderAppShellStart('Workspace / Dashboard', 'Operational workspace for document and finance flows.');
+
+        $this->renderWorkspaceQuickActions();
+        $this->renderWorkspaceStatusCards();
+        $this->renderWorkspaceRecentActivity();
+
+        $this->renderAppShellEnd();
     }
 
     public function renderClients(): void
@@ -239,8 +243,7 @@ final class PageController
         $selectedSnapshotId = $selectedSnapshotId !== false && $selectedSnapshotId !== null ? (int) $selectedSnapshotId : 0;
         $estimates = $this->factory->estimates()->all();
 
-        echo '<div class="wrap"><h1>Сметы</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Сметы', 'Estimate register and build workspace.');
         $this->renderCreateEstimateForm();
 
         echo '<h2>Список смет</h2><table class="widefat striped"><thead><tr><th>ID</th><th>project_id</th><th>title</th><th>status</th><th>currency</th><th>vat_rate_percent</th><th>labour_rate_minor</th><th>calculated_at</th><th>Actions</th></tr></thead><tbody>';
@@ -274,7 +277,7 @@ final class PageController
             }
         }
 
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderSuppliersPrices(): void
@@ -287,8 +290,7 @@ final class PageController
         $batches = $this->factory->priceImportBatches()->latest(20);
         $prices = $this->factory->materialSupplierPrices()->latest(50);
 
-        echo '<div class="wrap"><h1>Suppliers / Price import</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
         echo '<h2>Suppliers registry</h2>';
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
@@ -315,7 +317,7 @@ final class PageController
 
         echo '<h2>Price history (latest rows)</h2>';
         $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderSettings(): void
@@ -326,8 +328,7 @@ final class PageController
 
         $settings = (new DocumentSettings())->get();
 
-        echo '<div class="wrap"><h1>Настройки</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Настройки', 'Document profile, templates, and operational maintenance.');
         echo '<p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p>';
         echo '<h2>Business document settings</h2>';
         echo '<form method="post">';
@@ -415,7 +416,7 @@ final class PageController
             $this->renderBackupAdminSection();
         }
 
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderOfferts(): void
@@ -468,8 +469,7 @@ final class PageController
             || $filter->isStatusFilterActive($statusFilter)
             || $filter->isDocumentNumberFilterActive($documentNumberFilter);
 
-        echo '<div class="wrap"><h1>Offerter / Offerts / Оферты</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Offerter / Offerts / Оферты', 'Offert, Avtal, and ÄTA registers with operational actions.');
         $this->renderOffertFilterForm($estimateFilter, $statusFilter, $documentNumberFilter);
         echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($offerts));
         if ($hasActiveFilters) {
@@ -524,21 +524,21 @@ final class PageController
         if ($ataId > 0) {
             $this->renderAtaDetail($ataId);
         }
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderAuditLog(): void
     {
         $rows = $this->factory->auditLogs();
-        echo '<div class="wrap"><h1>Журнал</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Журнал', 'Audit and business-event trail.');
         echo '<table class="widefat striped"><thead><tr>';
         echo '<th>ID</th><th>Entity</th><th>Entity ID</th><th>Action</th><th>Actor</th><th>At</th><th>Changes</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr><td>' . esc_html((string) $row['id']) . '</td><td>' . esc_html((string) $row['entity_type']) . '</td><td>' . esc_html((string) $row['entity_id']) . '</td><td>' . esc_html((string) $row['action']) . '</td><td>' . esc_html((string) $row['actor_user_id']) . '</td><td>' . esc_html((string) $row['created_at']) . '</td><td><code>' . esc_html((string) $row['changes_json']) . '</code></td></tr>';
         }
-        echo '</tbody></table></div>';
+        echo '</tbody></table>';
+        $this->renderAppShellEnd();
     }
 
     public function renderInvoices(): void
@@ -590,8 +590,7 @@ final class PageController
 
         $summary = $summaryBuilder->build($registerRows);
 
-        echo '<div class="wrap"><h1>Fakturor / Invoices / Фактуры</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Fakturor / Invoices / Фактуры', 'Invoice register, issuance, and payment status tracking.');
         $this->renderInvoiceFilterForm($formFilters);
         echo '<p><strong>Total rows:</strong> ' . esc_html((string) count($registerRows));
         if ($hasActiveFilters) {
@@ -642,7 +641,7 @@ final class PageController
             $this->renderInvoiceDetail($invoiceId);
         }
 
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderPayments(): void
@@ -667,8 +666,7 @@ final class PageController
         $invoicePayments = $this->factory->invoicePayments();
         $invoiceRepository = $this->factory->invoices();
 
-        echo '<div class="wrap"><h1>Betalningar / Payments / Оплаты</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Betalningar / Payments / Оплаты', 'Payment register and invoice settlement overview.');
         $this->renderPaymentFilterForm($formFilters);
 
         echo '<p><strong>Total rows:</strong> ' . esc_html((string) ($summary['total_rows'] ?? 0));
@@ -715,7 +713,8 @@ final class PageController
             echo '<td><a class="button" href="' . esc_url($invoiceUrl) . '">Open invoice</a></td>';
             echo '</tr>';
         }
-        echo '</tbody></table></div>';
+        echo '</tbody></table>';
+        $this->renderAppShellEnd();
     }
 
     public function renderDossier(): void
@@ -729,13 +728,12 @@ final class PageController
         $projectId = $projectId !== false && $projectId !== null ? (int) $projectId : 0;
         $hasFilter = $projectIdRaw !== null;
 
-        echo '<div class="wrap"><h1>Dossier / Timeline / Досье</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Dossier / Timeline / Досье', 'Cross-document timeline and project dossier.');
         $this->renderDossierFilterForm($projectId);
 
         if (! $hasFilter || $projectId <= 0) {
             $this->renderEmptyState('Enter project_id to open dossier.');
-            echo '</div>';
+            $this->renderAppShellEnd();
 
             return;
         }
@@ -743,7 +741,7 @@ final class PageController
         $project = $this->factory->projects()->find($projectId);
         if (! is_array($project)) {
             $this->renderInlineErrorNotice('Project not found for selected project_id.');
-            echo '</div>';
+            $this->renderAppShellEnd();
 
             return;
         }
@@ -832,7 +830,7 @@ final class PageController
             'archived_invoices_count' => (string) (($dossier['summary']['archived_invoices_count'] ?? 0)),
         ]);
 
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderCreditNotes(): void
@@ -869,8 +867,7 @@ final class PageController
         $creditNotes = $filter->apply($this->factory->creditNotes()->all(), $rawFilters);
         $formFilters = $filter->normalizedForForm($rawFilters);
 
-        echo '<div class="wrap"><h1>Kreditnotor / Credit Notes / Кредит-ноты</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Kreditnotor / Credit Notes / Кредит-ноты', 'Credit note register and source links.');
         $this->renderCreditNoteFilterForm($formFilters);
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
@@ -917,7 +914,7 @@ final class PageController
         if ($creditNoteId > 0) {
             $this->renderCreditNoteDetail($creditNoteId);
         }
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     public function renderReminders(): void
@@ -946,8 +943,7 @@ final class PageController
         $reminders = $filter->apply($this->factory->reminders()->all(), $rawFilters);
         $formFilters = $filter->normalizedForForm($rawFilters);
 
-        echo '<div class="wrap"><h1>Påminnelser / Reminders / Напоминания</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart('Påminnelser / Reminders / Напоминания', 'Reminder register and follow-up actions.');
         $this->renderReminderFilterForm($formFilters);
 
         echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>document_number</th><th>version_no</th><th>reminder_level</th><th>status</th><th>total_inc_vat_minor</th><th>issued_at</th><th>Actions</th></tr></thead><tbody>';
@@ -993,14 +989,13 @@ final class PageController
         if ($reminderId > 0) {
             $this->renderReminderDetail($reminderId);
         }
-        echo '</div>';
+        $this->renderAppShellEnd();
     }
 
     /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
     private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status'): void
     {
-        echo '<div class="wrap"><h1>' . esc_html($title) . '</h1>';
-        $this->renderAdminNoticeFromRequest();
+        $this->renderAppShellStart($title);
         echo '<h2>Создать</h2><form method="post">';
         wp_nonce_field('trn_' . $entity . '_create');
         echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="create">';
@@ -1035,7 +1030,169 @@ final class PageController
             echo '</form></td></tr>';
         }
 
-        echo '</tbody></table></div>';
+        echo '</tbody></table>';
+        $this->renderAppShellEnd();
+    }
+
+    private function renderAppShellStart(string $title, string $subtitle = ''): void
+    {
+        echo '<div class="wrap trn-shell">';
+        echo '<div class="trn-shell__layout">';
+        echo '<aside class="trn-shell__nav" aria-label="Workspace navigation">';
+        echo '<h2>Smeta</h2>';
+        foreach ($this->workspaceNavigationSections() as $section) {
+            $items = $section['items'] ?? [];
+            if (! is_array($items) || $items === []) {
+                continue;
+            }
+            echo '<section class="trn-shell__nav-section">';
+            echo '<h3>' . esc_html((string) ($section['title'] ?? '')) . '</h3>';
+            echo '<ul>';
+            foreach ($items as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                echo '<li><a href="' . esc_url((string) ($item['url'] ?? '#')) . '">' . esc_html((string) ($item['label'] ?? '')) . '</a></li>';
+            }
+            echo '</ul>';
+            echo '</section>';
+        }
+        echo '</aside>';
+        echo '<main class="trn-shell__main">';
+        echo '<header class="trn-shell__header">';
+        echo '<h1>' . esc_html($title) . '</h1>';
+        if ($subtitle !== '') {
+            echo '<p>' . esc_html($subtitle) . '</p>';
+        }
+        echo '</header>';
+        echo '<section class="trn-shell__notices">';
+        $this->renderAdminNoticeFromRequest();
+        echo '</section>';
+    }
+
+    private function renderAppShellEnd(): void
+    {
+        echo '</main></div></div>';
+    }
+
+    /** @return array<int, array{title:string,items:array<int, array{label:string,url:string}>}> */
+    private function workspaceNavigationSections(): array
+    {
+        $sections = [
+            [
+                'title' => 'Workspace',
+                'items' => [
+                    ['label' => 'Dashboard', 'page' => 'trn_dashboard', 'cap' => 'read'],
+                    ['label' => 'Dossier / Timeline', 'page' => 'trn_dossier', 'cap' => 'read'],
+                ],
+            ],
+            [
+                'title' => 'Documents',
+                'items' => [
+                    ['label' => 'Estimates', 'page' => 'trn_estimates', 'cap' => 'trn_manage_estimates'],
+                    ['label' => 'Offerts / Avtal / ÄTA', 'page' => 'trn_offerts', 'cap' => 'trn_issue_offerts'],
+                    ['label' => 'Invoices', 'page' => 'trn_invoices', 'cap' => 'trn_issue_invoices'],
+                    ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
+                    ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
+                    ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
+                ],
+            ],
+            [
+                'title' => 'Supply / Ops',
+                'items' => [
+                    ['label' => 'Suppliers / Prices / Import', 'page' => 'trn_suppliers_prices', 'cap' => 'trn_manage_prices'],
+                    ['label' => 'Settings / Backup', 'page' => 'trn_settings', 'cap' => 'trn_manage_templates'],
+                    ['label' => 'Audit Log', 'page' => 'trn_audit_log', 'cap' => 'trn_archive_records'],
+                ],
+            ],
+        ];
+
+        $result = [];
+        foreach ($sections as $section) {
+            $visibleItems = [];
+            foreach ($section['items'] as $item) {
+                $capability = (string) ($item['cap'] ?? 'read');
+                if (! current_user_can($capability)) {
+                    continue;
+                }
+                $page = (string) ($item['page'] ?? '');
+                if ($page === '') {
+                    continue;
+                }
+                $visibleItems[] = [
+                    'label' => (string) ($item['label'] ?? ''),
+                    'url' => (string) admin_url('admin.php?page=' . $page),
+                ];
+            }
+
+            if ($visibleItems !== []) {
+                $result[] = [
+                    'title' => (string) ($section['title'] ?? ''),
+                    'items' => $visibleItems,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    private function renderWorkspaceQuickActions(): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Quick actions</h2><div class="trn-shell__actions">';
+        $actions = [
+            ['label' => 'Create estimate', 'url' => 'admin.php?page=trn_estimates'],
+            ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts'],
+            ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices'],
+            ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments'],
+            ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices'],
+            ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings'],
+        ];
+
+        foreach ($actions as $action) {
+            echo '<a class="button button-secondary" href="' . esc_url(admin_url((string) $action['url'])) . '">' . esc_html((string) $action['label']) . '</a>';
+        }
+        echo '</div></section>';
+    }
+
+    private function renderWorkspaceStatusCards(): void
+    {
+        $cards = [
+            'Estimates' => count($this->factory->estimates()->all()),
+            'Offerts' => count($this->factory->offerts()->all()),
+            'Invoices' => count($this->factory->invoices()->all()),
+            'Payments' => count($this->factory->invoicePayments()->all()),
+        ];
+
+        echo '<section class="trn-shell__panel"><h2>Current totals</h2><div class="trn-shell__stats">';
+        foreach ($cards as $label => $count) {
+            echo '<article class="trn-shell__stat"><h3>' . esc_html($label) . '</h3><p>' . esc_html((string) $count) . '</p></article>';
+        }
+        echo '</div></section>';
+    }
+
+    private function renderWorkspaceRecentActivity(): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Recent document activity</h2>';
+        $offerts = array_slice(array_reverse($this->factory->offerts()->all()), 0, 5);
+        $invoices = array_slice(array_reverse($this->factory->invoices()->all()), 0, 5);
+
+        if ($offerts === [] && $invoices === []) {
+            $this->renderEmptyState('No document activity yet.');
+            echo '</section>';
+
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr><th>Type</th><th>ID</th><th>Document #</th><th>Status</th><th>Link</th></tr></thead><tbody>';
+        foreach ($offerts as $offert) {
+            $id = (int) ($offert['id'] ?? 0);
+            echo '<tr><td>Offert</td><td>' . esc_html((string) $id) . '</td><td>' . esc_html((string) ($offert['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($offert['status'] ?? '')) . '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_offerts&offert_id=' . $id)) . '">Open</a></td></tr>';
+        }
+        foreach ($invoices as $invoice) {
+            $id = (int) ($invoice['id'] ?? 0);
+            echo '<tr><td>Invoice</td><td>' . esc_html((string) $id) . '</td><td>' . esc_html((string) ($invoice['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $id)) . '">Open</a></td></tr>';
+        }
+        echo '</tbody></table></section>';
     }
 
     private function renderCreateEstimateForm(): void
