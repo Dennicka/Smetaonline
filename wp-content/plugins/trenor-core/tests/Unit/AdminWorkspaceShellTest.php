@@ -89,6 +89,7 @@ final class AdminWorkspaceShellTest extends TestCase
         self::assertContains('trn_offerts', $GLOBALS['trn_test_submenu_pages']);
         self::assertContains('trn_invoices', $GLOBALS['trn_test_submenu_pages']);
         self::assertContains('trn_payments', $GLOBALS['trn_test_submenu_pages']);
+        self::assertContains('trn_operational_reports', $GLOBALS['trn_test_submenu_pages']);
         self::assertContains('trn_suppliers_prices', $GLOBALS['trn_test_submenu_pages']);
         self::assertContains('trn_settings', $GLOBALS['trn_test_submenu_pages']);
     }
