@@ -88,7 +88,20 @@ final class PageController
         }
 
         if ($entity === 'room') {
-            $this->handleEntity($this->factory->rooms(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['project_id', 'name', 'floor']));
+            $this->handleEntity($this->factory->rooms(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['project_id', 'name', 'floor', 'room_type', 'notes', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context']));
+        }
+
+
+        if ($entity === 'contact_person') {
+            $this->handleEntity($this->factory->contacts(), 'trn_projects', $action, $id, $this->collectData($postPayload, ['client_id', 'property_id', 'project_id', 'name', 'role_title', 'phone', 'email', 'notes', 'is_primary', 'status']));
+        }
+
+        if ($entity === 'attachment') {
+            $this->handleEntity($this->factory->attachments(), 'trn_projects', $action, $id, $this->collectData($postPayload, ['parent_entity_type', 'parent_entity_id', 'file_url', 'file_path', 'original_filename', 'mime_type', 'title', 'caption', 'notes', 'uploaded_by', 'status']));
+        }
+
+        if ($entity === 'surface') {
+            $this->handleEntity($this->factory->surfaces(), 'trn_rooms', $action, $id, $this->collectData($postPayload, ['room_id', 'surface_type', 'length_m', 'width_m', 'area_m2', 'condition_state', 'notes']));
         }
 
         if ($entity === 'work_item') {
@@ -241,7 +254,7 @@ final class PageController
         if (! current_user_can('trn_manage_clients')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Клиенты', 'client', ['name', 'org_number', 'email', 'phone'], $this->factory->clients()->all());
+        $this->renderClientsWorkspace();
     }
 
     public function renderProperties(): void
@@ -249,7 +262,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Объекты', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $this->factory->properties()->all());
+        $this->renderPropertiesWorkspace();
     }
 
     public function renderProjects(): void
@@ -257,7 +270,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Проекты', 'project', ['property_id', 'name', 'code'], $this->factory->projects()->all());
+        $this->renderProjectsWorkspace();
     }
 
     public function renderRooms(): void
@@ -265,7 +278,7 @@ final class PageController
         if (! current_user_can('trn_manage_projects')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Помещения', 'room', ['project_id', 'name', 'floor'], $this->factory->rooms()->all());
+        $this->renderRoomsWorkspace();
     }
 
     public function renderWorkItems(): void
@@ -1120,10 +1133,174 @@ final class PageController
         $this->renderAppShellEnd();
     }
 
-    /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
-    private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status'): void
+
+    private function renderClientsWorkspace(): void
     {
-        $this->renderAppShellStart($title);
+        $clients = $this->factory->clients()->all();
+        $this->renderAppShellStart('Clients workspace', 'Client registry with CRM adjacency links.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
+        ]);
+        $this->renderEntityPage('Clients', 'client', ['name', 'company_name', 'customer_type', 'org_number', 'vat_number', 'email', 'phone'], $clients, 'status', false);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderPropertiesWorkspace(): void
+    {
+        $properties = $this->factory->properties()->all();
+        $this->renderAppShellStart('Properties workspace', 'Property registry with client/project adjacency.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Clients workspace', 'url' => admin_url('admin.php?page=trn_clients')],
+            ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
+        ]);
+        $this->renderEntityPage('Properties', 'property', ['client_id', 'name', 'address_line', 'city', 'postal_code'], $properties, 'status', false);
+        $this->renderAppShellEnd();
+    }
+
+    private function renderProjectsWorkspace(): void
+    {
+        $projects = $this->factory->projects()->all();
+        $this->renderAppShellStart('Projects workspace', 'Operator-facing project register and dossier adjacency.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Rooms workspace', 'url' => admin_url('admin.php?page=trn_rooms')],
+        ]);
+        $this->renderEntityPage('Projects', 'project', ['property_id', 'name', 'code'], $projects, 'status', false);
+
+        $selectedProjectId = $this->queryInt('project_id');
+        $this->renderProjectAdjacencyDossier($selectedProjectId);
+
+        $this->renderAppShellEnd();
+    }
+
+    private function renderRoomsWorkspace(): void
+    {
+        $rooms = $this->factory->rooms()->all();
+        $this->renderAppShellStart('Rooms workspace', 'Rich room model with surfaces and attachment context.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Projects workspace', 'url' => admin_url('admin.php?page=trn_projects')],
+        ]);
+        $this->renderEntityPage('Rooms', 'room', ['project_id', 'name', 'floor', 'room_type', 'condition_state', 'length_m', 'width_m', 'height_m', 'area_m2', 'window_count', 'door_count', 'work_context', 'notes'], $rooms, 'status', false);
+
+        $selectedRoomId = $this->queryInt('room_id');
+        $this->renderRoomAdjacencyContext($selectedRoomId);
+
+        $this->renderAppShellEnd();
+    }
+
+    private function renderProjectAdjacencyDossier(int $projectId): void
+    {
+        $contacts = $projectId > 0 ? $this->factory->contacts()->byProject($projectId) : [];
+        $attachments = $projectId > 0 ? $this->factory->attachments()->byParent('project', $projectId) : [];
+        $rooms = $projectId > 0 ? $this->factory->rooms()->byProject($projectId) : [];
+
+        echo '<h2>Project dossier adjacency</h2>';
+        if ($projectId > 0) {
+            echo '<p><strong>project_id:</strong> ' . esc_html((string) $projectId) . '</p>';
+        } else {
+            echo '<p>Select a project to manage project-specific adjacency data. Sections stay visible for operator context.</p>';
+        }
+
+        echo '<h3>Create contact person</h3><form method="post">';
+        wp_nonce_field('trn_contact_person_create');
+        echo '<input type="hidden" name="trn_entity" value="contact_person"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="project_id" value="' . esc_attr((string) $projectId) . '">';
+        echo '<p><label>name<br><input class="regular-text" name="name" value=""></label></p>';
+        echo '<p><label>role_title<br><input class="regular-text" name="role_title" value=""></label></p>';
+        echo '<p><label>phone<br><input class="regular-text" name="phone" value=""></label></p>';
+        echo '<p><label>email<br><input class="regular-text" name="email" value=""></label></p>';
+        submit_button('Add contact person', 'primary', 'submit', false, ['disabled' => $projectId <= 0]);
+        echo '</form>';
+
+        echo '<h3>Create attachment/photo</h3><form method="post">';
+        wp_nonce_field('trn_attachment_create');
+        echo '<input type="hidden" name="trn_entity" value="attachment"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="parent_entity_type" value="project"><input type="hidden" name="parent_entity_id" value="' . esc_attr((string) $projectId) . '">';
+        echo '<p><label>title<br><input class="regular-text" name="title" value=""></label></p>';
+        echo '<p><label>file_url<br><input class="regular-text" name="file_url" value=""></label></p>';
+        echo '<p><label>mime_type<br><input class="regular-text" name="mime_type" value=""></label></p>';
+        submit_button('Add attachment', 'primary', 'submit', false, ['disabled' => $projectId <= 0]);
+        echo '</form>';
+
+        $this->renderSimpleRowsTable('Contacts', ['id', 'name', 'role_title', 'phone', 'email', 'is_primary', 'status'], $contacts);
+        $this->renderSimpleRowsTable('Attachments', ['id', 'title', 'mime_type', 'file_url', 'status'], $attachments);
+        $this->renderSimpleRowsTable('Rooms adjacency', ['id', 'name', 'floor', 'room_type', 'condition_state', 'area_m2'], $rooms);
+    }
+
+    private function renderRoomAdjacencyContext(int $roomId): void
+    {
+        $surfaces = $roomId > 0 ? $this->factory->surfaces()->byRoom($roomId) : [];
+        $attachments = $roomId > 0 ? $this->factory->attachments()->byParent('room', $roomId) : [];
+        $room = $roomId > 0 ? $this->factory->rooms()->find($roomId) : null;
+        $projectId = (int) ($room['project_id'] ?? 0);
+
+        echo '<h2>Room adjacency context</h2>';
+        if ($roomId > 0) {
+            echo '<p><strong>room_id:</strong> ' . esc_html((string) $roomId) . '</p>';
+        } else {
+            echo '<p>Select a room to manage room-specific surfaces and attachments. Context sections remain visible by design.</p>';
+        }
+        if ($projectId > 0) {
+            echo '<p><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_projects&project_id=' . $projectId)) . '">Return to project workspace</a></p>';
+        } else {
+            echo '<p>Return to project workspace link appears when selected room is linked to a project.</p>';
+        }
+
+        echo '<h3>Create surface</h3><form method="post">';
+        wp_nonce_field('trn_surface_create');
+        echo '<input type="hidden" name="trn_entity" value="surface"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="room_id" value="' . esc_attr((string) $roomId) . '">';
+        echo '<p><label>surface_type<br><input class="regular-text" name="surface_type" value="wall"></label></p>';
+        echo '<p><label>length_m<br><input class="regular-text" name="length_m" value="0"></label></p>';
+        echo '<p><label>width_m<br><input class="regular-text" name="width_m" value="0"></label></p>';
+        echo '<p><label>area_m2<br><input class="regular-text" name="area_m2" value="0"></label></p>';
+        submit_button('Add surface', 'primary', 'submit', false, ['disabled' => $roomId <= 0]);
+        echo '</form>';
+
+        echo '<h3>Create room attachment/photo</h3><form method="post">';
+        wp_nonce_field('trn_attachment_create');
+        echo '<input type="hidden" name="trn_entity" value="attachment"><input type="hidden" name="trn_action" value="create"><input type="hidden" name="parent_entity_type" value="room"><input type="hidden" name="parent_entity_id" value="' . esc_attr((string) $roomId) . '">';
+        echo '<p><label>title<br><input class="regular-text" name="title" value=""></label></p>';
+        echo '<p><label>file_url<br><input class="regular-text" name="file_url" value=""></label></p>';
+        submit_button('Add attachment', 'primary', 'submit', false, ['disabled' => $roomId <= 0]);
+        echo '</form>';
+
+        $this->renderSimpleRowsTable('Surfaces', ['id', 'surface_type', 'length_m', 'width_m', 'area_m2', 'condition_state', 'notes'], $surfaces);
+        $this->renderSimpleRowsTable('Attachments', ['id', 'title', 'mime_type', 'file_url', 'status'], $attachments);
+    }
+
+    /** @param array<int, string> $columns @param array<int, array<string,mixed>> $rows */
+    private function renderSimpleRowsTable(string $title, array $columns, array $rows): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        if ($rows === []) {
+            echo '<p>No rows.</p>';
+            return;
+        }
+
+        echo '<table class="widefat striped"><thead><tr>';
+        foreach ($columns as $column) {
+            echo '<th>' . esc_html($column) . '</th>';
+        }
+        echo '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            echo '<tr>';
+            foreach ($columns as $column) {
+                echo '<td>' . esc_html((string) ($row[$column] ?? '')) . '</td>';
+            }
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, string> $fields @param array<int, array<string,mixed>> $rows */
+    private function renderEntityPage(string $title, string $entity, array $fields, array $rows, string $statusField = 'status', bool $withShell = true): void
+    {
+        if ($withShell) {
+            $this->renderAppShellStart($title);
+        }
         echo '<h2>Создать</h2><form method="post">';
         wp_nonce_field('trn_' . $entity . '_create');
         echo '<input type="hidden" name="trn_entity" value="' . esc_attr($entity) . '"><input type="hidden" name="trn_action" value="create">';
@@ -1159,7 +1336,9 @@ final class PageController
         }
 
         echo '</tbody></table>';
-        $this->renderAppShellEnd();
+        if ($withShell) {
+            $this->renderAppShellEnd();
+        }
     }
 
     private function renderAppShellStart(string $title, string $subtitle = ''): void
@@ -2923,6 +3102,16 @@ final class PageController
         return $data;
     }
 
+    private function queryInt(string $field): int
+    {
+        $value = $_GET[$field] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only workspace filters.
+        if (is_string($value) && $value !== '' && is_numeric($value)) {
+            return max(0, (int) $value);
+        }
+
+        return 0;
+    }
+
     /** @param array<string, mixed> $postPayload */
     private function postValue(array $postPayload, string $field): string
     {
@@ -2960,7 +3149,7 @@ final class PageController
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_clients';
         }
 
-        if (in_array($entity, ['property', 'project', 'room'], true)) {
+        if (in_array($entity, ['property', 'project', 'room', 'contact_person', 'attachment', 'surface'], true)) {
             return $action === 'archive' ? 'trn_archive_records' : 'trn_manage_projects';
         }
 

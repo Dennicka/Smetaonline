@@ -38,7 +38,7 @@ namespace {
     }
 
     if (! function_exists('submit_button')) {
-        function submit_button(string $text, string $type = 'primary', string $name = 'submit', bool $wrap = true): void
+        function submit_button(string $text, string $type = 'primary', string $name = 'submit', bool $wrap = true, array $otherAttributes = []): void
         {
             echo '<button type="submit">' . esc_html($text) . '</button>';
         }
@@ -92,6 +92,9 @@ final class PageControllerUatSmokeTest extends TestCase
             'trn_manage_prices' => true,
             'trn_manage_backups' => true,
             'trn_manage_templates' => true,
+            'trn_manage_clients' => true,
+            'trn_manage_projects' => true,
+            'trn_archive_records' => true,
         ]);
     }
 
@@ -99,6 +102,50 @@ final class PageControllerUatSmokeTest extends TestCase
     {
         \trn_reset_test_current_user_caps();
         parent::tearDown();
+    }
+
+
+    public function testClientsWorkspaceSmokeRendersOperatorShell(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderClients();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Clients workspace', $output);
+        self::assertStringContainsString('Client registry with CRM adjacency links.', $output);
+        self::assertStringContainsString('Create', $output);
+    }
+
+    public function testProjectsWorkspaceSmokeRendersProjectAdjacencySections(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+        $_GET['project_id'] = '10';
+
+        ob_start();
+        $controller->renderProjects();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Projects workspace', $output);
+        self::assertStringContainsString('Project dossier adjacency', $output);
+        self::assertStringContainsString('Contacts', $output);
+        self::assertStringContainsString('Rooms adjacency', $output);
+    }
+
+    public function testRoomsWorkspaceSmokeRendersSurfaceAndAttachmentContext(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+        $_GET['room_id'] = '12';
+
+        ob_start();
+        $controller->renderRooms();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Rooms workspace', $output);
+        self::assertStringContainsString('Room adjacency context', $output);
+        self::assertStringContainsString('Surfaces', $output);
+        self::assertStringContainsString('Return to project workspace', $output);
     }
 
     public function testDashboardRendersFinalAcceptanceGuidanceWithoutFakeAutoPassClaim(): void

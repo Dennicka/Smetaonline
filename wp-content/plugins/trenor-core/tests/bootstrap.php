@@ -38,6 +38,28 @@ if (! function_exists('sanitize_textarea_field')) {
     }
 }
 
+
+if (! function_exists('sanitize_email')) {
+    function sanitize_email(string $value): string
+    {
+        return trim($value);
+    }
+}
+
+if (! function_exists('esc_url_raw')) {
+    function esc_url_raw(string $url): string
+    {
+        return $url;
+    }
+}
+
+if (! function_exists('wp_unslash')) {
+    function wp_unslash(string $value): string
+    {
+        return $value;
+    }
+}
+
 if (! function_exists('esc_textarea')) {
     function esc_textarea(string $text): string
     {
