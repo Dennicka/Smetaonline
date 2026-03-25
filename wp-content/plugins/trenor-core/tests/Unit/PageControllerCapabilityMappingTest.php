@@ -58,6 +58,13 @@ final class PageControllerCapabilityMappingTest extends TestCase
             'ata reject' => [['ata', 'reject'], 'trn_issue_offerts'],
             'ata link invoice' => [['ata', 'link_invoice'], 'trn_issue_offerts'],
             'ata archive' => [['ata', 'archive'], 'trn_archive_records'],
+
+            'contact person create' => [['contact_person', 'create'], 'trn_manage_projects'],
+            'contact person archive' => [['contact_person', 'archive'], 'trn_archive_records'],
+            'attachment create' => [['attachment', 'create'], 'trn_manage_projects'],
+            'attachment archive' => [['attachment', 'archive'], 'trn_archive_records'],
+            'surface create' => [['surface', 'create'], 'trn_manage_projects'],
+            'surface archive' => [['surface', 'archive'], 'trn_archive_records'],
             'document settings save' => [['document_settings', 'save'], 'trn_manage_templates'],
             'document profile save' => [['document_profile_settings', 'save'], 'trn_manage_templates'],
             'backup create' => [['backup', 'create'], 'trn_manage_backups'],

@@ -28,6 +28,21 @@ final class RepositoryFactory
         return new RoomRepository();
     }
 
+
+    public function contacts(): ContactPersonRepository
+    {
+        return new ContactPersonRepository();
+    }
+
+    public function attachments(): AttachmentRepository
+    {
+        return new AttachmentRepository();
+    }
+
+    public function surfaces(): SurfaceRepository
+    {
+        return new SurfaceRepository();
+    }
     public function workCategories(): WorkCategoryRepository
     {
         return new WorkCategoryRepository();

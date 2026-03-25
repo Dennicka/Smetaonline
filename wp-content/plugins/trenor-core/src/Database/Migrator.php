@@ -98,6 +98,11 @@ final class Migrator
             $this->runQueries($this->backupRestoreV1Queries($charsetCollate));
             $this->markMigration('017_backup_restore_v1');
         }
+
+        if (! $this->hasMigration('018_crm_object_room_rich_data_v1')) {
+            $this->runQueries($this->crmObjectRoomRichDataV1Queries($charsetCollate));
+            $this->markMigration('018_crm_object_room_rich_data_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -1111,6 +1116,94 @@ final class Migrator
                 PRIMARY KEY (id),
                 KEY status (status),
                 KEY created_at (created_at)
+            ) {$charsetCollate};",
+        ];
+    }
+
+
+    /** @return array<int, string> */
+    private function crmObjectRoomRichDataV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_contact_persons (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                client_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                property_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                project_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                name VARCHAR(191) NOT NULL,
+                role_title VARCHAR(191) NOT NULL DEFAULT '',
+                phone VARCHAR(64) NOT NULL DEFAULT '',
+                email VARCHAR(191) NOT NULL DEFAULT '',
+                notes TEXT NULL,
+                is_primary TINYINT(1) NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                archived_at DATETIME NULL,
+                PRIMARY KEY (id),
+                KEY client_id (client_id),
+                KEY property_id (property_id),
+                KEY project_id (project_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_attachments (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                parent_entity_type VARCHAR(64) NOT NULL,
+                parent_entity_id BIGINT UNSIGNED NOT NULL,
+                file_url TEXT NULL,
+                file_path TEXT NULL,
+                original_filename VARCHAR(255) NOT NULL DEFAULT '',
+                mime_type VARCHAR(127) NOT NULL DEFAULT '',
+                title VARCHAR(191) NOT NULL DEFAULT '',
+                caption TEXT NULL,
+                notes TEXT NULL,
+                uploaded_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                created_at DATETIME NOT NULL,
+                archived_at DATETIME NULL,
+                PRIMARY KEY (id),
+                KEY parent_entity (parent_entity_type, parent_entity_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_surfaces (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                room_id BIGINT UNSIGNED NOT NULL,
+                surface_type VARCHAR(64) NOT NULL,
+                length_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                width_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                area_m2 DECIMAL(10,2) NOT NULL DEFAULT 0,
+                condition_state VARCHAR(64) NOT NULL DEFAULT 'unknown',
+                notes TEXT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY room_id (room_id),
+                KEY surface_type (surface_type)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_rooms (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                project_id BIGINT UNSIGNED NOT NULL,
+                name VARCHAR(191) NOT NULL,
+                floor VARCHAR(64) NULL,
+                room_type VARCHAR(64) NOT NULL DEFAULT 'generic',
+                notes TEXT NULL,
+                condition_state VARCHAR(64) NOT NULL DEFAULT 'unknown',
+                length_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                width_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                height_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                area_m2 DECIMAL(10,2) NOT NULL DEFAULT 0,
+                window_count INT NOT NULL DEFAULT 0,
+                door_count INT NOT NULL DEFAULT 0,
+                work_context VARCHAR(255) NOT NULL DEFAULT '',
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY project_id (project_id),
+                KEY status (status)
             ) {$charsetCollate};",
         ];
     }
