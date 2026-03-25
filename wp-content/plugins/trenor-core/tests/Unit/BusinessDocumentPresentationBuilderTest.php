@@ -134,4 +134,27 @@ final class BusinessDocumentPresentationBuilderTest extends TestCase
         self::assertStringContainsString('OFF-2026-12', $referencesJson);
         self::assertStringNotContainsString('INVOICE#77', $referencesJson);
     }
+
+    public function testIncludesPaymentSummaryAndProfileNotesInSpecificSection(): void
+    {
+        $presentation = $this->builder->build('reminder', [
+            'document_number' => 'REM-2026-8',
+            'version_no' => 1,
+            'status' => 'issued',
+            'issued_at' => '2026-03-24 10:00:00',
+            'invoice_id' => 5,
+        ], [
+            'metadata' => ['invoice_outstanding_minor' => 23000],
+            'totals' => ['total_inc_vat_minor' => 23000],
+        ], [
+            'payment_summary' => ['paid_total_minor' => 12000, 'outstanding_minor' => 11000, 'computed_status' => 'partially_paid'],
+            'invoice_note' => 'Pay by bankgiro',
+        ]);
+
+        $specificJson = json_encode($presentation['specific']) ?: '';
+        self::assertStringContainsString('Outstanding amount', $specificJson);
+        self::assertStringContainsString('11000', $specificJson);
+        self::assertStringContainsString('Pay by bankgiro', $specificJson);
+        self::assertStringContainsString('partially_paid', $specificJson);
+    }
 }

@@ -3897,7 +3897,7 @@ final class PageController
         ]);
 
         $snapshot = (new ReminderSnapshotReader())->read($reminder);
-        (new ReminderDetailRenderer())->render($reminder, $snapshot);
+        (new ReminderDetailRenderer())->render($reminder, $snapshot, $this->loadReminderContext($reminder));
     }
 
     /** @param array<string, mixed> $invoice */
@@ -4615,27 +4615,169 @@ final class PageController
         $this->renderOperationalLinkBar($actionLinks);
 
         $snapshot = (new OffertSnapshotReader())->read($avtal);
-        $this->renderKeyValueTable([
-            'id' => $avtal['id'] ?? '',
-            'offert_id' => $avtal['offert_id'] ?? '',
-            'estimate_id' => $avtal['estimate_id'] ?? '',
-            'project_id' => $avtal['project_id'] ?? '',
-            'client_id' => $avtal['client_id'] ?? '',
-            'document_number' => $avtal['document_number'] ?? '',
-            'version_no' => $avtal['version_no'] ?? '',
-            'status' => $avtal['status'] ?? '',
-            'title' => $avtal['title'] ?? '',
-            'issued_at' => $avtal['issued_at'] ?? '',
-            'actor_user_id' => $avtal['actor_user_id'] ?? '',
-            'total_inc_vat_minor' => $avtal['total_inc_vat_minor'] ?? 0,
-        ]);
+        (new AvtalDetailRenderer())->render($avtal, $snapshot, $this->loadAvtalContext($avtal));
+    }
 
-        $totals = is_array($snapshot['totals'] ?? null) ? $snapshot['totals'] : [];
-        $this->renderKeyValueTable([
-            'snapshot_total_inc_vat_minor' => (string) ((int) ($totals['total_inc_vat_minor'] ?? 0)),
-            'snapshot_lines_count' => (string) count(is_array($snapshot['lines'] ?? null) ? $snapshot['lines'] : []),
-            'snapshot_material_lines_count' => (string) count(is_array($snapshot['material_lines'] ?? null) ? $snapshot['material_lines'] : []),
-        ]);
+    /**
+     * @param array<string,mixed> $reminder
+     * @return array{source_invoice: array<string,mixed>, source_offert: array<string,mixed>, source_estimate: array<string,mixed>, project: array<string,mixed>, property: array<string,mixed>, client: array<string,mixed>, payment_summary: array<string,mixed>, document_profile: array<string, string|int>}
+     */
+    private function loadReminderContext(array $reminder): array
+    {
+        $context = [
+            'source_invoice' => [],
+            'source_offert' => [],
+            'source_estimate' => [],
+            'project' => [],
+            'property' => [],
+            'client' => [],
+            'payment_summary' => [],
+            'document_profile' => (new DocumentProfileProvider())->get(),
+        ];
+
+        $invoiceId = (int) ($reminder['invoice_id'] ?? 0);
+        if ($invoiceId > 0) {
+            $invoice = $this->factory->invoices()->find($invoiceId);
+            if ($invoice !== null) {
+                $context['source_invoice'] = $invoice;
+                $payments = $this->factory->invoicePayments()->byInvoice($invoiceId);
+                $context['payment_summary'] = (new InvoicePaymentSummaryCalculator())->calculate($invoice, $payments);
+            }
+        }
+
+        $offertId = (int) ($reminder['offert_id'] ?? 0);
+        if ($offertId <= 0) {
+            $offertId = (int) ($context['source_invoice']['offert_id'] ?? 0);
+        }
+        if ($offertId > 0) {
+            $offert = $this->factory->offerts()->find($offertId);
+            if ($offert !== null) {
+                $context['source_offert'] = $offert;
+            }
+        }
+
+        $estimateId = (int) ($reminder['estimate_id'] ?? 0);
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_invoice']['estimate_id'] ?? 0);
+        }
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_offert']['estimate_id'] ?? 0);
+        }
+        if ($estimateId <= 0) {
+            return $context;
+        }
+
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if ($estimate === null) {
+            return $context;
+        }
+        $context['source_estimate'] = $estimate;
+
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return $context;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return $context;
+        }
+        $context['project'] = $project;
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return $context;
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return $context;
+        }
+        $context['property'] = $property;
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return $context;
+        }
+
+        $client = $this->factory->clients()->find($clientId);
+        if ($client !== null) {
+            $context['client'] = $client;
+        }
+
+        return $context;
+    }
+
+    /**
+     * @param array<string,mixed> $avtal
+     * @return array{source_offert: array<string,mixed>, source_estimate: array<string,mixed>, project: array<string,mixed>, property: array<string,mixed>, client: array<string,mixed>, document_profile: array<string, string|int>}
+     */
+    private function loadAvtalContext(array $avtal): array
+    {
+        $context = [
+            'source_offert' => [],
+            'source_estimate' => [],
+            'project' => [],
+            'property' => [],
+            'client' => [],
+            'document_profile' => (new DocumentProfileProvider())->get(),
+        ];
+
+        $offertId = (int) ($avtal['offert_id'] ?? 0);
+        if ($offertId > 0) {
+            $offert = $this->factory->offerts()->find($offertId);
+            if ($offert !== null) {
+                $context['source_offert'] = $offert;
+            }
+        }
+
+        $estimateId = (int) ($avtal['estimate_id'] ?? 0);
+        if ($estimateId <= 0) {
+            $estimateId = (int) ($context['source_offert']['estimate_id'] ?? 0);
+        }
+        if ($estimateId <= 0) {
+            return $context;
+        }
+
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if ($estimate === null) {
+            return $context;
+        }
+        $context['source_estimate'] = $estimate;
+
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return $context;
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return $context;
+        }
+        $context['project'] = $project;
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return $context;
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return $context;
+        }
+        $context['property'] = $property;
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return $context;
+        }
+
+        $client = $this->factory->clients()->find($clientId);
+        if ($client !== null) {
+            $context['client'] = $client;
+        }
+
+        return $context;
     }
 
     private function renderAvtalFilterForm(mixed $offertId, mixed $status, mixed $documentNumber): void

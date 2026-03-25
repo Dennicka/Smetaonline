@@ -255,6 +255,14 @@ final class DocumentPdfArtifactService
     private function buildPresentationContext(string $documentType, array $document): array
     {
         $context = (new DocumentSettings())->get();
+        $profileRaw = get_option('trn_document_profile', []);
+        if (is_array($profileRaw)) {
+            foreach (['offert_note', 'invoice_note', 'offert_valid_days', 'payment_terms_days'] as $key) {
+                if (! isset($context[$key]) && isset($profileRaw[$key])) {
+                    $context[$key] = is_scalar($profileRaw[$key]) ? trim((string) $profileRaw[$key]) : '';
+                }
+            }
+        }
 
         $estimateId = (int) ($document['estimate_id'] ?? 0);
         $offertId = (int) ($document['offert_id'] ?? 0);
@@ -274,6 +282,16 @@ final class DocumentPdfArtifactService
                 $offertId = $offertId > 0 ? $offertId : (int) ($invoice['offert_id'] ?? 0);
                 $estimateId = $estimateId > 0 ? $estimateId : (int) ($invoice['estimate_id'] ?? 0);
                 $context['source_invoice_document_number'] = (string) ($invoice['document_number'] ?? '');
+                $payments = $this->factory->invoicePayments()->byInvoice($invoiceId);
+                $context['payment_summary'] = (new InvoicePaymentSummaryCalculator())->calculate($invoice, $payments);
+            }
+        }
+
+        if ($documentType === 'invoice') {
+            $documentId = (int) ($document['id'] ?? 0);
+            if ($documentId > 0) {
+                $payments = $this->factory->invoicePayments()->byInvoice($documentId);
+                $context['payment_summary'] = (new InvoicePaymentSummaryCalculator())->calculate($document, $payments);
             }
         }
 
