@@ -123,6 +123,26 @@ final class AdminWorkspaceShellTest extends TestCase
         self::assertStringNotContainsString('Backup / Restore', $output);
     }
 
+
+    public function testQuickActionsShowOperationalReportsForBackupRole(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_backups' => true,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+        $method = new ReflectionMethod($controller, 'renderWorkspaceQuickActions');
+        $method->setAccessible(true);
+
+        ob_start();
+        $method->invoke($controller);
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Operational reports', $output);
+        self::assertStringContainsString('Backup / Restore', $output);
+    }
+
     public function testNavigationShowsSettingsWhenBackupCapabilityPresent(): void
     {
         \trn_set_test_current_user_caps([

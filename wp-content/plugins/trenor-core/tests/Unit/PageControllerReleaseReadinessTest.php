@@ -90,6 +90,7 @@ final class PageControllerReleaseReadinessTest extends TestCase
             'trn_issue_invoices' => true,
             'trn_record_payments' => true,
             'trn_issue_reminders' => true,
+            'trn_view_margin' => true,
         ]);
     }
 
@@ -147,6 +148,25 @@ final class PageControllerReleaseReadinessTest extends TestCase
         self::assertStringContainsString('No suppliers yet. Start by creating one supplier', $output);
         self::assertStringContainsString('No import batches yet.', $output);
         self::assertStringContainsString('No supplier price history yet.', $output);
+    }
+
+    public function testSuppliersPageHidesImportInternalsWithoutMarginCapability(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_prices' => true,
+            'trn_view_margin' => false,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderSuppliersPrices();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Import batches and supplier price history are hidden for your role.', $output);
+        self::assertStringNotContainsString('Import price list CSV', $output);
+        self::assertStringNotContainsString('Price history (latest rows)', $output);
     }
 
     public function testOperationalReportTableNoDataStateProvidesNextStepGuidance(): void

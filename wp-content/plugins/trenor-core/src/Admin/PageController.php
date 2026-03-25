@@ -294,7 +294,13 @@ final class PageController
         if (! current_user_can('trn_manage_catalogs')) {
             wp_die('Forbidden');
         }
-        $this->renderEntityPage('Материалы', 'material', ['category_id', 'name_ru', 'name_sv', 'unit_code', 'coverage_per_unit', 'buy_price_minor', 'sell_price_minor', 'currency', 'sku', 'is_active'], $this->factory->materials()->all(), 'is_active');
+
+        $fields = ['category_id', 'name_ru', 'name_sv', 'unit_code', 'coverage_per_unit', 'sell_price_minor', 'currency', 'sku', 'is_active'];
+        if ($this->canViewMarginSensitiveData()) {
+            $fields[] = 'buy_price_minor';
+        }
+
+        $this->renderEntityPage('Материалы', 'material', $fields, $this->factory->materials()->all(), 'is_active');
     }
 
     public function renderEstimates(): void
@@ -378,6 +384,7 @@ final class PageController
             wp_die('Forbidden');
         }
 
+        $canViewSensitiveProcurementData = $this->canViewSensitiveProcurementData();
         $rawSuppliers = $this->factory->suppliers()->all();
         $supplierFilters = [
             'supplier_query' => filter_input(INPUT_GET, 'supplier_query', FILTER_UNSAFE_RAW),
@@ -386,8 +393,12 @@ final class PageController
             'material_key' => filter_input(INPUT_GET, 'material_key', FILTER_UNSAFE_RAW),
         ];
         $suppliers = $this->filterSupplierRows($rawSuppliers, $supplierFilters);
-        $batches = $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters);
-        $prices = $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters);
+        $batches = $canViewSensitiveProcurementData
+            ? $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters)
+            : [];
+        $prices = $canViewSensitiveProcurementData
+            ? $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters)
+            : [];
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
         $this->renderOperationalLinkBar([
@@ -411,27 +422,31 @@ final class PageController
         echo '</form>';
         $this->renderSimpleTable(['id', 'name', 'code', 'source_type', 'country', 'currency', 'is_active', 'created_at'], $suppliers);
 
-        echo '<h2>Import price list CSV</h2>';
-        echo '<form method="post" enctype="multipart/form-data">';
-        wp_nonce_field('trn_price_import_import');
-        echo '<input type="hidden" name="trn_entity" value="price_import">';
-        echo '<input type="hidden" name="trn_action" value="import">';
-        echo '<p><label>Supplier ID <input type="number" min="1" name="supplier_id" required></label></p>';
-        echo '<p><label>CSV file <input type="file" name="price_csv" accept=\".csv,text/csv\" required></label></p>';
-        submit_button('Import');
-        echo '</form>';
+        if ($canViewSensitiveProcurementData) {
+            echo '<h2>Import price list CSV</h2>';
+            echo '<form method="post" enctype="multipart/form-data">';
+            wp_nonce_field('trn_price_import_import');
+            echo '<input type="hidden" name="trn_entity" value="price_import">';
+            echo '<input type="hidden" name="trn_action" value="import">';
+            echo '<p><label>Supplier ID <input type="number" min="1" name="supplier_id" required></label></p>';
+            echo '<p><label>CSV file <input type="file" name="price_csv" accept=".csv,text/csv" required></label></p>';
+            submit_button('Import');
+            echo '</form>';
 
-        echo '<h2>Import batches</h2>';
-        if ($batches === []) {
-            $this->renderEmptyState('No import batches yet. After creating a supplier, run the CSV import form above.');
-        }
-        $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
+            echo '<h2>Import batches</h2>';
+            if ($batches === []) {
+                $this->renderEmptyState('No import batches yet. After creating a supplier, run the CSV import form above.');
+            }
+            $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
 
-        echo '<h2>Price history (latest rows)</h2>';
-        if ($prices === []) {
-            $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
+            echo '<h2>Price history (latest rows)</h2>';
+            if ($prices === []) {
+                $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
+            }
+            $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
+        } else {
+            $this->renderEmptyState('Import batches and supplier price history are hidden for your role.');
         }
-        $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
         $this->renderAppShellEnd();
     }
 
@@ -1402,7 +1417,7 @@ final class PageController
                     ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
                     ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
                     ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
-                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'cap' => 'read'],
+                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'caps' => ['trn_issue_invoices', 'trn_record_payments', 'trn_issue_reminders', 'trn_manage_prices', 'trn_manage_backups']],
                 ],
             ],
             [
@@ -1447,7 +1462,7 @@ final class PageController
     {
         $actions = array_values(array_filter(
             $this->workspaceQuickActionRegistry(),
-            static fn (array $action): bool => current_user_can((string) ($action['capability'] ?? 'read'))
+            fn (array $action): bool => $this->userCanAccessQuickAction($action)
         ));
 
         echo '<section class="trn-shell__panel"><h2>Quick actions</h2><div class="trn-shell__actions">';
@@ -1472,6 +1487,17 @@ final class PageController
             ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices', 'capability' => 'trn_manage_prices'],
             ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings', 'capability' => 'trn_manage_backups'],
         ];
+    }
+
+
+    /** @param array<string,mixed> $action */
+    private function userCanAccessQuickAction(array $action): bool
+    {
+        if (((string) ($action['url'] ?? '')) === 'admin.php?page=trn_operational_reports') {
+            return $this->canViewOperationalReports();
+        }
+
+        return current_user_can((string) ($action['capability'] ?? 'read'));
     }
 
     /** @param array<int, array{label:string,url:string,cap?:string}> $links */
@@ -1769,6 +1795,17 @@ final class PageController
             || current_user_can('trn_manage_backups');
     }
 
+
+    private function canViewSensitiveProcurementData(): bool
+    {
+        return current_user_can('trn_manage_prices') && current_user_can('trn_view_margin');
+    }
+
+    private function canViewMarginSensitiveData(): bool
+    {
+        return current_user_can('trn_view_margin');
+    }
+
     /** @param array{status:string,date_from:string,date_to:string,period:string} $filters @return array<string, mixed> */
     private function buildOperationalReportPayload(array $filters): array
     {
@@ -1870,8 +1907,12 @@ final class PageController
         echo '<article class="trn-shell__stat"><h3>Payments total</h3><p>' . esc_html($this->formatMinorMoney((int) ($paymentTotals['total_minor'] ?? 0), 'SEK')) . '</p></article>';
         echo '<article class="trn-shell__stat"><h3>ROT docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['rot_documents'] ?? 0))) . '</p></article>';
         echo '<article class="trn-shell__stat"><h3>Reverse charge docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['reverse_charge_documents'] ?? 0))) . '</p></article>';
-        echo '<article class="trn-shell__stat"><h3>Latest imports</h3><p>' . esc_html((string) count((array) ($supplierActivity['imports'] ?? []))) . '</p></article>';
-        echo '<article class="trn-shell__stat"><h3>Backup events</h3><p>' . esc_html((string) count((array) $backupActivity)) . '</p></article>';
+        if (current_user_can('trn_manage_prices')) {
+            echo '<article class="trn-shell__stat"><h3>Latest imports</h3><p>' . esc_html((string) count((array) ($supplierActivity['imports'] ?? []))) . '</p></article>';
+        }
+        if (current_user_can('trn_manage_backups')) {
+            echo '<article class="trn-shell__stat"><h3>Backup events</h3><p>' . esc_html((string) count((array) $backupActivity)) . '</p></article>';
+        }
         echo '</div></section>';
     }
 
@@ -1909,29 +1950,33 @@ final class PageController
         }
         echo '</section>';
 
-        echo '<section class="trn-shell__panel"><h2>Price changes (latest)</h2>';
-        if ($priceChanges === []) {
-            $this->renderEmptyState('No recent supplier price changes.');
-        } else {
-            echo '<table class="widefat striped"><thead><tr><th>id</th><th>supplier_id</th><th>material_key</th><th>buy_price_minor</th><th>created_at</th></tr></thead><tbody>';
-            foreach ($priceChanges as $row) {
-                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['supplier_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['material_key'] ?? '')) . '</td><td>' . esc_html($this->formatMinorMoney((int) ($row['buy_price_minor'] ?? 0), (string) ($row['currency'] ?? 'SEK'))) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td></tr>';
+        if (current_user_can('trn_manage_prices')) {
+            echo '<section class="trn-shell__panel"><h2>Price changes (latest)</h2>';
+            if ($priceChanges === []) {
+                $this->renderEmptyState('No recent supplier price changes.');
+            } else {
+                echo '<table class="widefat striped"><thead><tr><th>id</th><th>supplier_id</th><th>material_key</th><th>buy_price_minor</th><th>created_at</th></tr></thead><tbody>';
+                foreach ($priceChanges as $row) {
+                    echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['supplier_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['material_key'] ?? '')) . '</td><td>' . esc_html($this->formatMinorMoney((int) ($row['buy_price_minor'] ?? 0), (string) ($row['currency'] ?? 'SEK'))) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td></tr>';
+                }
+                echo '</tbody></table>';
             }
-            echo '</tbody></table>';
+            echo '</section>';
         }
-        echo '</section>';
 
-        echo '<section class="trn-shell__panel"><h2>Backup / restore activity</h2>';
-        if ($backupRows === []) {
-            $this->renderEmptyState('No backup activity rows found.');
-        } else {
-            echo '<table class="widefat striped"><thead><tr><th>id</th><th>backup_type</th><th>status</th><th>created_at</th><th>completed_at</th></tr></thead><tbody>';
-            foreach ($backupRows as $row) {
-                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['backup_type'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td><td>' . esc_html((string) ($row['completed_at'] ?? '')) . '</td></tr>';
+        if (current_user_can('trn_manage_backups')) {
+            echo '<section class="trn-shell__panel"><h2>Backup / restore activity</h2>';
+            if ($backupRows === []) {
+                $this->renderEmptyState('No backup activity rows found.');
+            } else {
+                echo '<table class="widefat striped"><thead><tr><th>id</th><th>backup_type</th><th>status</th><th>created_at</th><th>completed_at</th></tr></thead><tbody>';
+                foreach ($backupRows as $row) {
+                    echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['backup_type'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td><td>' . esc_html((string) ($row['completed_at'] ?? '')) . '</td></tr>';
+                }
+                echo '</tbody></table>';
             }
-            echo '</tbody></table>';
+            echo '</section>';
         }
-        echo '</section>';
     }
 
     /** @param array<string, mixed> $payload @param array{status:string,date_from:string,date_to:string,period:string} $filters */
@@ -2062,7 +2107,7 @@ final class PageController
             ],
             'suppliers_imports' => [
                 'label' => 'Suppliers / Imports report',
-                'capability' => 'trn_manage_prices',
+                'capability' => 'trn_view_margin',
                 'payload_key' => 'imports',
                 'headers' => ['id', 'supplier_id', 'source_name', 'source_format', 'status', 'imported_at'],
             ],
@@ -3211,6 +3256,10 @@ final class PageController
     /** @param array<string, mixed> $postPayload */
     private function handlePriceImport(array $postPayload): void
     {
+        if (! $this->canViewSensitiveProcurementData()) {
+            wp_die('Forbidden');
+        }
+
         $supplierId = (int) $this->postValue($postPayload, 'supplier_id');
         if ($supplierId <= 0) {
             wp_safe_redirect(admin_url('admin.php?page=trn_suppliers_prices&trn_result=error&trn_msg=' . rawurlencode('Missing supplier_id.')));
