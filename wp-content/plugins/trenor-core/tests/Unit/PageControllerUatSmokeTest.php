@@ -162,6 +162,8 @@ final class PageControllerUatSmokeTest extends TestCase
         self::assertStringContainsString('Estimate workspace', $output);
         self::assertStringContainsString('Create estimate', $output);
         self::assertStringContainsString('Estimate register', $output);
+        self::assertStringContainsString('consumables_minor', $output);
+        self::assertStringContainsString('deposit_requested_minor', $output);
     }
 
     public function testDashboardRendersFinalAcceptanceGuidanceWithoutFakeAutoPassClaim(): void
@@ -200,6 +202,8 @@ final class PageControllerUatSmokeTest extends TestCase
         self::assertStringContainsString('Suppliers / Price import', $output);
         self::assertStringContainsString('Import price list CSV', $output);
         self::assertStringContainsString('Price history (latest rows)', $output);
+        self::assertStringContainsString('catalog_material', $output);
+        self::assertStringContainsString('catalog_sell_price_minor', $output);
     }
 
     public function testSettingsRouteSmokeRendersBackupRestoreSection(): void

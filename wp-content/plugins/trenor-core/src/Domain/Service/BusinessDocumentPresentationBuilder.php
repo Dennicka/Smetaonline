@@ -83,9 +83,21 @@ final class BusinessDocumentPresentationBuilder
         $totalsRows = [
             ['label' => 'Labour total', 'amount_minor' => $this->string($totals['labour_total_minor'] ?? null)],
             ['label' => 'Material total', 'amount_minor' => $this->string($totals['materials_total_minor'] ?? null)],
+            ['label' => 'Consumables', 'amount_minor' => $this->string($totals['consumables_minor'] ?? null)],
+            ['label' => 'Travel', 'amount_minor' => $this->string($totals['travel_minor'] ?? null)],
+            ['label' => 'Waste/disposal', 'amount_minor' => $this->string($totals['waste_disposal_minor'] ?? null)],
+            ['label' => 'Equipment rental', 'amount_minor' => $this->string($totals['equipment_rental_minor'] ?? null)],
+            ['label' => 'Other costs', 'amount_minor' => $this->string($totals['other_costs_minor'] ?? null)],
+            ['label' => 'Direct costs total', 'amount_minor' => $this->string($totals['direct_costs_total_minor'] ?? null)],
+            ['label' => 'Cost subtotal', 'amount_minor' => $this->string($totals['cost_subtotal_minor'] ?? null)],
+            ['label' => 'Margin', 'amount_minor' => $this->string($totals['margin_minor'] ?? null)],
+            ['label' => 'Subtotal before discount', 'amount_minor' => $this->string($totals['subtotal_before_discount_minor'] ?? null)],
+            ['label' => 'Discount', 'amount_minor' => $this->string($totals['discount_minor'] ?? null)],
             ['label' => 'Subtotal excl. VAT', 'amount_minor' => $this->string($totals['subtotal_ex_vat_minor'] ?? null)],
             ['label' => 'VAT', 'amount_minor' => $this->string($vatMinor)],
             ['label' => 'Total incl. VAT', 'amount_minor' => $this->string($totalMinor)],
+            ['label' => 'Requested deposit', 'amount_minor' => $this->string($totals['deposit_requested_minor'] ?? null)],
+            ['label' => 'Outstanding after deposit', 'amount_minor' => $this->string($totals['outstanding_after_deposit_minor'] ?? null)],
         ];
 
         if (($totals['preliminary_rot_minor'] ?? null) !== null || ($totals['rot_eligible_labour_minor'] ?? null) !== null) {

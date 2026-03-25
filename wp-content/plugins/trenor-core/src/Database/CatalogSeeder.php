@@ -8,15 +8,26 @@ final class CatalogSeeder
 {
     public function seed(): void
     {
-        $workCategoryId = $this->upsertWorkCategory('Базовые работы', 'Grundarbete', 100);
-        $materialCategoryId = $this->upsertMaterialCategory('Базовые материалы', 'Basmaterial', 100);
-
-        foreach ($this->workItems() as $item) {
-            $this->upsertWorkItem($workCategoryId, $item);
+        foreach ($this->workCategories() as $category) {
+            $categoryId = $this->upsertWorkCategory((string) $category['name_ru'], (string) $category['name_sv'], (int) $category['sort_order']);
+            $items = is_array($category['items'] ?? null) ? $category['items'] : [];
+            foreach ($items as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $this->upsertWorkItem($categoryId, $item);
+            }
         }
 
-        foreach ($this->materials() as $material) {
-            $this->upsertMaterial($materialCategoryId, $material);
+        foreach ($this->materialCategories() as $category) {
+            $categoryId = $this->upsertMaterialCategory((string) $category['name_ru'], (string) $category['name_sv'], (int) $category['sort_order']);
+            $items = is_array($category['items'] ?? null) ? $category['items'] : [];
+            foreach ($items as $material) {
+                if (! is_array($material)) {
+                    continue;
+                }
+                $this->upsertMaterial($categoryId, $material);
+            }
         }
     }
 
@@ -130,36 +141,74 @@ final class CatalogSeeder
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function workItems(): array
+    private function workCategories(): array
     {
         return [
-            ['name_ru' => 'Осмотр объекта', 'name_sv' => 'Besiktning', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 25.0, 'norm_medium_per_hour' => 35.0, 'norm_fast_per_hour' => 45.0, 'default_material_consumption_note' => '', 'is_rot_eligible' => 0, 'sort_order' => 10],
-            ['name_ru' => 'Укрытие пола', 'name_sv' => 'Täckning av golv', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 8.0, 'norm_medium_per_hour' => 12.0, 'norm_fast_per_hour' => 16.0, 'default_material_consumption_note' => 'Maskering och skydd', 'is_rot_eligible' => 1, 'sort_order' => 20],
-            ['name_ru' => 'Грунтовка стен', 'name_sv' => 'Grundning av väggar', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 10.0, 'norm_medium_per_hour' => 14.0, 'norm_fast_per_hour' => 18.0, 'default_material_consumption_note' => 'Grundfärg', 'is_rot_eligible' => 1, 'sort_order' => 30],
-            ['name_ru' => 'Шпаклёвка стен 1 слой', 'name_sv' => 'Spackling vägg 1 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 4.0, 'norm_medium_per_hour' => 6.0, 'norm_fast_per_hour' => 8.0, 'default_material_consumption_note' => 'Spackel', 'is_rot_eligible' => 1, 'sort_order' => 40],
-            ['name_ru' => 'Шпаклёвка стен 2 слоя', 'name_sv' => 'Spackling vägg 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 2.5, 'norm_medium_per_hour' => 4.0, 'norm_fast_per_hour' => 5.5, 'default_material_consumption_note' => 'Spackel', 'is_rot_eligible' => 1, 'sort_order' => 50],
-            ['name_ru' => 'Покраска стен 2 слоя', 'name_sv' => 'Målning vägg 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 8.0, 'norm_medium_per_hour' => 11.0, 'norm_fast_per_hour' => 14.0, 'default_material_consumption_note' => 'Väggfärg', 'is_rot_eligible' => 1, 'sort_order' => 60],
-            ['name_ru' => 'Покраска потолка 2 слоя', 'name_sv' => 'Målning tak 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 6.0, 'norm_medium_per_hour' => 9.0, 'norm_fast_per_hour' => 12.0, 'default_material_consumption_note' => 'Takfärg', 'is_rot_eligible' => 1, 'sort_order' => 70],
-            ['name_ru' => 'Снятие обоев', 'name_sv' => 'Tapetborttagning', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 3.0, 'norm_medium_per_hour' => 5.0, 'norm_fast_per_hour' => 7.0, 'default_material_consumption_note' => '', 'is_rot_eligible' => 1, 'sort_order' => 80],
-            ['name_ru' => 'Поклейка обоев', 'name_sv' => 'Tapetsering', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 3.5, 'norm_medium_per_hour' => 5.5, 'norm_fast_per_hour' => 7.5, 'default_material_consumption_note' => 'Tapetlim', 'is_rot_eligible' => 1, 'sort_order' => 90],
-            ['name_ru' => 'Покраска плинтусов', 'name_sv' => 'Målning socklar', 'unit_code' => 'm', 'norm_slow_per_hour' => 10.0, 'norm_medium_per_hour' => 14.0, 'norm_fast_per_hour' => 18.0, 'default_material_consumption_note' => 'Snickerifärg', 'is_rot_eligible' => 1, 'sort_order' => 100],
+            [
+                'name_ru' => 'Подготовка и защита',
+                'name_sv' => 'Förberedelse och skydd',
+                'sort_order' => 100,
+                'items' => [
+                    ['name_ru' => 'Осмотр объекта', 'name_sv' => 'Besiktning', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 25.0, 'norm_medium_per_hour' => 35.0, 'norm_fast_per_hour' => 45.0, 'default_material_consumption_note' => '', 'is_rot_eligible' => 0, 'sort_order' => 10],
+                    ['name_ru' => 'Укрытие пола', 'name_sv' => 'Täckning av golv', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 8.0, 'norm_medium_per_hour' => 12.0, 'norm_fast_per_hour' => 16.0, 'default_material_consumption_note' => 'Maskering och skydd', 'is_rot_eligible' => 1, 'sort_order' => 20],
+                    ['name_ru' => 'Защита мебели', 'name_sv' => 'Skydd av möbler', 'unit_code' => 'room', 'norm_slow_per_hour' => 0.5, 'norm_medium_per_hour' => 0.8, 'norm_fast_per_hour' => 1.1, 'default_material_consumption_note' => 'Skyddsplast', 'is_rot_eligible' => 1, 'sort_order' => 30],
+                ],
+            ],
+            [
+                'name_ru' => 'Стены и потолок',
+                'name_sv' => 'Väggar och tak',
+                'sort_order' => 200,
+                'items' => [
+                    ['name_ru' => 'Грунтовка стен', 'name_sv' => 'Grundning av väggar', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 10.0, 'norm_medium_per_hour' => 14.0, 'norm_fast_per_hour' => 18.0, 'default_material_consumption_note' => 'Grundfärg', 'is_rot_eligible' => 1, 'sort_order' => 40],
+                    ['name_ru' => 'Шпаклёвка стен 1 слой', 'name_sv' => 'Spackling vägg 1 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 4.0, 'norm_medium_per_hour' => 6.0, 'norm_fast_per_hour' => 8.0, 'default_material_consumption_note' => 'Spackel', 'is_rot_eligible' => 1, 'sort_order' => 50],
+                    ['name_ru' => 'Шпаклёвка стен 2 слоя', 'name_sv' => 'Spackling vägg 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 2.5, 'norm_medium_per_hour' => 4.0, 'norm_fast_per_hour' => 5.5, 'default_material_consumption_note' => 'Spackel', 'is_rot_eligible' => 1, 'sort_order' => 60],
+                    ['name_ru' => 'Покраска стен 2 слоя', 'name_sv' => 'Målning vägg 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 8.0, 'norm_medium_per_hour' => 11.0, 'norm_fast_per_hour' => 14.0, 'default_material_consumption_note' => 'Väggfärg', 'is_rot_eligible' => 1, 'sort_order' => 70],
+                    ['name_ru' => 'Покраска потолка 2 слоя', 'name_sv' => 'Målning tak 2 lager', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 6.0, 'norm_medium_per_hour' => 9.0, 'norm_fast_per_hour' => 12.0, 'default_material_consumption_note' => 'Takfärg', 'is_rot_eligible' => 1, 'sort_order' => 80],
+                ],
+            ],
+            [
+                'name_ru' => 'Обои и отделка',
+                'name_sv' => 'Tapet och snickeri',
+                'sort_order' => 300,
+                'items' => [
+                    ['name_ru' => 'Снятие обоев', 'name_sv' => 'Tapetborttagning', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 3.0, 'norm_medium_per_hour' => 5.0, 'norm_fast_per_hour' => 7.0, 'default_material_consumption_note' => '', 'is_rot_eligible' => 1, 'sort_order' => 90],
+                    ['name_ru' => 'Поклейка обоев', 'name_sv' => 'Tapetsering', 'unit_code' => 'sqm', 'norm_slow_per_hour' => 3.5, 'norm_medium_per_hour' => 5.5, 'norm_fast_per_hour' => 7.5, 'default_material_consumption_note' => 'Tapetlim', 'is_rot_eligible' => 1, 'sort_order' => 100],
+                    ['name_ru' => 'Покраска плинтусов', 'name_sv' => 'Målning socklar', 'unit_code' => 'm', 'norm_slow_per_hour' => 10.0, 'norm_medium_per_hour' => 14.0, 'norm_fast_per_hour' => 18.0, 'default_material_consumption_note' => 'Snickerifärg', 'is_rot_eligible' => 1, 'sort_order' => 110],
+                ],
+            ],
         ];
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function materials(): array
+    private function materialCategories(): array
     {
         return [
-            ['name_ru' => 'Грунт', 'name_sv' => 'Grundfärg', 'unit_code' => 'l', 'coverage_per_unit' => 8.0, 'buy_price_minor' => 5500, 'sell_price_minor' => 7900, 'sku' => 'MAT-GRUND'],
-            ['name_ru' => 'Краска для стен', 'name_sv' => 'Väggfärg', 'unit_code' => 'l', 'coverage_per_unit' => 7.0, 'buy_price_minor' => 9000, 'sell_price_minor' => 12500, 'sku' => 'MAT-WALL-PAINT'],
-            ['name_ru' => 'Краска для потолка', 'name_sv' => 'Takfärg', 'unit_code' => 'l', 'coverage_per_unit' => 7.0, 'buy_price_minor' => 9500, 'sell_price_minor' => 13000, 'sku' => 'MAT-CEIL-PAINT'],
-            ['name_ru' => 'Шпаклёвка', 'name_sv' => 'Spackel', 'unit_code' => 'kg', 'coverage_per_unit' => 2.0, 'buy_price_minor' => 2500, 'sell_price_minor' => 4200, 'sku' => 'MAT-SPACKEL'],
-            ['name_ru' => 'Малярная лента', 'name_sv' => 'Maskeringstejp', 'unit_code' => 'roll', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 450, 'sell_price_minor' => 950, 'sku' => 'MAT-TAPE'],
-            ['name_ru' => 'Укрывочная плёнка', 'name_sv' => 'Täckplast', 'unit_code' => 'sqm', 'coverage_per_unit' => 1.0, 'buy_price_minor' => 35, 'sell_price_minor' => 90, 'sku' => 'MAT-COVER'],
-            ['name_ru' => 'Шлифлист', 'name_sv' => 'Slippapper', 'unit_code' => 'sheet', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 120, 'sell_price_minor' => 300, 'sku' => 'MAT-SAND'],
-            ['name_ru' => 'Акрил', 'name_sv' => 'Akrylfog', 'unit_code' => 'tube', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 3900, 'sell_price_minor' => 5900, 'sku' => 'MAT-ACRYL'],
-            ['name_ru' => 'Валик', 'name_sv' => 'Roller', 'unit_code' => 'pcs', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 6500, 'sell_price_minor' => 9900, 'sku' => 'MAT-ROLLER'],
-            ['name_ru' => 'Кисть', 'name_sv' => 'Pensel', 'unit_code' => 'pcs', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 4200, 'sell_price_minor' => 6900, 'sku' => 'MAT-BRUSH'],
+            [
+                'name_ru' => 'Краски и покрытия',
+                'name_sv' => 'Färg och ytskikt',
+                'sort_order' => 100,
+                'items' => [
+                    ['name_ru' => 'Грунт', 'name_sv' => 'Grundfärg', 'unit_code' => 'l', 'coverage_per_unit' => 8.0, 'buy_price_minor' => 5500, 'sell_price_minor' => 7900, 'sku' => 'MAT-GRUND'],
+                    ['name_ru' => 'Краска для стен', 'name_sv' => 'Väggfärg', 'unit_code' => 'l', 'coverage_per_unit' => 7.0, 'buy_price_minor' => 9000, 'sell_price_minor' => 12500, 'sku' => 'MAT-WALL-PAINT'],
+                    ['name_ru' => 'Краска для потолка', 'name_sv' => 'Takfärg', 'unit_code' => 'l', 'coverage_per_unit' => 7.0, 'buy_price_minor' => 9500, 'sell_price_minor' => 13000, 'sku' => 'MAT-CEIL-PAINT'],
+                    ['name_ru' => 'Краска для дерева', 'name_sv' => 'Snickerifärg', 'unit_code' => 'l', 'coverage_per_unit' => 9.0, 'buy_price_minor' => 9800, 'sell_price_minor' => 13900, 'sku' => 'MAT-WOOD-PAINT'],
+                ],
+            ],
+            [
+                'name_ru' => 'Расходники',
+                'name_sv' => 'Förbrukning',
+                'sort_order' => 200,
+                'items' => [
+                    ['name_ru' => 'Шпаклёвка', 'name_sv' => 'Spackel', 'unit_code' => 'kg', 'coverage_per_unit' => 2.0, 'buy_price_minor' => 2500, 'sell_price_minor' => 4200, 'sku' => 'MAT-SPACKEL'],
+                    ['name_ru' => 'Малярная лента', 'name_sv' => 'Maskeringstejp', 'unit_code' => 'roll', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 450, 'sell_price_minor' => 950, 'sku' => 'MAT-TAPE'],
+                    ['name_ru' => 'Укрывочная плёнка', 'name_sv' => 'Täckplast', 'unit_code' => 'sqm', 'coverage_per_unit' => 1.0, 'buy_price_minor' => 35, 'sell_price_minor' => 90, 'sku' => 'MAT-COVER'],
+                    ['name_ru' => 'Шлифлист', 'name_sv' => 'Slippapper', 'unit_code' => 'sheet', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 120, 'sell_price_minor' => 300, 'sku' => 'MAT-SAND'],
+                    ['name_ru' => 'Акрил', 'name_sv' => 'Akrylfog', 'unit_code' => 'tube', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 3900, 'sell_price_minor' => 5900, 'sku' => 'MAT-ACRYL'],
+                    ['name_ru' => 'Валик', 'name_sv' => 'Roller', 'unit_code' => 'pcs', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 6500, 'sell_price_minor' => 9900, 'sku' => 'MAT-ROLLER'],
+                    ['name_ru' => 'Кисть', 'name_sv' => 'Pensel', 'unit_code' => 'pcs', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 4200, 'sell_price_minor' => 6900, 'sku' => 'MAT-BRUSH'],
+                    ['name_ru' => 'Пакеты для мусора', 'name_sv' => 'Avfallspåsar', 'unit_code' => 'pcs', 'coverage_per_unit' => 0.0, 'buy_price_minor' => 180, 'sell_price_minor' => 350, 'sku' => 'MAT-WASTE-BAG'],
+                ],
+            ],
         ];
     }
 }

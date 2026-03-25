@@ -30,6 +30,14 @@ final class EstimateRepository extends BaseRepository
             'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
+            'consumables_minor' => (int) ($data['consumables_minor'] ?? 0),
+            'travel_minor' => (int) ($data['travel_minor'] ?? 0),
+            'waste_disposal_minor' => (int) ($data['waste_disposal_minor'] ?? 0),
+            'equipment_rental_minor' => (int) ($data['equipment_rental_minor'] ?? 0),
+            'other_costs_minor' => (int) ($data['other_costs_minor'] ?? 0),
+            'margin_percent' => (float) ($data['margin_percent'] ?? 0),
+            'discount_minor' => (int) ($data['discount_minor'] ?? 0),
+            'deposit_requested_minor' => (int) ($data['deposit_requested_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
             'rot_requested' => ! empty($data['rot_requested']) ? 1 : 0,
             'housing_type' => sanitize_key((string) ($data['housing_type'] ?? '')),
@@ -38,7 +46,7 @@ final class EstimateRepository extends BaseRepository
             'rot_buyers_json' => (string) ($data['rot_buyers_json'] ?? '[]'),
             'created_at' => $now,
             'updated_at' => $now,
-        ], ['%d', '%s', '%s', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']);
+        ], ['%d', '%s', '%s', '%s', '%s', '%s', '%f', '%d', '%d', '%d', '%d', '%d', '%d', '%f', '%d', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']);
         if ($ok === false) {
             return null;
         }
@@ -62,6 +70,14 @@ final class EstimateRepository extends BaseRepository
             'reverse_charge_note' => sanitize_text_field((string) ($data['reverse_charge_note'] ?? '')),
             'vat_rate_percent' => (float) ($data['vat_rate_percent'] ?? 25),
             'labour_rate_minor' => (int) ($data['labour_rate_minor'] ?? 0),
+            'consumables_minor' => (int) ($data['consumables_minor'] ?? 0),
+            'travel_minor' => (int) ($data['travel_minor'] ?? 0),
+            'waste_disposal_minor' => (int) ($data['waste_disposal_minor'] ?? 0),
+            'equipment_rental_minor' => (int) ($data['equipment_rental_minor'] ?? 0),
+            'other_costs_minor' => (int) ($data['other_costs_minor'] ?? 0),
+            'margin_percent' => (float) ($data['margin_percent'] ?? 0),
+            'discount_minor' => (int) ($data['discount_minor'] ?? 0),
+            'deposit_requested_minor' => (int) ($data['deposit_requested_minor'] ?? 0),
             'notes' => sanitize_textarea_field((string) ($data['notes'] ?? '')),
             'rot_requested' => ! empty($data['rot_requested']) ? 1 : 0,
             'housing_type' => sanitize_key((string) ($data['housing_type'] ?? '')),

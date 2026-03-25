@@ -48,6 +48,7 @@ final class BusinessDocumentPresentationBuilderTest extends TestCase
         self::assertNotEmpty($presentation['seller']);
         self::assertNotEmpty($presentation['references']);
         self::assertNotEmpty($presentation['totals']);
+        self::assertStringContainsString('Subtotal excl. VAT', json_encode($presentation['totals']) ?: '');
         self::assertStringContainsString('ROT', json_encode($presentation['tax_notes']));
     }
 

@@ -121,7 +121,12 @@ final class PageController
         }
 
         if ($entity === 'estimate') {
-            $data = $this->collectData($postPayload, ['project_id', 'title', 'status', 'currency', 'tax_mode', 'reverse_charge_note', 'vat_rate_percent', 'labour_rate_minor', 'notes', 'rot_requested', 'housing_type', 'rot_is_new_build', 'rot_property_reference', 'rot_buyers_json']);
+            $data = $this->collectData($postPayload, [
+                'project_id', 'title', 'status', 'currency', 'tax_mode', 'reverse_charge_note', 'vat_rate_percent', 'labour_rate_minor',
+                'consumables_minor', 'travel_minor', 'waste_disposal_minor', 'equipment_rental_minor', 'other_costs_minor',
+                'margin_percent', 'discount_minor', 'deposit_requested_minor',
+                'notes', 'rot_requested', 'housing_type', 'rot_is_new_build', 'rot_property_reference', 'rot_buyers_json',
+            ]);
             if (TaxMode::isReverseCharge((string) ($data['tax_mode'] ?? '')) && ! empty($data['rot_requested'])) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('Reverse charge cannot be combined with ROT.')));
                 exit;
@@ -381,6 +386,14 @@ final class PageController
         $suppliers = $this->filterSupplierRows($rawSuppliers, $supplierFilters);
         $batches = $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters);
         $prices = $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters);
+        $materialsBySku = [];
+        foreach ($this->factory->materials()->all() as $material) {
+            $sku = sanitize_text_field((string) ($material['sku'] ?? ''));
+            if ($sku === '') {
+                continue;
+            }
+            $materialsBySku[$sku] = $material;
+        }
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
         $this->renderOperationalLinkBar([
@@ -424,7 +437,27 @@ final class PageController
         if ($prices === []) {
             $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
         }
-        $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
+        if ($prices !== []) {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>supplier_id</th><th>batch_id</th><th>material_key</th><th>catalog_material</th><th>buy_price_minor</th><th>catalog_sell_price_minor</th><th>currency</th><th>effective_from</th><th>effective_to</th><th>is_active</th></tr></thead><tbody>';
+            foreach ($prices as $row) {
+                $materialKey = sanitize_text_field((string) ($row['material_key'] ?? ''));
+                $catalogMaterial = $materialsBySku[$materialKey] ?? null;
+                echo '<tr>';
+                echo '<td>' . esc_html((string) ($row['id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['supplier_id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['batch_id'] ?? '')) . '</td>';
+                echo '<td>' . esc_html($materialKey) . '</td>';
+                echo '<td>' . esc_html((string) ($catalogMaterial['name_ru'] ?? '—')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['buy_price_minor'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($catalogMaterial['sell_price_minor'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['currency'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['effective_from'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['effective_to'] ?? '')) . '</td>';
+                echo '<td>' . esc_html((string) ($row['is_active'] ?? '')) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
         $this->renderAppShellEnd();
     }
 
@@ -2166,6 +2199,14 @@ final class PageController
         echo '<p><label>reverse_charge_note<br><input name="reverse_charge_note" class="regular-text" value=""></label></p>';
         echo '<p><label>vat_rate_percent<br><input name="vat_rate_percent" class="regular-text" value="25"></label></p>';
         echo '<p><label>labour_rate_minor<br><input name="labour_rate_minor" class="regular-text" value="65000"></label></p>';
+        echo '<p><label>consumables_minor<br><input name="consumables_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>travel_minor<br><input name="travel_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>waste_disposal_minor<br><input name="waste_disposal_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>equipment_rental_minor<br><input name="equipment_rental_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>other_costs_minor<br><input name="other_costs_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>margin_percent<br><input name="margin_percent" class="regular-text" value="0"></label></p>';
+        echo '<p><label>discount_minor<br><input name="discount_minor" class="regular-text" value="0"></label></p>';
+        echo '<p><label>deposit_requested_minor<br><input name="deposit_requested_minor" class="regular-text" value="0"></label></p>';
         echo '<p><label>rot_requested (0/1)<br><input name="rot_requested" class="regular-text" value="0"></label></p>';
         echo '<p><label>housing_type (smahus|bostadsratt|agarlagenhet)<br><input name="housing_type" class="regular-text" value=""></label></p>';
         echo '<p><label>rot_is_new_build (0/1)<br><input name="rot_is_new_build" class="regular-text" value="0"></label></p>';
@@ -2259,7 +2300,7 @@ final class PageController
 
         $lines = $this->factory->estimateLines()->byEstimate($estimateId);
         $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
-        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
+        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null), $estimate);
 
         echo '<section class="trn-shell__panel"><h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
         $projectId = (int) ($estimate['project_id'] ?? 0);
@@ -2349,9 +2390,21 @@ final class PageController
             'material_lines_count' => (int) count($materialLines),
             'labour_total' => $this->formatMinorMoney($totals['labour_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'materials_total' => $this->formatMinorMoney($totals['materials_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'consumables_total' => $this->formatMinorMoney($totals['consumables_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'travel_total' => $this->formatMinorMoney($totals['travel_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'waste_disposal_total' => $this->formatMinorMoney($totals['waste_disposal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'equipment_rental_total' => $this->formatMinorMoney($totals['equipment_rental_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'other_costs_total' => $this->formatMinorMoney($totals['other_costs_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'direct_costs_total' => $this->formatMinorMoney($totals['direct_costs_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'cost_subtotal' => $this->formatMinorMoney($totals['cost_subtotal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'margin_total' => $this->formatMinorMoney($totals['margin_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'subtotal_before_discount' => $this->formatMinorMoney($totals['subtotal_before_discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'discount_total' => $this->formatMinorMoney($totals['discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'subtotal_ex_vat' => $this->formatMinorMoney($totals['subtotal_ex_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'vat' => $this->formatMinorMoney($totals['vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'deposit_requested' => $this->formatMinorMoney($totals['deposit_requested_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'outstanding_after_deposit' => $this->formatMinorMoney($totals['outstanding_after_deposit_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'rot_eligibility_status' => $rotSummary['rot_eligibility_status'] ?? '',
             'rot_ineligibility_reason' => $rotSummary['rot_ineligibility_reason'] ?? '',
             'rot_eligible_labour' => $this->formatMinorMoney($rotSummary['rot_eligible_labour_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
@@ -2658,7 +2711,7 @@ final class PageController
         $lines = $lineRepo->byEstimate($estimateId);
         $materialLines = $materialRepo->byEstimate($estimateId);
 
-        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
+        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null), $estimate);
         $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
         $totals = array_merge($totals, [
             'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
@@ -2675,6 +2728,14 @@ final class PageController
             'reverse_charge_note' => (string) ($estimate['reverse_charge_note'] ?? ''),
             'vat_rate_percent' => (float) $estimate['vat_rate_percent'],
             'labour_rate_minor' => (int) $estimate['labour_rate_minor'],
+            'consumables_minor' => (int) ($estimate['consumables_minor'] ?? 0),
+            'travel_minor' => (int) ($estimate['travel_minor'] ?? 0),
+            'waste_disposal_minor' => (int) ($estimate['waste_disposal_minor'] ?? 0),
+            'equipment_rental_minor' => (int) ($estimate['equipment_rental_minor'] ?? 0),
+            'other_costs_minor' => (int) ($estimate['other_costs_minor'] ?? 0),
+            'margin_percent' => (float) ($estimate['margin_percent'] ?? 0),
+            'discount_minor' => (int) ($estimate['discount_minor'] ?? 0),
+            'deposit_requested_minor' => (int) ($estimate['deposit_requested_minor'] ?? 0),
             'notes' => (string) $estimate['notes'],
             'calculated_at' => current_time('mysql', true),
         ]);
@@ -2716,7 +2777,7 @@ final class PageController
                 exit;
             }
 
-            $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
+            $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null), $estimate);
             try {
                 $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
             } catch (RotValidationException $exception) {
