@@ -382,6 +382,13 @@ final class PageController
             ['label' => 'Clear filters', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
         ]);
         $this->renderSuppliersFilterForm($supplierFilters);
+$this->renderOperationalLinkBar([
+    ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+    ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings')],
+    ['label' => 'Open audit log', 'url' => admin_url('admin.php?page=trn_audit_log')],
+    ['label' => 'Clear filters', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
+]);
+$this->renderSuppliersFilterForm($supplierFilters);
         echo '<h2>Suppliers registry</h2>';
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
