@@ -87,7 +87,7 @@ final class BusinessDocumentPresentationBuilder
             $totalsRows[] = ['label' => 'Amount after ROT deduction', 'amount_minor' => $this->string($afterRot)];
         }
 
-        $taxNotes = $this->taxNotes($taxMode, $document, $header, $vatMinor);
+        $taxNotes = $this->taxNotes($taxMode, $document, $header, $totals, $vatMinor);
 
         $specific = [
             ['label' => 'Document title', 'value' => $this->titleForType($documentType)],
@@ -133,8 +133,8 @@ final class BusinessDocumentPresentationBuilder
         ];
     }
 
-    /** @return array<int,array{label:string,value:string}> */
-    private function taxNotes(string $taxMode, array $document, array $header, int $vatMinor): array
+    /** @param array<string,mixed> $totals @return array<int,array{label:string,value:string}> */
+    private function taxNotes(string $taxMode, array $document, array $header, array $totals, int $vatMinor): array
     {
         if (TaxMode::isReverseCharge($taxMode)) {
             return [
@@ -144,7 +144,7 @@ final class BusinessDocumentPresentationBuilder
             ];
         }
 
-        if (($header['preliminary_rot_minor'] ?? null) !== null || ($document['rot_requested'] ?? null)) {
+        if ($this->isRotScenario($document, $header, $totals)) {
             return [
                 ['label' => 'Tax mode', 'value' => 'ROT deduction applied where eligible labour is included.'],
                 ['label' => 'VAT handling', 'value' => 'Standard VAT applies before ROT deduction. VAT shown: ' . $this->string($vatMinor) . ' minor.'],
@@ -156,6 +156,41 @@ final class BusinessDocumentPresentationBuilder
             ['label' => 'Tax mode', 'value' => 'Standard VAT.'],
             ['label' => 'VAT handling', 'value' => 'VAT is included according to the shown VAT rate.'],
         ];
+    }
+
+    /** @param array<string,mixed> $document @param array<string,mixed> $header @param array<string,mixed> $totals */
+    private function isRotScenario(array $document, array $header, array $totals): bool
+    {
+        $signals = [
+            $document['rot_requested'] ?? null,
+            $header['rot_requested'] ?? null,
+            $document['rot_property_reference'] ?? null,
+            $header['rot_property_reference'] ?? null,
+            $totals['rot_eligible_labour_minor'] ?? null,
+            $totals['preliminary_rot_minor'] ?? null,
+            $totals['amount_after_preliminary_rot_minor'] ?? null,
+            $header['rot'] ?? null,
+        ];
+
+        foreach ($signals as $signal) {
+            if (is_bool($signal) && $signal) {
+                return true;
+            }
+
+            if (is_numeric($signal) && (float) $signal > 0) {
+                return true;
+            }
+
+            if (is_string($signal) && trim($signal) !== '' && strtolower(trim($signal)) !== '0') {
+                return true;
+            }
+
+            if (is_array($signal) && $signal !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function titleForType(string $documentType): string

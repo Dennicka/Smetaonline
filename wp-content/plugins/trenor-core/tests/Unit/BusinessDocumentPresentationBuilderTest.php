@@ -70,6 +70,27 @@ final class BusinessDocumentPresentationBuilderTest extends TestCase
         self::assertStringContainsString('reverse charge', strtolower(json_encode($presentation['tax_notes']) ?: ''));
     }
 
+
+    public function testBuildsStandardVatTaxNoteWhenNoRotSignalsExist(): void
+    {
+        $presentation = $this->builder->build('invoice', [
+            'document_number' => 'INV-2026-101',
+            'version_no' => 1,
+            'status' => 'issued',
+            'issued_at' => '2026-03-24 10:00:00',
+            'currency' => 'SEK',
+            'tax_mode' => 'private_consumer',
+            'total_inc_vat_minor' => 100000,
+        ], [
+            'totals' => [
+                'vat_minor' => 20000,
+                'total_inc_vat_minor' => 100000,
+            ],
+        ]);
+
+        self::assertStringContainsString('Standard VAT', json_encode($presentation['tax_notes']) ?: '');
+    }
+
     public function testBuildsDocumentSpecificTitlesForAllBusinessDocumentTypes(): void
     {
         foreach (['avtal', 'reminder', 'credit_note'] as $type) {
