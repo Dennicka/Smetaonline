@@ -32,9 +32,12 @@ final class SupplierRepositoryTest extends TestCase
         ]);
 
         self::assertSame(1, $id);
-        self::assertSame('wp_trn_suppliers', $wpdb->insertedTable);
-        self::assertSame('bygg-gross', $wpdb->insertHistory[0]['data']['code']);
-        self::assertSame('SEK', $wpdb->insertHistory[0]['data']['currency']);
+        $supplierInsert = $this->findInsertByTable($wpdb->insertHistory, 'wp_trn_suppliers');
+        self::assertNotNull($supplierInsert);
+        self::assertSame('bygg-gross', $supplierInsert['data']['code'] ?? null);
+        self::assertSame('SEK', $supplierInsert['data']['currency'] ?? null);
+
+        self::assertNotNull($this->findInsertByTable($wpdb->insertHistory, 'wp_trn_audit_log'));
     }
 
     public function testRepositoryMapsExpectedTableAndEntityType(): void
@@ -51,5 +54,17 @@ final class SupplierRepositoryTest extends TestCase
         $reflection->setAccessible(true);
 
         return $reflection->invoke($subject);
+    }
+
+    /** @param array<int, array<string, mixed>> $insertHistory */
+    private function findInsertByTable(array $insertHistory, string $table): ?array
+    {
+        foreach ($insertHistory as $insert) {
+            if ((string) ($insert['table'] ?? '') === $table) {
+                return $insert;
+            }
+        }
+
+        return null;
     }
 }
