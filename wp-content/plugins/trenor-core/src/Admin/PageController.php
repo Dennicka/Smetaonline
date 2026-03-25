@@ -131,6 +131,11 @@ final class PageController
                 wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('Reverse charge cannot be combined with ROT.')));
                 exit;
             }
+            $estimateProjectId = (int) ($data['project_id'] ?? 0);
+            if (! $this->canAccessProject($estimateProjectId)) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('No access to selected project scope.')));
+                exit;
+            }
             $this->handleEntity($this->factory->estimates(), 'trn_estimates', $action, $id, $data);
         }
 
@@ -217,13 +222,15 @@ final class PageController
         if (current_user_can('trn_manage_projects')) {
             echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_projects')) . '">Open projects workspace</a>';
         }
-        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_dossier')) . '">Open dossier timeline</a>';
+        if (current_user_can('trn_manage_estimates')) {
+            echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_dossier')) . '">Open dossier timeline</a>';
+        }
         echo '</div></section>';
     }
 
     public function renderOperationalReports(): void
     {
-        if (! $this->canViewOperationalReports()) {
+        if (! $this->canAccessOperationalReportsPage()) {
             wp_die('Forbidden');
         }
 
@@ -339,7 +346,7 @@ final class PageController
             'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
             'title' => filter_input(INPUT_GET, 'title', FILTER_UNSAFE_RAW),
         ];
-        $allEstimates = $this->factory->estimates()->all();
+        $allEstimates = $this->filterEstimateRowsByProjectScope($this->factory->estimates()->all());
         $estimates = $this->filterEstimateRows($allEstimates, $estimateFilters);
 
         $this->renderAppShellStart('Сметы', 'Estimate register and build workspace.');
@@ -890,7 +897,7 @@ final class PageController
 
     public function renderDossier(): void
     {
-        if (! current_user_can('read')) {
+        if (! current_user_can('trn_manage_estimates')) {
             wp_die('Forbidden');
         }
 
@@ -912,6 +919,12 @@ final class PageController
         $project = $this->factory->projects()->find($projectId);
         if (! is_array($project)) {
             $this->renderInlineErrorNotice('Project not found for selected project_id.');
+            $this->renderAppShellEnd();
+
+            return;
+        }
+        if (! $this->canAccessProject((int) ($project['id'] ?? 0))) {
+            $this->renderInlineErrorNotice('No access to selected project scope.');
             $this->renderAppShellEnd();
 
             return;
@@ -1488,7 +1501,7 @@ final class PageController
                 'title' => 'Workspace',
                 'items' => [
                     ['label' => 'Dashboard', 'page' => 'trn_dashboard', 'cap' => 'read'],
-                    ['label' => 'Dossier / Timeline', 'page' => 'trn_dossier', 'cap' => 'read'],
+                    ['label' => 'Dossier / Timeline', 'page' => 'trn_dossier', 'cap' => 'trn_manage_estimates'],
                 ],
             ],
             [
@@ -1500,7 +1513,7 @@ final class PageController
                     ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
                     ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
                     ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
-                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'caps' => ['trn_issue_invoices', 'trn_record_payments', 'trn_issue_reminders', 'trn_manage_prices', 'trn_manage_backups']],
+                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'caps' => $this->operationalReportsAccessCaps()],
                 ],
             ],
             [
@@ -1566,7 +1579,7 @@ final class PageController
             ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts', 'capability' => 'trn_issue_offerts'],
             ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices', 'capability' => 'trn_issue_invoices'],
             ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments', 'capability' => 'trn_record_payments'],
-            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports', 'capability' => 'read'],
+            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports', 'capability' => 'trn_view_operational_reports'],
             ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices', 'capability' => 'trn_manage_prices'],
             ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings', 'capability' => 'trn_manage_backups'],
         ];
@@ -1661,13 +1674,17 @@ final class PageController
         }
         echo '</ul>';
 
-        echo '<div class="trn-shell__actions">';
-        $this->renderOperationalLinkBar([
+        $readinessLinks = [
             ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_backups'],
             ['label' => 'Open document settings', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_templates'],
             ['label' => 'Open suppliers / imports', 'url' => admin_url('admin.php?page=trn_suppliers_prices'), 'cap' => 'trn_manage_prices'],
-            ['label' => 'Open operational reports', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'read'],
-        ]);
+        ];
+        if ($this->canViewOperationalReports()) {
+            $readinessLinks[] = ['label' => 'Open operational reports', 'url' => admin_url('admin.php?page=trn_operational_reports')];
+        }
+
+        echo '<div class="trn-shell__actions">';
+        $this->renderOperationalLinkBar($readinessLinks);
         echo '</div>';
         echo '</section>';
     }
@@ -1700,8 +1717,8 @@ final class PageController
         $this->renderUatPathChecklist(
             'Operational control',
             [
-                ['label' => 'Operational reports / export', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'read'],
-                ['label' => 'Dossier / timeline', 'url' => admin_url('admin.php?page=trn_dossier'), 'cap' => 'read'],
+                ['label' => 'Operational reports / export', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'caps' => $this->operationalReportsAccessCaps()],
+                ['label' => 'Dossier / timeline', 'url' => admin_url('admin.php?page=trn_dossier'), 'cap' => 'trn_manage_estimates'],
             ]
         );
         echo '<p><strong>Reminder:</strong> after this stage, only blocker fixes found in real staging/UAT should change these flows.</p>';
@@ -1709,14 +1726,26 @@ final class PageController
         echo '</section>';
     }
 
-    /** @param array<int,array{label:string,url:string,cap:string}> $steps */
+    /** @param array<int,array{label:string,url:string,cap?:string,caps?:array<int,string>}> $steps */
     private function renderUatPathChecklist(string $title, array $steps): void
     {
         echo '<h3>' . esc_html($title) . '</h3>';
         $visible = false;
         echo '<ul>';
         foreach ($steps as $step) {
-            if (! current_user_can((string) ($step['cap'] ?? 'read'))) {
+            $capabilities = $step['caps'] ?? [];
+            if (is_array($capabilities) && $capabilities !== []) {
+                $allowed = false;
+                foreach ($capabilities as $candidateCapability) {
+                    if (is_string($candidateCapability) && $candidateCapability !== '' && current_user_can($candidateCapability)) {
+                        $allowed = true;
+                        break;
+                    }
+                }
+                if (! $allowed) {
+                    continue;
+                }
+            } elseif (! current_user_can((string) ($step['cap'] ?? 'read'))) {
                 continue;
             }
             $visible = true;
@@ -1871,11 +1900,31 @@ final class PageController
 
     private function canViewOperationalReports(): bool
     {
-        return current_user_can('trn_issue_invoices')
-            || current_user_can('trn_record_payments')
-            || current_user_can('trn_issue_reminders')
-            || current_user_can('trn_manage_prices')
-            || current_user_can('trn_manage_backups');
+        foreach ($this->operationalReportsAccessCaps() as $capability) {
+            if (current_user_can($capability)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function canAccessOperationalReportsPage(): bool
+    {
+        return current_user_can('trn_view_operational_reports');
+    }
+
+    /** @return array<int, string> */
+    private function operationalReportsAccessCaps(): array
+    {
+        return [
+            'trn_view_operational_reports',
+            'trn_issue_invoices',
+            'trn_record_payments',
+            'trn_issue_reminders',
+            'trn_manage_prices',
+            'trn_manage_backups',
+        ];
     }
 
 
@@ -2302,13 +2351,17 @@ final class PageController
             echo '<p>Estimate not found.</p>';
             return;
         }
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if (! $this->canAccessProject($projectId)) {
+            echo '<p>Estimate is outside your assigned project scope.</p>';
+            return;
+        }
 
         $lines = $this->factory->estimateLines()->byEstimate($estimateId);
         $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
         $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null), $estimate);
 
         echo '<section class="trn-shell__panel"><h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
-        $projectId = (int) ($estimate['project_id'] ?? 0);
         $actionLinks = [
             ['label' => 'Back to estimates list', 'url' => admin_url('admin.php?page=trn_estimates')],
             ['label' => 'Open offerts for this estimate', 'url' => admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId)],
@@ -2389,33 +2442,37 @@ final class PageController
         ]);
 
         echo '<h3>Commercial summary</h3>';
-        $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
-        $this->renderKeyValueTable([
-            'work_lines_count' => (int) count($lines),
-            'material_lines_count' => (int) count($materialLines),
-            'labour_total' => $this->formatMinorMoney($totals['labour_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'materials_total' => $this->formatMinorMoney($totals['materials_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'consumables_total' => $this->formatMinorMoney($totals['consumables_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'travel_total' => $this->formatMinorMoney($totals['travel_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'waste_disposal_total' => $this->formatMinorMoney($totals['waste_disposal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'equipment_rental_total' => $this->formatMinorMoney($totals['equipment_rental_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'other_costs_total' => $this->formatMinorMoney($totals['other_costs_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'direct_costs_total' => $this->formatMinorMoney($totals['direct_costs_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'cost_subtotal' => $this->formatMinorMoney($totals['cost_subtotal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'margin_total' => $this->formatMinorMoney($totals['margin_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'subtotal_before_discount' => $this->formatMinorMoney($totals['subtotal_before_discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'discount_total' => $this->formatMinorMoney($totals['discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'subtotal_ex_vat' => $this->formatMinorMoney($totals['subtotal_ex_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'vat' => $this->formatMinorMoney($totals['vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'deposit_requested' => $this->formatMinorMoney($totals['deposit_requested_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'outstanding_after_deposit' => $this->formatMinorMoney($totals['outstanding_after_deposit_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'rot_eligibility_status' => $rotSummary['rot_eligibility_status'] ?? '',
-            'rot_ineligibility_reason' => $rotSummary['rot_ineligibility_reason'] ?? '',
-            'rot_eligible_labour' => $this->formatMinorMoney($rotSummary['rot_eligible_labour_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'preliminary_rot' => $this->formatMinorMoney($rotSummary['preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-            'total_after_preliminary_rot' => $this->formatMinorMoney($rotSummary['amount_after_preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
-        ]);
+        if ($this->canViewMarginSensitiveData()) {
+            $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
+            $this->renderKeyValueTable([
+                'work_lines_count' => (int) count($lines),
+                'material_lines_count' => (int) count($materialLines),
+                'labour_total' => $this->formatMinorMoney($totals['labour_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'materials_total' => $this->formatMinorMoney($totals['materials_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'consumables_total' => $this->formatMinorMoney($totals['consumables_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'travel_total' => $this->formatMinorMoney($totals['travel_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'waste_disposal_total' => $this->formatMinorMoney($totals['waste_disposal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'equipment_rental_total' => $this->formatMinorMoney($totals['equipment_rental_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'other_costs_total' => $this->formatMinorMoney($totals['other_costs_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'direct_costs_total' => $this->formatMinorMoney($totals['direct_costs_total_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'cost_subtotal' => $this->formatMinorMoney($totals['cost_subtotal_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'margin_total' => $this->formatMinorMoney($totals['margin_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'subtotal_before_discount' => $this->formatMinorMoney($totals['subtotal_before_discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'discount_total' => $this->formatMinorMoney($totals['discount_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'subtotal_ex_vat' => $this->formatMinorMoney($totals['subtotal_ex_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'vat' => $this->formatMinorMoney($totals['vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'deposit_requested' => $this->formatMinorMoney($totals['deposit_requested_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'outstanding_after_deposit' => $this->formatMinorMoney($totals['outstanding_after_deposit_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'rot_eligibility_status' => $rotSummary['rot_eligibility_status'] ?? '',
+                'rot_ineligibility_reason' => $rotSummary['rot_ineligibility_reason'] ?? '',
+                'rot_eligible_labour' => $this->formatMinorMoney($rotSummary['rot_eligible_labour_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'preliminary_rot' => $this->formatMinorMoney($rotSummary['preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+                'total_after_preliminary_rot' => $this->formatMinorMoney($rotSummary['amount_after_preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            ]);
+        } else {
+            $this->renderEmptyState('Commercial totals are hidden for your role.');
+        }
 
         $offerts = $this->factory->offerts()->byEstimate($estimateId);
         $timelineBuilder = new EstimateDocumentTimelineBuilder();
@@ -2609,11 +2666,15 @@ final class PageController
     private function handleEstimateLine(string $action, int $id, array $postPayload): void
     {
         $estimateId = (int) $this->postValue($postPayload, 'estimate_id');
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if (! is_array($estimate) || ! $this->canAccessProject((int) ($estimate['project_id'] ?? 0))) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('No access to selected project scope.')));
+            exit;
+        }
         $repo = $this->factory->estimateLines();
         $data = $this->collectData($postPayload, ['estimate_id', 'room_id', 'work_item_id', 'line_title_ru_snapshot', 'line_title_sv_snapshot', 'unit_code_snapshot', 'quantity', 'speed_profile', 'norm_per_hour_snapshot', 'complexity_coeff', 'surface_coeff', 'access_coeff', 'urgency_coeff', 'manual_hours_delta', 'labour_rate_minor_snapshot', 'labour_subtotal_minor', 'sort_order']);
 
         if ($action === 'create') {
-            $estimate = $this->factory->estimates()->find($estimateId);
             $data['labour_rate_minor_snapshot'] = $estimate['labour_rate_minor'] ?? 0;
             if (! empty($data['work_item_id'])) {
                 $workItem = $this->factory->workItems()->find((int) $data['work_item_id']);
@@ -2641,6 +2702,11 @@ final class PageController
     private function handleEstimateMaterialLine(string $action, int $id, array $postPayload): void
     {
         $estimateId = (int) $this->postValue($postPayload, 'estimate_id');
+        $estimate = $this->factory->estimates()->find($estimateId);
+        if (! is_array($estimate) || ! $this->canAccessProject((int) ($estimate['project_id'] ?? 0))) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('No access to selected project scope.')));
+            exit;
+        }
         $repo = $this->factory->estimateMaterialLines();
         $data = $this->collectData($postPayload, ['estimate_id', 'estimate_line_id', 'material_id', 'material_name_ru_snapshot', 'material_name_sv_snapshot', 'unit_code_snapshot', 'quantity', 'coverage_snapshot', 'buy_price_minor_snapshot', 'sell_price_minor_snapshot', 'sort_order']);
 
@@ -2683,6 +2749,10 @@ final class PageController
 
         if ($estimate === null) {
             wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error'));
+            exit;
+        }
+        if (! $this->canAccessProject((int) ($estimate['project_id'] ?? 0))) {
+            wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('No access to selected project scope.')));
             exit;
         }
 
@@ -4246,6 +4316,80 @@ final class PageController
         submit_button('Filter', 'secondary', 'submit', false);
         echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_estimates')) . '">Clear filters</a>';
         echo '</form></section>';
+    }
+
+    private function shouldEnforceWorkerProjectScope(): bool
+    {
+        return current_user_can('trn_manage_estimates')
+            && ! current_user_can('trn_manage_projects')
+            && ! current_user_can('trn_issue_offerts');
+    }
+
+    /** @return array<int, int> */
+    private function assignedProjectScope(): array
+    {
+        if (! $this->shouldEnforceWorkerProjectScope()) {
+            return [];
+        }
+
+        $rawMap = get_option('trn_worker_project_scope_map', []);
+        if (! is_array($rawMap)) {
+            return [];
+        }
+
+        $userId = (int) get_current_user_id();
+        $rawScope = $rawMap[$userId] ?? $rawMap[(string) $userId] ?? [];
+        if (! is_array($rawScope)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rawScope as $projectId) {
+            if (! is_scalar($projectId)) {
+                continue;
+            }
+
+            $candidate = (int) $projectId;
+            if ($candidate > 0) {
+                $normalized[] = $candidate;
+            }
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+
+        return $normalized;
+    }
+
+    private function canAccessProject(int $projectId): bool
+    {
+        if (! $this->shouldEnforceWorkerProjectScope()) {
+            return true;
+        }
+
+        $allowedProjectIds = $this->assignedProjectScope();
+        if ($allowedProjectIds === []) {
+            return false;
+        }
+
+        return in_array($projectId, $allowedProjectIds, true);
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @return array<int, array<string, mixed>> */
+    private function filterEstimateRowsByProjectScope(array $rows): array
+    {
+        if (! $this->shouldEnforceWorkerProjectScope()) {
+            return $rows;
+        }
+
+        $allowedProjectIds = $this->assignedProjectScope();
+        if ($allowedProjectIds === []) {
+            return [];
+        }
+
+        return array_values(array_filter($rows, static function (array $row) use ($allowedProjectIds): bool {
+            return in_array((int) ($row['project_id'] ?? 0), $allowedProjectIds, true);
+        }));
     }
 
     /** @param array<int, array<string, mixed>> $rows @param array<string, mixed> $filters @return array<int, array<string, mixed>> */

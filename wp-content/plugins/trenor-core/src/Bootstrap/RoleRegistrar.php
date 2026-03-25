@@ -10,6 +10,7 @@ final class RoleRegistrar
     private const ROLE_CAPABILITY_MAP = [
         'trn_owner_admin' => [
             'read' => true,
+            'trn_view_operational_reports' => true,
             'trn_manage_clients' => true,
             'trn_manage_projects' => true,
             'trn_manage_estimates' => true,
@@ -27,6 +28,7 @@ final class RoleRegistrar
         ],
         'trn_manager' => [
             'read' => true,
+            'trn_view_operational_reports' => true,
             'trn_manage_clients' => true,
             'trn_manage_projects' => true,
             'trn_manage_estimates' => true,
@@ -43,6 +45,7 @@ final class RoleRegistrar
         ],
         'trn_accountant' => [
             'read' => true,
+            'trn_view_operational_reports' => true,
             'trn_issue_invoices' => true,
             'trn_issue_credit_notes' => true,
             'trn_issue_reminders' => true,
@@ -59,6 +62,7 @@ final class RoleRegistrar
         // Backward-compatibility alias for legacy deployments.
         'trn_viewer_accountant' => [
             'read' => true,
+            'trn_view_operational_reports' => true,
             'trn_issue_invoices' => true,
             'trn_issue_credit_notes' => true,
             'trn_issue_reminders' => true,
