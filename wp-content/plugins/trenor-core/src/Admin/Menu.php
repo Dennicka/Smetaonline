@@ -32,7 +32,7 @@ final class Menu
         add_submenu_page('trn_dashboard', 'Betalningar / Payments / Оплаты', 'Payments', 'trn_record_payments', 'trn_payments', [$this->controller, 'renderPayments']);
         add_submenu_page('trn_dashboard', 'Påminnelser / Reminders / Напоминания', 'Reminders', 'trn_issue_reminders', 'trn_reminders', [$this->controller, 'renderReminders']);
         add_submenu_page('trn_dashboard', 'Kreditnotor / Credit Notes / Кредит-ноты', 'Credit Notes', 'trn_issue_credit_notes', 'trn_credit_notes', [$this->controller, 'renderCreditNotes']);
-        add_submenu_page('trn_dashboard', 'Operational Reports / Export', 'Operational Reports', 'read', 'trn_operational_reports', [$this->controller, 'renderOperationalReports']);
+        add_submenu_page('trn_dashboard', 'Operational Reports / Export', 'Operational Reports', 'trn_view_operational_reports', 'trn_operational_reports', [$this->controller, 'renderOperationalReports']);
 
         add_submenu_page('trn_dashboard', 'Suppliers / Price import', 'Suppliers / Prices / Import', 'trn_manage_prices', 'trn_suppliers_prices', [$this->controller, 'renderSuppliersPrices']);
         add_submenu_page('trn_dashboard', 'Клиенты', 'Clients', 'trn_manage_clients', 'trn_clients', [$this->controller, 'renderClients']);

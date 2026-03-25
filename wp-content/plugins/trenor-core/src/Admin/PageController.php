@@ -1914,11 +1914,6 @@ final class PageController
     {
         return [
             'trn_view_operational_reports',
-            'trn_issue_invoices',
-            'trn_record_payments',
-            'trn_issue_reminders',
-            'trn_manage_prices',
-            'trn_manage_backups',
         ];
     }
 
