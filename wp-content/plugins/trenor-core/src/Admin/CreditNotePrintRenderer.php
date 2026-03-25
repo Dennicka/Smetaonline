@@ -45,29 +45,31 @@ final class CreditNotePrintRenderer
         echo '</div>';
 
         echo '<div class="trn-print-doc">';
-        echo '<h2>Printable credit note document</h2>';
-        echo '<h3>Document</h3>';
+        echo '<h2>Credit note</h2>';
+        echo '<h3>1. Document identity</h3>';
         $this->renderKeyValueTable($view['document']);
 
-        echo '<h3>Source context</h3>';
+        echo '<h3>2. Source references</h3>';
+
         $this->renderKeyValueTable($view['context']);
 
-        echo '<h3>Totals</h3>';
+        echo '<h3>3. Corrected totals</h3>';
         $this->renderTotalsTable($view['totals'], $view['currency']);
 
-        echo '<h3>Labour lines</h3>';
+        echo '<h3>4. Labour lines</h3>';
         $this->renderLabourLinesTable($view['labour_lines'], $view['currency']);
 
-        echo '<h3>Material lines</h3>';
+        echo '<h3>5. Material lines</h3>';
         $this->renderMaterialLinesTable($view['material_lines'], $view['currency']);
 
-        echo '<h3>Issuer / Company</h3>';
+        echo '<h3>6. Seller / Company</h3>';
         $this->renderKeyValueTable($view['issuer']);
 
-        echo '<h3>Contact / Payment details</h3>';
+        echo '<h3>7. Contact / Payment details</h3>';
         $this->renderKeyValueTable($view['payment_details']);
 
-        echo '<h3>Terms / Notes</h3>';
+        echo '<h3>8. Notes</h3>';
+
         $this->renderKeyValueTable($view['terms_notes']);
         echo '</div>';
     }
@@ -88,12 +90,11 @@ final class CreditNotePrintRenderer
     /** @param array<int, array{label: string, minor: string}> $rows */
     private function renderTotalsTable(array $rows, string $currency): void
     {
-        echo '<table><thead><tr><th>Field</th><th>Amount</th><th>Minor</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Field</th><th>Amount</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html($row['label']) . '</td>';
             echo '<td>' . esc_html($this->formatMinorMoney($row['minor'], $currency)) . '</td>';
-            echo '<td>' . esc_html($row['minor'] !== '' ? $row['minor'] : '—') . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -108,7 +109,7 @@ final class CreditNotePrintRenderer
             return;
         }
 
-        echo '<table><thead><tr><th>title</th><th>unit</th><th>quantity</th><th>hours</th><th>labour subtotal</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Title</th><th>Unit</th><th>Quantity</th><th>Hours</th><th>Subtotal</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html($row['title']) . '</td>';
@@ -130,7 +131,7 @@ final class CreditNotePrintRenderer
             return;
         }
 
-        echo '<table><thead><tr><th>name</th><th>unit</th><th>quantity</th><th>subtotal</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Name</th><th>Unit</th><th>Quantity</th><th>Subtotal</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html($row['name']) . '</td>';

@@ -13,15 +13,18 @@ final class DocumentPdfArtifactService
     private RepositoryFactory $factory;
     private DocumentArtifactRepository $artifactRepository;
     private RealPdfGenerator $pdfGenerator;
+    private BusinessDocumentPresentationBuilder $presentationBuilder;
 
     public function __construct(
         RepositoryFactory $factory,
         ?DocumentArtifactRepository $artifactRepository = null,
-        ?RealPdfGenerator $pdfGenerator = null
+        ?RealPdfGenerator $pdfGenerator = null,
+        ?BusinessDocumentPresentationBuilder $presentationBuilder = null
     ) {
         $this->factory = $factory;
         $this->artifactRepository = $artifactRepository ?? new DocumentArtifactRepository();
         $this->pdfGenerator = $pdfGenerator ?? new RealPdfGenerator();
+        $this->presentationBuilder = $presentationBuilder ?? new BusinessDocumentPresentationBuilder();
     }
 
     public function getOrCreate(string $documentType, int $documentId): array
@@ -205,34 +208,96 @@ final class DocumentPdfArtifactService
     private function buildPdfLines(string $documentType, array $document): array
     {
         $snapshotPayload = $this->decodeSnapshot((string) ($document['snapshot_json'] ?? ''));
+        $context = $this->buildPresentationContext($documentType, $document);
+        $presentation = $this->presentationBuilder->build($documentType, $document, $snapshotPayload, $context);
 
         $lines = [
-            'Smetaonline document artifact',
-            'Type: ' . strtoupper($documentType),
-            'Document number: ' . (string) ($document['document_number'] ?? ''),
-            'Version: ' . (string) ((int) ($document['version_no'] ?? 1)),
-            'Status: ' . (string) ($document['status'] ?? ''),
-            'Issued at: ' . (string) ($document['issued_at'] ?? ''),
-            'Currency: ' . (string) ($document['currency'] ?? 'SEK'),
-            'Tax mode: ' . (string) ($document['tax_mode'] ?? 'private_consumer'),
-            'Reverse charge note: ' . (string) ($document['reverse_charge_note'] ?? ''),
-            'Client company: ' . (string) ($document['client_company_name'] ?? ''),
-            'Client org/VAT: ' . (string) ($document['client_org_number'] ?? '') . ' / ' . (string) ($document['client_vat_number'] ?? ''),
-            'Total incl VAT (minor): ' . (string) ((int) ($document['total_inc_vat_minor'] ?? 0)),
-            'VAT rate percent: ' . (string) ($document['vat_rate_percent'] ?? ''),
+            'Smetaonline business document',
+            'Title: ' . (string) ($presentation['title'] ?? strtoupper($documentType)),
             'Snapshot checksum source: ' . hash('sha256', (string) ($document['snapshot_json'] ?? '')),
         ];
 
-        if (isset($snapshotPayload['estimate_title']) && is_string($snapshotPayload['estimate_title'])) {
-            $lines[] = 'Estimate title: ' . $snapshotPayload['estimate_title'];
+        $lines = array_merge($lines, $this->sectionLines('Identity', $presentation['identity'] ?? [], 'value'));
+        $lines = array_merge($lines, $this->sectionLines('Seller / Company', $presentation['seller'] ?? [], 'value'));
+        $lines = array_merge($lines, $this->sectionLines('Customer', $presentation['customer'] ?? [], 'value'));
+        $lines = array_merge($lines, $this->sectionLines('References', $presentation['references'] ?? [], 'value'));
+        $lines = array_merge($lines, $this->sectionLines('Totals', $presentation['totals'] ?? [], 'amount_minor'));
+        $lines = array_merge($lines, $this->sectionLines('Tax / Legal notes', $presentation['tax_notes'] ?? [], 'value'));
+        $lines = array_merge($lines, $this->sectionLines('Document-specific context', $presentation['specific'] ?? [], 'value'));
+
+        return $lines;
+    }
+
+    /** @param array<int,mixed> $rows @return array<int,string> */
+    private function sectionLines(string $title, array $rows, string $valueKey): array
+    {
+        if ($rows === []) {
+            return [];
         }
 
-        if (isset($snapshotPayload['totals']) && is_array($snapshotPayload['totals'])) {
-            $totals = $snapshotPayload['totals'];
-            $lines[] = 'Snapshot total inc VAT (minor): ' . (string) ((int) ($totals['total_inc_vat_minor'] ?? 0));
+        $lines = ['-- ' . $title . ' --'];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $label = (string) ($row['label'] ?? '');
+            $value = (string) ($row[$valueKey] ?? '');
+            if ($label === '' || $value === '') {
+                continue;
+            }
+            $lines[] = $label . ': ' . $value;
         }
 
         return $lines;
+    }
+
+    /** @param array<string,mixed> $document @return array<string,mixed> */
+    private function buildPresentationContext(string $documentType, array $document): array
+    {
+        $context = (new DocumentSettings())->get();
+
+        $estimateId = (int) ($document['estimate_id'] ?? 0);
+        $offertId = (int) ($document['offert_id'] ?? 0);
+        $invoiceId = (int) ($document['invoice_id'] ?? 0);
+
+        if ($documentType === 'invoice' && $offertId > 0) {
+            $offert = $this->factory->offerts()->find($offertId);
+            if (is_array($offert)) {
+                $estimateId = $estimateId > 0 ? $estimateId : (int) ($offert['estimate_id'] ?? 0);
+            }
+        }
+
+        if (($documentType === 'credit_note' || $documentType === 'reminder') && $invoiceId > 0) {
+            $invoice = $this->factory->invoices()->find($invoiceId);
+            if (is_array($invoice)) {
+                $offertId = $offertId > 0 ? $offertId : (int) ($invoice['offert_id'] ?? 0);
+                $estimateId = $estimateId > 0 ? $estimateId : (int) ($invoice['estimate_id'] ?? 0);
+            }
+        }
+
+        if (($documentType === 'avtal' || $documentType === 'offert') && $offertId <= 0) {
+            $offertId = (int) ($document['id'] ?? 0);
+        }
+
+        if ($estimateId > 0) {
+            $estimate = $this->factory->estimates()->find($estimateId);
+            if (is_array($estimate)) {
+                $project = $this->factory->projects()->find((int) ($estimate['project_id'] ?? 0));
+                if (is_array($project)) {
+                    $context['project'] = $project;
+                    $property = $this->factory->properties()->find((int) ($project['property_id'] ?? 0));
+                    if (is_array($property)) {
+                        $context['property'] = $property;
+                        $client = $this->factory->clients()->find((int) ($property['client_id'] ?? 0));
+                        if (is_array($client)) {
+                            $context['client'] = $client;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $context;
     }
 
     /** @return array<string, mixed> */
