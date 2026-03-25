@@ -22,7 +22,7 @@ final class InvoiceFromOffertService
 
     /**
      * @param array<string,mixed> $offertRow
-     * @param array{header: array<string, mixed>, totals: array<string, mixed>, lines: array<int, mixed>, material_lines: array<int, mixed>, metadata: array<string, mixed>} $offertSnapshot
+     * @param array{header: array<string, mixed>, totals: array<string, mixed>, lines: array<int, mixed>, material_lines: array<int, mixed>, metadata: array<string, mixed>, rot?: array<string, mixed>} $offertSnapshot
      * @return array<string,mixed>
      */
     public function buildPayload(array $offertRow, array $offertSnapshot, ?DateTimeImmutable $issuedAtUtc = null): array
@@ -43,6 +43,7 @@ final class InvoiceFromOffertService
         $totals = is_array($offertSnapshot['totals'] ?? null) ? $offertSnapshot['totals'] : [];
         $lines = is_array($offertSnapshot['lines'] ?? null) ? $offertSnapshot['lines'] : [];
         $materialLines = is_array($offertSnapshot['material_lines'] ?? null) ? $offertSnapshot['material_lines'] : [];
+        $rotSummary = is_array($offertSnapshot['rot'] ?? null) ? $offertSnapshot['rot'] : [];
 
         $snapshotPayload = Snapshot::freeze([
             'header' => $header,
@@ -58,6 +59,7 @@ final class InvoiceFromOffertService
                 'document_number' => $documentNumber,
                 'issued_at_utc' => $issuedAtUtc->format('Y-m-d H:i:s'),
             ],
+            'rot' => $rotSummary,
         ]);
 
         return [
@@ -73,6 +75,17 @@ final class InvoiceFromOffertService
             'subtotal_ex_vat_minor' => (int) ($totals['subtotal_ex_vat_minor'] ?? 0),
             'vat_minor' => (int) ($totals['vat_minor'] ?? 0),
             'total_inc_vat_minor' => (int) ($totals['total_inc_vat_minor'] ?? 0),
+            'rot_requested' => ! empty($rotSummary['rot_requested']) ? 1 : 0,
+            'housing_type' => (string) ($rotSummary['housing_type'] ?? ''),
+            'rot_eligibility_status' => (string) ($rotSummary['rot_eligibility_status'] ?? 'not_requested'),
+            'rot_ineligibility_reason' => (string) ($rotSummary['rot_ineligibility_reason'] ?? ''),
+            'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
+            'preliminary_rot_minor' => (int) ($rotSummary['preliminary_rot_minor'] ?? 0),
+            'total_after_preliminary_rot_minor' => (int) ($rotSummary['amount_after_preliminary_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+            'rot_buyer_count' => (int) ($rotSummary['rot_buyer_count'] ?? 0),
+            'rot_buyers_json' => (string) wp_json_encode($rotSummary['rot_buyers'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            'rot_allocation_json' => (string) wp_json_encode($rotSummary['rot_allocation'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            'rot_property_reference' => (string) ($rotSummary['rot_property_reference'] ?? ''),
             'snapshot_json' => (string) wp_json_encode($snapshotPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
             'issued_at' => $issuedAtUtc->format('Y-m-d H:i:s'),
         ];

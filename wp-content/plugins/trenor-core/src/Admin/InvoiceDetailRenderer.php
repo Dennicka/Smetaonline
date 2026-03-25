@@ -43,6 +43,10 @@ final class InvoiceDetailRenderer
             'subtotal_ex_vat_minor' => $this->formatMinorMoney($snapshot['totals']['subtotal_ex_vat_minor'] ?? 0, $currency),
             'vat_minor' => $this->formatMinorMoney($snapshot['totals']['vat_minor'] ?? 0, $currency),
             'total_inc_vat_minor' => $this->formatMinorMoney($snapshot['totals']['total_inc_vat_minor'] ?? 0, $currency),
+            'rot_eligible_labour_minor' => $this->formatMinorMoney($snapshot['totals']['rot_eligible_labour_minor'] ?? 0, $currency),
+            'preliminary_rot_minor' => $this->formatMinorMoney($snapshot['totals']['preliminary_rot_minor'] ?? 0, $currency),
+            'amount_before_rot_minor' => $this->formatMinorMoney($snapshot['totals']['amount_before_rot_minor'] ?? 0, $currency),
+            'amount_after_preliminary_rot_minor' => $this->formatMinorMoney($snapshot['totals']['amount_after_preliminary_rot_minor'] ?? 0, $currency),
         ]);
 
         echo '<h3>4. Labour lines snapshot</h3>';

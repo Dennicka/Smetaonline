@@ -9,6 +9,7 @@ use Trenor\Core\Database\RepositoryFactory;
 use Trenor\Core\Domain\Exception\PaymentRegistrationException;
 use Trenor\Core\Domain\Service\DocumentSequenceGenerator;
 use Trenor\Core\Domain\Exception\EstimateCalculationException;
+use Trenor\Core\Domain\Exception\RotValidationException;
 use Trenor\Core\Domain\Service\EstimateCalculator;
 use Trenor\Core\Domain\Service\EstimateSnapshotService;
 use Trenor\Core\Domain\Service\EstimateTotalsCalculator;
@@ -26,6 +27,7 @@ use Trenor\Core\Domain\Service\DocumentPdfArtifactService;
 use Trenor\Core\Domain\Service\AvtalFromOffertService;
 use Trenor\Core\Domain\Service\AtaIssueService;
 use Trenor\Core\Domain\Service\AtaTotalsCalculator;
+use Trenor\Core\Domain\Service\RotCalculationService;
 
 final class PageController
 {
@@ -91,7 +93,7 @@ final class PageController
         }
 
         if ($entity === 'estimate') {
-            $this->handleEntity($this->factory->estimates(), 'trn_estimates', $action, $id, $this->collectData($postPayload, ['project_id', 'title', 'status', 'currency', 'vat_rate_percent', 'labour_rate_minor', 'notes']));
+            $this->handleEntity($this->factory->estimates(), 'trn_estimates', $action, $id, $this->collectData($postPayload, ['project_id', 'title', 'status', 'currency', 'vat_rate_percent', 'labour_rate_minor', 'notes', 'rot_requested', 'housing_type', 'rot_is_new_build', 'rot_property_reference', 'rot_buyers_json']));
         }
 
         if ($entity === 'estimate_line') {
@@ -972,6 +974,11 @@ final class PageController
         echo '<p><label>currency<br><input name="currency" class="regular-text" value="SEK"></label></p>';
         echo '<p><label>vat_rate_percent<br><input name="vat_rate_percent" class="regular-text" value="25"></label></p>';
         echo '<p><label>labour_rate_minor<br><input name="labour_rate_minor" class="regular-text" value="65000"></label></p>';
+        echo '<p><label>rot_requested (0/1)<br><input name="rot_requested" class="regular-text" value="0"></label></p>';
+        echo '<p><label>housing_type (smahus|bostadsratt|agarlagenhet)<br><input name="housing_type" class="regular-text" value=""></label></p>';
+        echo '<p><label>rot_is_new_build (0/1)<br><input name="rot_is_new_build" class="regular-text" value="0"></label></p>';
+        echo '<p><label>rot_property_reference<br><input name="rot_property_reference" class="regular-text" value=""></label></p>';
+        echo '<p><label>rot_buyers_json<br><textarea name="rot_buyers_json" rows="4" class="large-text">[]</textarea></label></p>';
         submit_button('Create estimate');
         echo '</form>';
     }
@@ -1050,6 +1057,7 @@ final class PageController
         }
 
         echo '<h3>Commercial summary</h3>';
+        $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
         $this->renderKeyValueTable([
             'work_lines_count' => (int) count($lines),
             'material_lines_count' => (int) count($materialLines),
@@ -1058,6 +1066,11 @@ final class PageController
             'subtotal_ex_vat' => $this->formatMinorMoney($totals['subtotal_ex_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'vat' => $this->formatMinorMoney($totals['vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
             'total_inc_vat' => $this->formatMinorMoney($totals['total_inc_vat_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'rot_eligibility_status' => $rotSummary['rot_eligibility_status'] ?? '',
+            'rot_ineligibility_reason' => $rotSummary['rot_ineligibility_reason'] ?? '',
+            'rot_eligible_labour' => $this->formatMinorMoney($rotSummary['rot_eligible_labour_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'preliminary_rot' => $this->formatMinorMoney($rotSummary['preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
+            'total_after_preliminary_rot' => $this->formatMinorMoney($rotSummary['amount_after_preliminary_rot_minor'] ?? null, (string) ($estimate['currency'] ?? 'SEK')),
         ]);
 
         $offerts = $this->factory->offerts()->byEstimate($estimateId);
@@ -1345,6 +1358,13 @@ final class PageController
         $materialLines = $materialRepo->byEstimate($estimateId);
 
         $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+        $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
+        $totals = array_merge($totals, [
+            'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
+            'preliminary_rot_minor' => (int) ($rotSummary['preliminary_rot_minor'] ?? 0),
+            'amount_before_rot_minor' => (int) ($rotSummary['amount_before_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+            'amount_after_preliminary_rot_minor' => (int) ($rotSummary['amount_after_preliminary_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+        ]);
         $estimateRepo->updateEntity($estimateId, [
             'project_id' => (int) $estimate['project_id'],
             'title' => (string) $estimate['title'],
@@ -1387,6 +1407,19 @@ final class PageController
             }
 
             $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+            try {
+                $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
+            } catch (RotValidationException $exception) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
+
+            $totals = array_merge($totals, [
+                'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
+                'preliminary_rot_minor' => (int) ($rotSummary['preliminary_rot_minor'] ?? 0),
+                'amount_before_rot_minor' => (int) ($rotSummary['amount_before_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+                'amount_after_preliminary_rot_minor' => (int) ($rotSummary['amount_after_preliminary_rot_minor'] ?? ($totals['total_inc_vat_minor'] ?? 0)),
+            ]);
             $businessEffect = $this->operationReplayGuard->beginBusinessEffect(
                 'issue_offert',
                 $this->issueOffertScope($estimateId),
@@ -1398,7 +1431,7 @@ final class PageController
 
             $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
             $service = new OffertFromEstimateService($offertRepo, new DocumentSequenceGenerator());
-            $payload = $service->buildPayload($estimate, $lines, $materialLines, $totals);
+            $payload = $service->buildPayload($estimate, $lines, $materialLines, $totals, null, $rotSummary);
             $offertId = $offertRepo->create($payload);
 
             if ($offertId === null) {
@@ -2401,6 +2434,34 @@ final class PageController
     private function issueInvoiceScope(int $offertId): string
     {
         return 'offert:' . $offertId;
+    }
+
+    /**
+     * @param array<string,mixed> $estimate
+     * @param array<int,array<string,mixed>> $lines
+     * @param array<string,mixed> $totals
+     * @return array<string,mixed>
+     */
+    private function buildRotSummary(array $estimate, array $lines, array $totals): array
+    {
+        $workItems = $this->factory->workItems();
+        $eligibilityMap = [];
+        foreach ($lines as $line) {
+            $workItemId = (int) ($line['work_item_id'] ?? 0);
+            if ($workItemId <= 0 || array_key_exists((string) $workItemId, $eligibilityMap)) {
+                continue;
+            }
+
+            $workItem = $workItems->find($workItemId);
+            $eligibilityMap[(string) $workItemId] = (bool) (($workItem['is_rot_eligible'] ?? 0) === 1 || ($workItem['is_rot_eligible'] ?? 0) === '1');
+        }
+
+        return (new RotCalculationService())->buildSummary(
+            $estimate,
+            $lines,
+            (int) ($totals['total_inc_vat_minor'] ?? 0),
+            $eligibilityMap
+        );
     }
 
     private function issueCreditNoteScope(int $invoiceId): string

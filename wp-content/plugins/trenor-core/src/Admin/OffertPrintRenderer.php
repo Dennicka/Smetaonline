@@ -168,6 +168,10 @@ final class OffertPrintRenderer
             'subtotal_ex_vat' => 'Subtotal (ex VAT)',
             'vat' => 'VAT',
             'total_inc_vat' => 'Total (inc VAT)',
+            'rot_eligible_labour' => 'ROT eligible labour',
+            'preliminary_rot' => 'Preliminary ROT',
+            'amount_before_rot' => 'Amount before ROT',
+            'amount_after_preliminary_rot' => 'Amount after preliminary ROT',
         ];
 
         foreach ($labels as $key => $label) {

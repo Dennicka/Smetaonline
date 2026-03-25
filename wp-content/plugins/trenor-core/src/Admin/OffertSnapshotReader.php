@@ -13,7 +13,8 @@ final class OffertSnapshotReader
      *     totals: array<string, mixed>,
      *     lines: array<int, mixed>,
      *     material_lines: array<int, mixed>,
-     *     metadata: array<string, mixed>
+     *     metadata: array<string, mixed>,
+     *     rot: array<string, mixed>
      * }
      */
     public function read(array $offertRow): array
@@ -29,11 +30,12 @@ final class OffertSnapshotReader
             'lines' => $this->normalizeList($decoded['lines'] ?? null),
             'material_lines' => $this->normalizeList($decoded['material_lines'] ?? null),
             'metadata' => $this->normalizeMap($decoded['metadata'] ?? null),
+            'rot' => $this->normalizeMap($decoded['rot'] ?? null),
         ];
     }
 
     /**
-     * @return array{header: array<string, mixed>, totals: array<string, mixed>, lines: array<int, mixed>, material_lines: array<int, mixed>, metadata: array<string, mixed>}
+     * @return array{header: array<string, mixed>, totals: array<string, mixed>, lines: array<int, mixed>, material_lines: array<int, mixed>, metadata: array<string, mixed>, rot: array<string, mixed>}
      */
     private function emptySnapshot(): array
     {
@@ -43,6 +45,7 @@ final class OffertSnapshotReader
             'lines' => [],
             'material_lines' => [],
             'metadata' => [],
+            'rot' => [],
         ];
     }
 

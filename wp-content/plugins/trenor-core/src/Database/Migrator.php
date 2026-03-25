@@ -78,6 +78,11 @@ final class Migrator
             $this->runQueries($this->ataCoreQueries($charsetCollate));
             $this->markMigration('013_ata_core');
         }
+
+        if (! $this->hasMigration('014_rot_engine_v1')) {
+            $this->runQueries($this->rotEngineV1Queries($charsetCollate));
+            $this->markMigration('014_rot_engine_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -441,6 +446,104 @@ final class Migrator
                 subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
                 vat_minor BIGINT NOT NULL DEFAULT 0,
                 total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY offert_id (offert_id),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function rotEngineV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_estimates (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                project_id BIGINT UNSIGNED NOT NULL,
+                title VARCHAR(191) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_rate_minor BIGINT NOT NULL DEFAULT 0,
+                notes TEXT NULL,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_is_new_build TINYINT(1) NOT NULL DEFAULT 0,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                rot_buyers_json LONGTEXT NULL,
+                calculated_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY project_id (project_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_offerts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_eligibility_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
+                rot_ineligibility_reason VARCHAR(64) NOT NULL DEFAULT '',
+                rot_eligible_labour_minor BIGINT NOT NULL DEFAULT 0,
+                preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                total_after_preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                rot_buyer_count INT NOT NULL DEFAULT 0,
+                rot_buyers_json LONGTEXT NULL,
+                rot_allocation_json LONGTEXT NULL,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_invoices (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                offert_id BIGINT UNSIGNED NOT NULL,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_eligibility_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
+                rot_ineligibility_reason VARCHAR(64) NOT NULL DEFAULT '',
+                rot_eligible_labour_minor BIGINT NOT NULL DEFAULT 0,
+                preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                total_after_preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                rot_buyer_count INT NOT NULL DEFAULT 0,
+                rot_buyers_json LONGTEXT NULL,
+                rot_allocation_json LONGTEXT NULL,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
                 snapshot_json LONGTEXT NOT NULL,
                 issued_at DATETIME NOT NULL,
                 created_at DATETIME NOT NULL,

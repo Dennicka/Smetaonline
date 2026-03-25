@@ -43,7 +43,20 @@ final class OffertFromEstimateServiceTest extends TestCase
         $materials = [['id' => 7, 'quantity' => 2.25, 'subtotal_minor' => 30000]];
         $totals = ['labour_total_minor' => 90000, 'materials_total_minor' => 30000, 'subtotal_ex_vat_minor' => 120000, 'vat_minor' => 30000, 'total_inc_vat_minor' => 150000];
 
-        $payload = $service->buildPayload($header, $lines, $materials, $totals, new DateTimeImmutable('2026-03-10 09:30:00'));
+        $rotSummary = [
+            'rot_requested' => true,
+            'housing_type' => 'smahus',
+            'rot_eligibility_status' => 'preliminary_approved',
+            'rot_eligible_labour_minor' => 90000,
+            'preliminary_rot_minor' => 27000,
+            'amount_after_preliminary_rot_minor' => 123000,
+            'rot_buyer_count' => 1,
+            'rot_buyers' => [['personal_identity' => '19800101-1234', 'share_percent' => 100]],
+            'rot_allocation' => [['personal_identity' => '19800101-1234', 'allocated_rot_minor' => 27000]],
+            'rot_property_reference' => 'FAST-123',
+        ];
+
+        $payload = $service->buildPayload($header, $lines, $materials, $totals, new DateTimeImmutable('2026-03-10 09:30:00'), $rotSummary);
 
         $header['title'] = 'Changed later';
         $lines[0]['quantity'] = 99.0;
@@ -59,6 +72,8 @@ final class OffertFromEstimateServiceTest extends TestCase
         self::assertSame(120000, $payload['subtotal_ex_vat_minor']);
         self::assertSame(30000, $payload['vat_minor']);
         self::assertSame(150000, $payload['total_inc_vat_minor']);
+        self::assertSame(27000, $payload['preliminary_rot_minor']);
+        self::assertSame(123000, $payload['total_after_preliminary_rot_minor']);
 
         self::assertSame(44, $versionProvider->receivedEstimateId);
         self::assertSame('off', $documentNumbers->receivedDocType);
@@ -69,6 +84,7 @@ final class OffertFromEstimateServiceTest extends TestCase
         self::assertSame(1.5, $snapshot['lines'][0]['quantity']);
         self::assertSame(2.25, $snapshot['material_lines'][0]['quantity']);
         self::assertSame(150000, $snapshot['totals']['total_inc_vat_minor']);
+        self::assertSame(27000, $snapshot['rot']['preliminary_rot_minor']);
         self::assertSame(44, $snapshot['metadata']['source_estimate_id']);
         self::assertSame(2, $snapshot['metadata']['offert_version_no']);
         self::assertSame((string) $payload['document_number'], $snapshot['metadata']['document_number']);

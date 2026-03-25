@@ -20,12 +20,13 @@ final class OffertSnapshotReaderTest extends TestCase
     {
         $actual = $this->reader->read(['snapshot_json' => '{invalid']);
 
-        self::assertSame(['header', 'totals', 'lines', 'material_lines', 'metadata'], array_keys($actual));
+        self::assertSame(['header', 'totals', 'lines', 'material_lines', 'metadata', 'rot'], array_keys($actual));
         self::assertSame([], $actual['header']);
         self::assertSame([], $actual['totals']);
         self::assertSame([], $actual['lines']);
         self::assertSame([], $actual['material_lines']);
         self::assertSame([], $actual['metadata']);
+        self::assertSame([], $actual['rot']);
     }
 
     public function testReadNormalizesMissingSectionsSafely(): void
@@ -44,6 +45,7 @@ final class OffertSnapshotReaderTest extends TestCase
         self::assertSame([['id' => 10]], $actual['lines']);
         self::assertSame([], $actual['material_lines']);
         self::assertSame([], $actual['metadata']);
+        self::assertSame([], $actual['rot']);
     }
 
     public function testReadNormalizesMalformedSectionTypesSafely(): void
@@ -65,6 +67,7 @@ final class OffertSnapshotReaderTest extends TestCase
         self::assertSame([], $actual['lines']);
         self::assertSame([], $actual['material_lines']);
         self::assertSame([], $actual['metadata']);
+        self::assertSame([], $actual['rot']);
     }
 
     public function testReadPreservesValidSnapshotSections(): void
@@ -76,6 +79,7 @@ final class OffertSnapshotReaderTest extends TestCase
                 'lines' => [['id' => 10, 'quantity' => 2]],
                 'material_lines' => [['id' => 20, 'quantity' => 3]],
                 'metadata' => ['source_estimate_id' => 55],
+                'rot' => ['preliminary_rot_minor' => 100],
             ]),
         ];
 
@@ -86,5 +90,6 @@ final class OffertSnapshotReaderTest extends TestCase
         self::assertSame([['id' => 10, 'quantity' => 2]], $actual['lines']);
         self::assertSame([['id' => 20, 'quantity' => 3]], $actual['material_lines']);
         self::assertSame(['source_estimate_id' => 55], $actual['metadata']);
+        self::assertSame(['preliminary_rot_minor' => 100], $actual['rot']);
     }
 }
