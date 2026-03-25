@@ -28,6 +28,7 @@ final class CreditNotePrintViewModelTest extends TestCase
                 'version_no' => 2,
                 'status' => 'issued',
                 'currency' => 'SEK',
+                'tax_mode' => 'business_reverse_charge',
                 'total_inc_vat_minor' => 2500,
                 'issued_at' => '2026-03-20 12:00:00',
             ],
@@ -38,7 +39,8 @@ final class CreditNotePrintViewModelTest extends TestCase
                     'materials_total_minor' => 1000,
                     'subtotal_ex_vat_minor' => 2000,
                     'vat_minor' => 500,
-                    'total_inc_vat_minor' => 2500,
+                    'tax_mode' => 'business_reverse_charge',
+                'total_inc_vat_minor' => 2500,
                 ],
                 'lines' => [['line_title_sv_snapshot' => 'Arbete', 'unit_code_snapshot' => 'h', 'quantity' => 2, 'calculated_hours' => 2, 'labour_subtotal_minor' => 1000]],
                 'material_lines' => [['material_name_sv_snapshot' => 'Farg', 'unit_code_snapshot' => 'pcs', 'quantity' => 1, 'subtotal_minor' => 1000]],
@@ -48,11 +50,12 @@ final class CreditNotePrintViewModelTest extends TestCase
                 'source_invoice' => ['id' => 9, 'document_number' => 'INV-2026-001'],
                 'source_estimate' => ['id' => 4, 'title' => 'Kitchen'],
                 'project' => ['name' => 'Project X'],
-                'client' => ['name' => 'Client Y'],
+                'client' => ['name' => 'Client Y', 'company_name' => 'Client Y AB', 'org_number' => '556677-8899', 'vat_number' => 'SE556677889901'],
             ]
         );
 
         self::assertSame('CRN-2026-001', $result['document']['document_number']);
+        self::assertSame('business_reverse_charge', $result['document']['tax_mode']);
         self::assertSame('INV-2026-001', $result['context']['source_invoice_document_number']);
         self::assertSame('Kitchen', $result['context']['source_estimate_title']);
         self::assertSame('1000', $result['totals'][0]['minor']);

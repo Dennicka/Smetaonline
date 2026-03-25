@@ -20,6 +20,8 @@ use Trenor\Core\Domain\Service\InvoiceFromOffertService;
 use Trenor\Core\Domain\Service\OffertFromEstimateService;
 use Trenor\Core\Domain\Service\PaymentRecorderService;
 use Trenor\Core\Domain\Service\ReminderFromInvoiceService;
+use Trenor\Core\Domain\Service\ReverseChargePolicy;
+use Trenor\Core\Domain\Service\TaxMode;
 use Trenor\Core\Domain\Service\DocumentSettings;
 use Trenor\Core\Domain\Service\OperationReplayGuard;
 use Trenor\Core\Domain\Service\BusinessEffectFingerprint;
@@ -69,7 +71,7 @@ final class PageController
         $id = (int) $this->postValue($postPayload, 'id');
 
         if ($entity === 'client') {
-            $this->handleEntity($this->factory->clients(), 'trn_clients', $action, $id, $this->collectData($postPayload, ['name', 'org_number', 'email', 'phone']));
+            $this->handleEntity($this->factory->clients(), 'trn_clients', $action, $id, $this->collectData($postPayload, ['name', 'company_name', 'customer_type', 'org_number', 'vat_number', 'reverse_charge_applicable', 'reverse_charge_note', 'email', 'phone']));
         }
 
         if ($entity === 'property') {
@@ -93,7 +95,12 @@ final class PageController
         }
 
         if ($entity === 'estimate') {
-            $this->handleEntity($this->factory->estimates(), 'trn_estimates', $action, $id, $this->collectData($postPayload, ['project_id', 'title', 'status', 'currency', 'vat_rate_percent', 'labour_rate_minor', 'notes', 'rot_requested', 'housing_type', 'rot_is_new_build', 'rot_property_reference', 'rot_buyers_json']));
+            $data = $this->collectData($postPayload, ['project_id', 'title', 'status', 'currency', 'tax_mode', 'reverse_charge_note', 'vat_rate_percent', 'labour_rate_minor', 'notes', 'rot_requested', 'housing_type', 'rot_is_new_build', 'rot_property_reference', 'rot_buyers_json']);
+            if (TaxMode::isReverseCharge((string) ($data['tax_mode'] ?? '')) && ! empty($data['rot_requested'])) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&trn_result=error&trn_msg=' . rawurlencode('Reverse charge cannot be combined with ROT.')));
+                exit;
+            }
+            $this->handleEntity($this->factory->estimates(), 'trn_estimates', $action, $id, $data);
         }
 
         if ($entity === 'estimate_line') {
@@ -972,6 +979,8 @@ final class PageController
         echo '<p><label>project_id<br><input name="project_id" class="regular-text"></label></p>';
         echo '<p><label>title<br><input name="title" class="regular-text"></label></p>';
         echo '<p><label>currency<br><input name="currency" class="regular-text" value="SEK"></label></p>';
+        echo '<p><label>tax_mode (private_consumer|business_standard_vat|business_reverse_charge)<br><input name="tax_mode" class="regular-text" value="private_consumer"></label></p>';
+        echo '<p><label>reverse_charge_note<br><input name="reverse_charge_note" class="regular-text" value=""></label></p>';
         echo '<p><label>vat_rate_percent<br><input name="vat_rate_percent" class="regular-text" value="25"></label></p>';
         echo '<p><label>labour_rate_minor<br><input name="labour_rate_minor" class="regular-text" value="65000"></label></p>';
         echo '<p><label>rot_requested (0/1)<br><input name="rot_requested" class="regular-text" value="0"></label></p>';
@@ -993,7 +1002,7 @@ final class PageController
 
         $lines = $this->factory->estimateLines()->byEstimate($estimateId);
         $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
-        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
 
         echo '<h2>Estimate #' . esc_html((string) $estimateId) . '</h2>';
         echo '<p><strong>title:</strong> ' . esc_html((string) $estimate['title']) . ' | <strong>labour_rate_minor:</strong> ' . esc_html((string) $estimate['labour_rate_minor']) . ' | <strong>vat_rate_percent:</strong> ' . esc_html((string) $estimate['vat_rate_percent']) . '</p>';
@@ -1040,6 +1049,7 @@ final class PageController
                 'address_line' => $property['address_line'] ?? '',
                 'city' => $property['city'] ?? '',
                 'postal_code' => $property['postal_code'] ?? '',
+                'tax_mode' => TaxMode::normalize($estimate['tax_mode'] ?? null),
             ]);
         }
 
@@ -1357,7 +1367,7 @@ final class PageController
         $lines = $lineRepo->byEstimate($estimateId);
         $materialLines = $materialRepo->byEstimate($estimateId);
 
-        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+        $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
         $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
         $totals = array_merge($totals, [
             'rot_eligible_labour_minor' => (int) ($rotSummary['rot_eligible_labour_minor'] ?? 0),
@@ -1370,6 +1380,8 @@ final class PageController
             'title' => (string) $estimate['title'],
             'status' => (string) $estimate['status'],
             'currency' => (string) $estimate['currency'],
+            'tax_mode' => TaxMode::normalize($estimate['tax_mode'] ?? null),
+            'reverse_charge_note' => (string) ($estimate['reverse_charge_note'] ?? ''),
             'vat_rate_percent' => (float) $estimate['vat_rate_percent'],
             'labour_rate_minor' => (int) $estimate['labour_rate_minor'],
             'notes' => (string) $estimate['notes'],
@@ -1401,12 +1413,19 @@ final class PageController
 
             $lines = $this->factory->estimateLines()->byEstimate($estimateId);
             $materialLines = $this->factory->estimateMaterialLines()->byEstimate($estimateId);
+            $client = $this->resolveEstimateClient($estimate);
+            try {
+                (new ReverseChargePolicy())->assertEstimateEligibility($estimate, $client);
+            } catch (RuntimeException $exception) {
+                wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode($exception->getMessage())));
+                exit;
+            }
             if ($lines === [] && $materialLines === []) {
                 wp_safe_redirect(admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId . '&trn_result=error&trn_msg=' . rawurlencode('Cannot issue offert without labour/material lines.')));
                 exit;
             }
 
-            $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent']);
+            $totals = (new EstimateTotalsCalculator())->calculate($lines, $materialLines, (float) $estimate['vat_rate_percent'], TaxMode::normalize($estimate['tax_mode'] ?? null));
             try {
                 $rotSummary = $this->buildRotSummary($estimate, $lines, $totals);
             } catch (RotValidationException $exception) {
@@ -1431,7 +1450,12 @@ final class PageController
 
             $receiptId = (int) ($businessEffect['receipt_id'] ?? 0);
             $service = new OffertFromEstimateService($offertRepo, new DocumentSequenceGenerator());
-            $payload = $service->buildPayload($estimate, $lines, $materialLines, $totals, null, $rotSummary);
+            $estimateForPayload = $estimate;
+            $estimateForPayload['tax_mode'] = TaxMode::normalize($estimate['tax_mode'] ?? null);
+            $estimateForPayload['client_company_name'] = (string) ($client['company_name'] ?? ($client['name'] ?? ''));
+            $estimateForPayload['client_org_number'] = (string) ($client['org_number'] ?? '');
+            $estimateForPayload['client_vat_number'] = (string) ($client['vat_number'] ?? '');
+            $payload = $service->buildPayload($estimateForPayload, $lines, $materialLines, $totals, null, $rotSummary);
             $offertId = $offertRepo->create($payload);
 
             if ($offertId === null) {
@@ -3433,6 +3457,37 @@ final class PageController
         }
 
         return $context;
+    }
+
+    /** @param array<string, mixed> $estimate @return array<string, mixed> */
+    private function resolveEstimateClient(array $estimate): array
+    {
+        $projectId = (int) ($estimate['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            return [];
+        }
+
+        $project = $this->factory->projects()->find($projectId);
+        if ($project === null) {
+            return [];
+        }
+
+        $propertyId = (int) ($project['property_id'] ?? 0);
+        if ($propertyId <= 0) {
+            return [];
+        }
+
+        $property = $this->factory->properties()->find($propertyId);
+        if ($property === null) {
+            return [];
+        }
+
+        $clientId = (int) ($property['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            return [];
+        }
+
+        return $this->factory->clients()->find($clientId) ?? [];
     }
 
     /**

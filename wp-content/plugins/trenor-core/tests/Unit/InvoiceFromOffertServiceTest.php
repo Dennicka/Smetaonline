@@ -39,7 +39,7 @@ final class InvoiceFromOffertServiceTest extends TestCase
 
         $service = new InvoiceFromOffertService($versionProvider, $documentNumbers);
 
-        $offert = ['id' => 17, 'estimate_id' => 44, 'status' => 'accepted', 'document_number' => 'OFF-202603-00077', 'currency' => 'SEK', 'vat_rate_percent' => 25.0];
+        $offert = ['id' => 17, 'estimate_id' => 44, 'status' => 'accepted', 'document_number' => 'OFF-202603-00077', 'currency' => 'SEK', 'tax_mode' => 'business_standard_vat', 'client_company_name' => 'Client AB', 'client_org_number' => '556677-8899', 'client_vat_number' => 'SE556677889901', 'vat_rate_percent' => 25.0];
         $snapshot = [
             'header' => ['id' => 44, 'title' => 'Kitchen refresh'],
             'totals' => ['labour_total_minor' => 90000, 'materials_total_minor' => 30000, 'subtotal_ex_vat_minor' => 120000, 'vat_minor' => 30000, 'total_inc_vat_minor' => 150000],
@@ -79,6 +79,8 @@ final class InvoiceFromOffertServiceTest extends TestCase
         self::assertSame(150000, $payload['total_inc_vat_minor']);
         self::assertSame(27000, $payload['preliminary_rot_minor']);
         self::assertSame(123000, $payload['total_after_preliminary_rot_minor']);
+        self::assertSame('business_standard_vat', $payload['tax_mode']);
+        self::assertSame('Client AB', $payload['client_company_name']);
 
         self::assertSame(17, $versionProvider->receivedOffertId);
         self::assertSame('inv', $documentNumbers->receivedDocType);

@@ -27,6 +27,7 @@ final class InvoicePrintViewModelTest extends TestCase
                 'status' => 'partially_paid',
                 'issued_at' => '2026-03-10 10:00:00',
                 'currency' => 'SEK',
+                'tax_mode' => 'business_standard_vat',
                 'total_inc_vat_minor' => 13000,
             ],
             [
@@ -36,7 +37,8 @@ final class InvoicePrintViewModelTest extends TestCase
                     'materials_total_minor' => 3000,
                     'subtotal_ex_vat_minor' => 10000,
                     'vat_minor' => 3000,
-                    'total_inc_vat_minor' => 13000,
+                    'tax_mode' => 'business_standard_vat',
+                'total_inc_vat_minor' => 13000,
                 ],
                 'lines' => [[
                     'title' => 'Labour item',
@@ -89,6 +91,7 @@ final class InvoicePrintViewModelTest extends TestCase
         self::assertSame(['document', 'recipient', 'project_object', 'invoice_summary', 'labour_lines', 'material_lines', 'payment_summary', 'payments', 'issuer', 'payment_terms', 'currency'], array_keys($result));
 
         self::assertSame('INV-202603-00031', $result['document']['document_number']);
+        self::assertSame('business_standard_vat', $result['document']['tax_mode']);
         self::assertSame('3', $result['document']['version_no']);
         self::assertSame('partially_paid', $result['document']['status']);
         self::assertSame('2026-03-25', $result['document']['payment_due_date']);

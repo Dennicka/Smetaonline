@@ -83,6 +83,11 @@ final class Migrator
             $this->runQueries($this->rotEngineV1Queries($charsetCollate));
             $this->markMigration('014_rot_engine_v1');
         }
+
+        if (! $this->hasMigration('015_b2b_reverse_charge_v1')) {
+            $this->runQueries($this->b2bReverseChargeV1Queries($charsetCollate));
+            $this->markMigration('015_b2b_reverse_charge_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -846,6 +851,166 @@ final class Migrator
                 KEY invoice_id (invoice_id),
                 KEY status (status),
                 KEY invoice_link_status (invoice_link_status)
+            ) {$charsetCollate};",
+        ];
+    }
+
+
+    /** @return array<int, string> */
+    private function b2bReverseChargeV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_clients (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                name VARCHAR(191) NOT NULL,
+                company_name VARCHAR(191) NOT NULL DEFAULT '',
+                customer_type VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                org_number VARCHAR(64) NULL,
+                vat_number VARCHAR(64) NOT NULL DEFAULT '',
+                reverse_charge_applicable TINYINT(1) NOT NULL DEFAULT 0,
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                email VARCHAR(191) NULL,
+                phone VARCHAR(64) NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_estimates (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                project_id BIGINT UNSIGNED NOT NULL,
+                title VARCHAR(191) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                tax_mode VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_rate_minor BIGINT NOT NULL DEFAULT 0,
+                notes TEXT NULL,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_is_new_build TINYINT(1) NOT NULL DEFAULT 0,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                rot_buyers_json LONGTEXT NULL,
+                calculated_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY project_id (project_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_offerts (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                tax_mode VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                client_company_name VARCHAR(191) NOT NULL DEFAULT '',
+                client_org_number VARCHAR(64) NOT NULL DEFAULT '',
+                client_vat_number VARCHAR(64) NOT NULL DEFAULT '',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_eligibility_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
+                rot_ineligibility_reason VARCHAR(64) NOT NULL DEFAULT '',
+                rot_eligible_labour_minor BIGINT NOT NULL DEFAULT 0,
+                preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                total_after_preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                rot_buyer_count INT NOT NULL DEFAULT 0,
+                rot_buyers_json LONGTEXT NULL,
+                rot_allocation_json LONGTEXT NULL,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_invoices (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                offert_id BIGINT UNSIGNED NOT NULL,
+                estimate_id BIGINT UNSIGNED NOT NULL,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                tax_mode VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                client_company_name VARCHAR(191) NOT NULL DEFAULT '',
+                client_org_number VARCHAR(64) NOT NULL DEFAULT '',
+                client_vat_number VARCHAR(64) NOT NULL DEFAULT '',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                rot_requested TINYINT(1) NOT NULL DEFAULT 0,
+                housing_type VARCHAR(32) NOT NULL DEFAULT '',
+                rot_eligibility_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
+                rot_ineligibility_reason VARCHAR(64) NOT NULL DEFAULT '',
+                rot_eligible_labour_minor BIGINT NOT NULL DEFAULT 0,
+                preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                total_after_preliminary_rot_minor BIGINT NOT NULL DEFAULT 0,
+                rot_buyer_count INT NOT NULL DEFAULT 0,
+                rot_buyers_json LONGTEXT NULL,
+                rot_allocation_json LONGTEXT NULL,
+                rot_property_reference VARCHAR(191) NOT NULL DEFAULT '',
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY offert_id (offert_id),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_credit_notes (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                invoice_id BIGINT UNSIGNED NOT NULL,
+                offert_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                estimate_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                document_number VARCHAR(64) NOT NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                status VARCHAR(32) NOT NULL DEFAULT 'issued',
+                currency CHAR(3) NOT NULL DEFAULT 'SEK',
+                tax_mode VARCHAR(32) NOT NULL DEFAULT 'private_consumer',
+                reverse_charge_note VARCHAR(255) NOT NULL DEFAULT '',
+                client_company_name VARCHAR(191) NOT NULL DEFAULT '',
+                client_org_number VARCHAR(64) NOT NULL DEFAULT '',
+                client_vat_number VARCHAR(64) NOT NULL DEFAULT '',
+                vat_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 25,
+                labour_total_minor BIGINT NOT NULL DEFAULT 0,
+                materials_total_minor BIGINT NOT NULL DEFAULT 0,
+                subtotal_ex_vat_minor BIGINT NOT NULL DEFAULT 0,
+                vat_minor BIGINT NOT NULL DEFAULT 0,
+                total_inc_vat_minor BIGINT NOT NULL DEFAULT 0,
+                snapshot_json LONGTEXT NOT NULL,
+                issued_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY document_number (document_number),
+                KEY invoice_id (invoice_id),
+                KEY offert_id (offert_id),
+                KEY estimate_id (estimate_id),
+                KEY status (status)
             ) {$charsetCollate};",
         ];
     }

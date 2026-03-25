@@ -26,6 +26,8 @@ final class OffertPrintViewModelTest extends TestCase
                 'status' => 'issued',
                 'issued_at' => '2026-03-01 09:00:00',
                 'currency' => 'SEK',
+                'tax_mode' => 'business_reverse_charge',
+                'reverse_charge_note' => 'RC applies',
                 'vat_rate_percent' => 25,
                 'total_inc_vat_minor' => 150000,
             ],
@@ -64,7 +66,7 @@ final class OffertPrintViewModelTest extends TestCase
             [
                 'project' => ['name' => 'Project A', 'code' => 'PA-10'],
                 'property' => ['name' => 'Property A', 'address_line' => 'Main 1', 'city' => 'Stockholm', 'postal_code' => '11111'],
-                'client' => ['name' => 'Client A', 'org_number' => '556677-8899', 'email' => 'a@example.com', 'phone' => '12345'],
+                'client' => ['name' => 'Client A', 'company_name' => 'Client A AB', 'org_number' => '556677-8899', 'vat_number' => 'SE556677889901', 'email' => 'a@example.com', 'phone' => '12345'],
                 'document_profile' => ['company_name' => 'Issuer AB', 'offert_valid_days' => '20', 'offert_note' => 'Thanks'],
             ]
         );
@@ -74,6 +76,7 @@ final class OffertPrintViewModelTest extends TestCase
         self::assertSame('2', $result['document']['version_no']);
         self::assertSame('issued', $result['document']['status']);
         self::assertSame('SEK', $result['document']['currency']);
+        self::assertSame('business_reverse_charge', $result['document']['tax_mode']);
         self::assertSame('2026-03-21', $result['document']['offert_valid_until']);
 
         self::assertSame('Client A', $result['recipient']['client_name']);

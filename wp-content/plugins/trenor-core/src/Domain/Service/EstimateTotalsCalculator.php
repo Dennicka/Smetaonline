@@ -7,7 +7,7 @@ namespace Trenor\Core\Domain\Service;
 final class EstimateTotalsCalculator
 {
     /** @param array<int, array<string, mixed>> $labourLines @param array<int, array<string, mixed>> $materialLines */
-    public function calculate(array $labourLines, array $materialLines, float $vatRatePercent): array
+    public function calculate(array $labourLines, array $materialLines, float $vatRatePercent, string $taxMode = TaxMode::PRIVATE_CONSUMER): array
     {
         $labourTotalMinor = 0;
         foreach ($labourLines as $line) {
@@ -20,7 +20,8 @@ final class EstimateTotalsCalculator
         }
 
         $subtotal = $labourTotalMinor + $materialsTotalMinor;
-        $vatMinor = (int) round($subtotal * ($vatRatePercent / 100));
+        $mode = TaxMode::normalize($taxMode);
+        $vatMinor = TaxMode::isReverseCharge($mode) ? 0 : (int) round($subtotal * ($vatRatePercent / 100));
 
         return [
             'labour_total_minor' => $labourTotalMinor,
