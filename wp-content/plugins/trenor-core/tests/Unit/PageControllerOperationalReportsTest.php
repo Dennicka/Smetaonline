@@ -38,20 +38,6 @@ final class PageControllerOperationalReportsTest extends TestCase
         self::assertSame('trn_view_margin', $registry['suppliers_imports']['capability']);
     }
 
-
-    public function testSensitiveProcurementDataRequiresPriceAndMarginCapabilities(): void
-    {
-        $controller = new PageController(new RepositoryFactory());
-        $method = new ReflectionMethod($controller, 'canViewSensitiveProcurementData');
-        $method->setAccessible(true);
-
-        	\trn_set_test_current_user_caps(['read' => true, 'trn_manage_prices' => true, 'trn_view_margin' => false]);
-        self::assertFalse($method->invoke($controller));
-
-        	\trn_set_test_current_user_caps(['read' => true, 'trn_manage_prices' => true, 'trn_view_margin' => true]);
-        self::assertTrue($method->invoke($controller));
-    }
-
     public function testCanViewOperationalReportsRequiresAtLeastOneOperationalCapability(): void
     {
         $controller = new PageController(new RepositoryFactory());

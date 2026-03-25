@@ -384,7 +384,6 @@ final class PageController
             wp_die('Forbidden');
         }
 
-        $canViewSensitiveProcurementData = $this->canViewSensitiveProcurementData();
         $rawSuppliers = $this->factory->suppliers()->all();
         $supplierFilters = [
             'supplier_query' => filter_input(INPUT_GET, 'supplier_query', FILTER_UNSAFE_RAW),
@@ -393,12 +392,8 @@ final class PageController
             'material_key' => filter_input(INPUT_GET, 'material_key', FILTER_UNSAFE_RAW),
         ];
         $suppliers = $this->filterSupplierRows($rawSuppliers, $supplierFilters);
-        $batches = $canViewSensitiveProcurementData
-            ? $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters)
-            : [];
-        $prices = $canViewSensitiveProcurementData
-            ? $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters)
-            : [];
+        $batches = $this->filterImportBatchRows($this->factory->priceImportBatches()->latest(20), $supplierFilters);
+        $prices = $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters);
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
         $this->renderOperationalLinkBar([
@@ -422,31 +417,27 @@ final class PageController
         echo '</form>';
         $this->renderSimpleTable(['id', 'name', 'code', 'source_type', 'country', 'currency', 'is_active', 'created_at'], $suppliers);
 
-        if ($canViewSensitiveProcurementData) {
-            echo '<h2>Import price list CSV</h2>';
-            echo '<form method="post" enctype="multipart/form-data">';
-            wp_nonce_field('trn_price_import_import');
-            echo '<input type="hidden" name="trn_entity" value="price_import">';
-            echo '<input type="hidden" name="trn_action" value="import">';
-            echo '<p><label>Supplier ID <input type="number" min="1" name="supplier_id" required></label></p>';
-            echo '<p><label>CSV file <input type="file" name="price_csv" accept=".csv,text/csv" required></label></p>';
-            submit_button('Import');
-            echo '</form>';
+        echo '<h2>Import price list CSV</h2>';
+        echo '<form method="post" enctype="multipart/form-data">';
+        wp_nonce_field('trn_price_import_import');
+        echo '<input type="hidden" name="trn_entity" value="price_import">';
+        echo '<input type="hidden" name="trn_action" value="import">';
+        echo '<p><label>Supplier ID <input type="number" min="1" name="supplier_id" required></label></p>';
+        echo '<p><label>CSV file <input type="file" name="price_csv" accept=".csv,text/csv" required></label></p>';
+        submit_button('Import');
+        echo '</form>';
 
-            echo '<h2>Import batches</h2>';
-            if ($batches === []) {
-                $this->renderEmptyState('No import batches yet. After creating a supplier, run the CSV import form above.');
-            }
-            $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
-
-            echo '<h2>Price history (latest rows)</h2>';
-            if ($prices === []) {
-                $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
-            }
-            $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
-        } else {
-            $this->renderEmptyState('Import batches and supplier price history are hidden for your role.');
+        echo '<h2>Import batches</h2>';
+        if ($batches === []) {
+            $this->renderEmptyState('No import batches yet. After creating a supplier, run the CSV import form above.');
         }
+        $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
+
+        echo '<h2>Price history (latest rows)</h2>';
+        if ($prices === []) {
+            $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
+        }
+        $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
         $this->renderAppShellEnd();
     }
 
@@ -1795,11 +1786,6 @@ final class PageController
             || current_user_can('trn_manage_backups');
     }
 
-
-    private function canViewSensitiveProcurementData(): bool
-    {
-        return current_user_can('trn_manage_prices') && current_user_can('trn_view_margin');
-    }
 
     private function canViewMarginSensitiveData(): bool
     {
@@ -3256,7 +3242,7 @@ final class PageController
     /** @param array<string, mixed> $postPayload */
     private function handlePriceImport(array $postPayload): void
     {
-        if (! $this->canViewSensitiveProcurementData()) {
+        if (! current_user_can('trn_manage_prices')) {
             wp_die('Forbidden');
         }
 

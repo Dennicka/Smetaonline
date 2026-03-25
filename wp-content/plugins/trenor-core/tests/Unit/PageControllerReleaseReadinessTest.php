@@ -150,7 +150,7 @@ final class PageControllerReleaseReadinessTest extends TestCase
         self::assertStringContainsString('No supplier price history yet.', $output);
     }
 
-    public function testSuppliersPageHidesImportInternalsWithoutMarginCapability(): void
+    public function testSuppliersPageKeepsCoreImportWorkflowVisibleForManagePricesRole(): void
     {
         \trn_set_test_current_user_caps([
             'read' => true,
@@ -164,9 +164,9 @@ final class PageControllerReleaseReadinessTest extends TestCase
         $controller->renderSuppliersPrices();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('Import batches and supplier price history are hidden for your role.', $output);
-        self::assertStringNotContainsString('Import price list CSV', $output);
-        self::assertStringNotContainsString('Price history (latest rows)', $output);
+        self::assertStringContainsString('Import price list CSV', $output);
+        self::assertStringContainsString('Import batches', $output);
+        self::assertStringContainsString('Price history (latest rows)', $output);
     }
 
     public function testOperationalReportTableNoDataStateProvidesNextStepGuidance(): void

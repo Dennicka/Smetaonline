@@ -8,8 +8,8 @@ Business-grade visibility and action controls for procurement, margin, settings/
 | Sensitive area | Read visibility capability | Action capability | Notes |
 |---|---|---|---|
 | Supplier registry | `trn_manage_prices` | `trn_manage_prices` | Registry remains visible to price operators. |
-| Import batches internals | `trn_manage_prices` + `trn_view_margin` | `trn_manage_prices` + `trn_view_margin` | CSV import form, batch rows, checksum/import actor fields are hidden unless both capabilities are present. |
-| Supplier price history / buy-side | `trn_manage_prices` + `trn_view_margin` | N/A (read-only table) | `buy_price_minor` is treated as procurement-sensitive data. |
+| Import batches internals | `trn_manage_prices` | `trn_manage_prices` | Core suppliers/import workflow remains coherent under the module capability contract. |
+| Supplier price history / buy-side | `trn_manage_prices` | N/A (read-only table) | Price/import/history baseline is intentionally visible to roles that operate the price module. |
 | Materials catalog buy/sell split | `trn_view_margin` (buy side) | `trn_manage_catalogs` (catalog CRUD) | `buy_price_minor` is hidden when margin capability is absent. |
 | Settings / templates / profiles | `trn_manage_templates` | `trn_manage_templates` | Owner/admin-level configuration surface. |
 | Backup / restore section | `trn_manage_backups` | `trn_manage_backups` | Backup-only users can open settings page but only backup section is rendered. |
@@ -26,5 +26,5 @@ Business-grade visibility and action controls for procurement, margin, settings/
 ## Read vs action distinction
 
 - Read visibility and action gating are intentionally separated for sensitive areas.
-- Example: a role may keep access to supplier registry CRUD (`trn_manage_prices`) while import/history internals and buy-side values remain hidden unless `trn_view_margin` is also present.
+- Example: supplier registry, import form, import batches, and history are governed by the same baseline capability (`trn_manage_prices`) to avoid half-open module behavior.
 - Report route access and report/export block visibility are aligned to avoid “button hidden but export route open” mismatches.
