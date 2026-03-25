@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Admin;
 
 use Trenor\Core\Domain\Service\InvoicePaymentSummaryCalculator;
+use Trenor\Core\Domain\Service\TaxMode;
 
 final class OperationalReportBuilder
 {
@@ -152,7 +153,7 @@ final class OperationalReportBuilder
                     ++$rotDocuments;
                 }
 
-                if (sanitize_key((string) ($row['tax_mode'] ?? '')) === 'reverse_charge') {
+                if (TaxMode::isReverseCharge((string) ($row['tax_mode'] ?? ''))) {
                     ++$reverseChargeDocuments;
                 }
             }

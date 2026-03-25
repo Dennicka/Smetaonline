@@ -51,4 +51,22 @@ final class OperationalReportBuilderTest extends TestCase
         self::assertCount(1, $supplierActivity['imports']);
         self::assertCount(1, $supplierActivity['price_changes']);
     }
+
+    public function testTaxVisibilityCountsReverseChargeFromCanonicalTaxMode(): void
+    {
+        $builder = new OperationalReportBuilder();
+
+        $visibility = $builder->taxVisibility(
+            [
+                ['id' => 10, 'tax_mode' => 'business_reverse_charge', 'rot_requested' => 0],
+                ['id' => 11, 'tax_mode' => 'private_consumer', 'rot_requested' => 1],
+            ],
+            [
+                ['id' => 20, 'tax_mode' => 'business_reverse_charge', 'rot_requested' => 0],
+            ]
+        );
+
+        self::assertSame(1, $visibility['rot_documents']);
+        self::assertSame(2, $visibility['reverse_charge_documents']);
+    }
 }
