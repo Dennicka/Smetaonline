@@ -122,5 +122,32 @@ final class AdminWorkspaceShellTest extends TestCase
         self::assertStringNotContainsString('Price imports', $output);
         self::assertStringNotContainsString('Backup / Restore', $output);
     }
+
+    public function testNavigationShowsSettingsWhenBackupCapabilityPresent(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_issue_invoices' => false,
+            'trn_record_payments' => false,
+            'trn_issue_offerts' => false,
+            'trn_manage_templates' => false,
+            'trn_manage_prices' => false,
+            'trn_manage_estimates' => false,
+            'trn_issue_credit_notes' => false,
+            'trn_issue_reminders' => false,
+            'trn_archive_records' => false,
+            'trn_manage_backups' => true,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+        $method = new ReflectionMethod($controller, 'workspaceNavigationSections');
+        $method->setAccessible(true);
+
+        $sections = $method->invoke($controller);
+        $json = json_encode($sections);
+
+        self::assertIsString($json);
+        self::assertStringContainsString('trn_settings', $json);
+    }
 }
 }

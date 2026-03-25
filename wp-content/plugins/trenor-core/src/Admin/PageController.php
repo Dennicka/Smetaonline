@@ -179,6 +179,7 @@ final class PageController
 
         $this->renderWorkspaceQuickActions();
         $this->renderWorkspaceReadinessSection();
+        $this->renderUatOperatorPathSection();
         $this->renderWorkspaceStatusCards();
         $this->renderWorkspaceRecentActivity();
         $this->renderGoLiveLimitationsRegistry();
@@ -423,7 +424,9 @@ final class PageController
 
     public function renderSettings(): void
     {
-        if (! current_user_can('trn_manage_templates')) {
+        $canManageTemplates = current_user_can('trn_manage_templates');
+        $canManageBackups = current_user_can('trn_manage_backups');
+        if (! $canManageTemplates && ! $canManageBackups) {
             wp_die('Forbidden');
         }
 
@@ -431,89 +434,93 @@ final class PageController
 
         $this->renderAppShellStart('Настройки', 'Document profile, templates, and operational maintenance.');
         echo '<p>Версия ядра: ' . esc_html((string) get_option('trn_core_version', 'unknown')) . '</p>';
-        echo '<h2>Business document settings</h2>';
-        echo '<form method="post">';
-        wp_nonce_field('trn_document_settings_save');
-        echo '<input type="hidden" name="trn_entity" value="document_settings">';
-        echo '<input type="hidden" name="trn_action" value="save">';
+        if ($canManageTemplates) {
+            echo '<h2>Business document settings</h2>';
+            echo '<form method="post">';
+            wp_nonce_field('trn_document_settings_save');
+            echo '<input type="hidden" name="trn_entity" value="document_settings">';
+            echo '<input type="hidden" name="trn_action" value="save">';
 
-        $this->renderDocumentSettingsFieldset('Company', [
-            'company_name' => 'Company name',
-            'company_legal_name' => 'Company legal name',
-            'org_number' => 'Org number',
-            'vat_number' => 'VAT number',
-            'email' => 'Email',
-            'phone' => 'Phone',
-            'website' => 'Website',
-        ], $settings);
+            $this->renderDocumentSettingsFieldset('Company', [
+                'company_name' => 'Company name',
+                'company_legal_name' => 'Company legal name',
+                'org_number' => 'Org number',
+                'vat_number' => 'VAT number',
+                'email' => 'Email',
+                'phone' => 'Phone',
+                'website' => 'Website',
+            ], $settings);
 
-        $this->renderDocumentSettingsFieldset('Address', [
-            'address_line_1' => 'Address line 1',
-            'address_line_2' => 'Address line 2',
-            'postal_code' => 'Postal code',
-            'city' => 'City',
-            'country' => 'Country',
-        ], $settings);
+            $this->renderDocumentSettingsFieldset('Address', [
+                'address_line_1' => 'Address line 1',
+                'address_line_2' => 'Address line 2',
+                'postal_code' => 'Postal code',
+                'city' => 'City',
+                'country' => 'Country',
+            ], $settings);
 
-        $this->renderDocumentSettingsFieldset('Payment / bank', [
-            'bank_name' => 'Bank name',
-            'iban' => 'IBAN',
-            'bic' => 'BIC',
-            'plusgiro' => 'Plusgiro',
-            'bankgiro' => 'Bankgiro',
-            'swish' => 'Swish',
-            'payment_terms_days' => 'Payment terms days',
-        ], $settings);
+            $this->renderDocumentSettingsFieldset('Payment / bank', [
+                'bank_name' => 'Bank name',
+                'iban' => 'IBAN',
+                'bic' => 'BIC',
+                'plusgiro' => 'Plusgiro',
+                'bankgiro' => 'Bankgiro',
+                'swish' => 'Swish',
+                'payment_terms_days' => 'Payment terms days',
+            ], $settings);
 
-        $this->renderDocumentSettingsTextareaFieldset('Default document text blocks', [
-            'offert_intro_text' => 'Offert intro text',
-            'offert_footer_text' => 'Offert footer text',
-            'invoice_footer_text' => 'Invoice footer text',
-            'credit_note_footer_text' => 'Credit note footer text',
-        ], $settings);
+            $this->renderDocumentSettingsTextareaFieldset('Default document text blocks', [
+                'offert_intro_text' => 'Offert intro text',
+                'offert_footer_text' => 'Offert footer text',
+                'invoice_footer_text' => 'Invoice footer text',
+                'credit_note_footer_text' => 'Credit note footer text',
+            ], $settings);
 
-        submit_button('Save settings');
-        echo '</form>';
+            submit_button('Save settings');
+            echo '</form>';
 
-        $documentProfile = (new DocumentProfileProvider())->get();
-        echo '<h2>Document profile / Företagsprofil / Профиль документов</h2>';
-        echo '<form method="post">';
-        wp_nonce_field('trn_document_profile_settings_save');
-        echo '<input type="hidden" name="trn_entity" value="document_profile_settings">';
-        echo '<input type="hidden" name="trn_action" value="save">';
+            $documentProfile = (new DocumentProfileProvider())->get();
+            echo '<h2>Document profile / Företagsprofil / Профиль документов</h2>';
+            echo '<form method="post">';
+            wp_nonce_field('trn_document_profile_settings_save');
+            echo '<input type="hidden" name="trn_entity" value="document_profile_settings">';
+            echo '<input type="hidden" name="trn_action" value="save">';
 
-        $this->renderDocumentProfileFieldset('Issuer / Company', [
-            'company_name' => 'Company name',
-            'org_number' => 'Org number',
-            'vat_number' => 'VAT number',
-            'email' => 'Email',
-            'phone' => 'Phone',
-            'website' => 'Website',
-            'address_line' => 'Address line',
-            'postal_code' => 'Postal code',
-            'city' => 'City',
-            'country' => 'Country',
-            'bankgiro' => 'Bankgiro',
-            'plusgiro' => 'Plusgiro',
-            'swish' => 'Swish',
-            'iban' => 'IBAN',
-            'bic' => 'BIC',
-        ], $documentProfile);
+            $this->renderDocumentProfileFieldset('Issuer / Company', [
+                'company_name' => 'Company name',
+                'org_number' => 'Org number',
+                'vat_number' => 'VAT number',
+                'email' => 'Email',
+                'phone' => 'Phone',
+                'website' => 'Website',
+                'address_line' => 'Address line',
+                'postal_code' => 'Postal code',
+                'city' => 'City',
+                'country' => 'Country',
+                'bankgiro' => 'Bankgiro',
+                'plusgiro' => 'Plusgiro',
+                'swish' => 'Swish',
+                'iban' => 'IBAN',
+                'bic' => 'BIC',
+            ], $documentProfile);
 
-        $this->renderDocumentProfileFieldset('Commercial terms', [
-            'payment_terms_days' => 'Payment terms days',
-            'offert_valid_days' => 'Offert valid days',
-        ], $documentProfile);
+            $this->renderDocumentProfileFieldset('Commercial terms', [
+                'payment_terms_days' => 'Payment terms days',
+                'offert_valid_days' => 'Offert valid days',
+            ], $documentProfile);
 
-        $this->renderDocumentProfileTextareaFieldset('Document notes', [
-            'invoice_note' => 'Invoice note',
-            'offert_note' => 'Offert note',
-        ], $documentProfile);
+            $this->renderDocumentProfileTextareaFieldset('Document notes', [
+                'invoice_note' => 'Invoice note',
+                'offert_note' => 'Offert note',
+            ], $documentProfile);
 
-        submit_button('Save document profile');
-        echo '</form>';
+            submit_button('Save document profile');
+            echo '</form>';
+        } else {
+            echo '<div class="notice notice-info inline"><p>Document profile editing is hidden for your role. You can still run backup/restore operations from this screen.</p></div>';
+        }
 
-        if (current_user_can('trn_manage_backups')) {
+        if ($canManageBackups) {
             $this->renderBackupAdminSection();
         }
 
@@ -1223,7 +1230,7 @@ final class PageController
                 'title' => 'Supply / Ops',
                 'items' => [
                     ['label' => 'Suppliers / Prices / Import', 'page' => 'trn_suppliers_prices', 'cap' => 'trn_manage_prices'],
-                    ['label' => 'Settings / Backup', 'page' => 'trn_settings', 'cap' => 'trn_manage_templates'],
+                    ['label' => 'Settings / Backup', 'page' => 'trn_settings', 'caps' => ['trn_manage_templates', 'trn_manage_backups']],
                     ['label' => 'Audit Log', 'page' => 'trn_audit_log', 'cap' => 'trn_archive_records'],
                 ],
             ],
@@ -1233,8 +1240,7 @@ final class PageController
         foreach ($sections as $section) {
             $visibleItems = [];
             foreach ($section['items'] as $item) {
-                $capability = (string) ($item['cap'] ?? 'read');
-                if (! current_user_can($capability)) {
+                if (! $this->userCanAccessNavigationItem($item)) {
                     continue;
                 }
                 $page = (string) ($item['page'] ?? '');
@@ -1368,11 +1374,90 @@ final class PageController
         echo '</ul>';
 
         echo '<div class="trn-shell__actions">';
-        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_settings')) . '">Open settings / backup</a>';
-        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_suppliers_prices')) . '">Open suppliers / imports</a>';
-        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_operational_reports')) . '">Open operational reports</a>';
+        $this->renderOperationalLinkBar([
+            ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_backups'],
+            ['label' => 'Open document settings', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_templates'],
+            ['label' => 'Open suppliers / imports', 'url' => admin_url('admin.php?page=trn_suppliers_prices'), 'cap' => 'trn_manage_prices'],
+            ['label' => 'Open operational reports', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'read'],
+        ]);
         echo '</div>';
         echo '</section>';
+    }
+
+    private function renderUatOperatorPathSection(): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Final acceptance operator paths</h2>';
+        echo '<p>Use these paths for UAT and cutover checks. Items are shown only when current role can open the target area.</p>';
+
+        $this->renderUatPathChecklist(
+            'First-run / setup baseline',
+            [
+                ['label' => 'Open settings', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_templates'],
+                ['label' => 'Open backup/restore', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_backups'],
+                ['label' => 'Open suppliers/imports', 'url' => admin_url('admin.php?page=trn_suppliers_prices'), 'cap' => 'trn_manage_prices'],
+            ]
+        );
+        $this->renderUatPathChecklist(
+            'Core document chain',
+            [
+                ['label' => 'Estimates', 'url' => admin_url('admin.php?page=trn_estimates'), 'cap' => 'trn_manage_estimates'],
+                ['label' => 'Offerts / Avtal / ÄTA', 'url' => admin_url('admin.php?page=trn_offerts'), 'cap' => 'trn_issue_offerts'],
+                ['label' => 'Invoices', 'url' => admin_url('admin.php?page=trn_invoices'), 'cap' => 'trn_issue_invoices'],
+                ['label' => 'Payments', 'url' => admin_url('admin.php?page=trn_payments'), 'cap' => 'trn_record_payments'],
+                ['label' => 'Reminders', 'url' => admin_url('admin.php?page=trn_reminders'), 'cap' => 'trn_issue_reminders'],
+                ['label' => 'Credit notes', 'url' => admin_url('admin.php?page=trn_credit_notes'), 'cap' => 'trn_issue_credit_notes'],
+            ]
+        );
+        $this->renderUatPathChecklist(
+            'Operational control',
+            [
+                ['label' => 'Operational reports / export', 'url' => admin_url('admin.php?page=trn_operational_reports'), 'cap' => 'read'],
+                ['label' => 'Dossier / timeline', 'url' => admin_url('admin.php?page=trn_dossier'), 'cap' => 'read'],
+            ]
+        );
+
+        echo '</section>';
+    }
+
+    /** @param array<int,array{label:string,url:string,cap:string}> $steps */
+    private function renderUatPathChecklist(string $title, array $steps): void
+    {
+        echo '<h3>' . esc_html($title) . '</h3>';
+        $visible = false;
+        echo '<ul>';
+        foreach ($steps as $step) {
+            if (! current_user_can((string) ($step['cap'] ?? 'read'))) {
+                continue;
+            }
+            $visible = true;
+            echo '<li><a href="' . esc_url((string) ($step['url'] ?? '#')) . '">' . esc_html((string) ($step['label'] ?? '')) . '</a></li>';
+        }
+        if (! $visible) {
+            echo '<li>No visible steps for current role in this path.</li>';
+        }
+        echo '</ul>';
+    }
+
+    /** @param array<string,mixed> $item */
+    private function userCanAccessNavigationItem(array $item): bool
+    {
+        $capability = (string) ($item['cap'] ?? '');
+        if ($capability !== '') {
+            return current_user_can($capability);
+        }
+
+        $capabilities = $item['caps'] ?? [];
+        if (! is_array($capabilities) || $capabilities === []) {
+            return current_user_can('read');
+        }
+
+        foreach ($capabilities as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && current_user_can($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array{blockers:array<int,string>,warnings:array<int,string>,ready:array<int,string>} */

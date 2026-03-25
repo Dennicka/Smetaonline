@@ -109,8 +109,30 @@ final class PageControllerReleaseReadinessTest extends TestCase
 
         self::assertStringContainsString('Release candidate readiness', $output);
         self::assertStringContainsString('Go-live blockers detected', $output);
+        self::assertStringContainsString('Final acceptance operator paths', $output);
+        self::assertStringContainsString('First-run / setup baseline', $output);
         self::assertStringContainsString('Go-live limitations registry', $output);
         self::assertStringContainsString('Open settings / backup', $output);
+    }
+
+    public function testSettingsScreenAllowsBackupOnlyOperatorWithoutTemplateForms(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_templates' => false,
+            'trn_manage_backups' => true,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderSettings();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Document profile editing is hidden for your role.', $output);
+        self::assertStringContainsString('Backup / Restore', $output);
+        self::assertStringNotContainsString('Save settings', $output);
+        self::assertStringNotContainsString('Save document profile', $output);
     }
 
     public function testSuppliersPageRendersGuidedEmptyState(): void
