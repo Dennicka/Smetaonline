@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trenor\Core\Admin;
 
 use RuntimeException;
+use Trenor\Core\Backup\BackupManifestRepository;
 use Trenor\Core\Backup\BackupExporter;
 use Trenor\Core\Backup\BackupRestorer;
 use Trenor\Core\Database\RepositoryFactory;
@@ -179,6 +180,55 @@ final class PageController
         $this->renderWorkspaceQuickActions();
         $this->renderWorkspaceStatusCards();
         $this->renderWorkspaceRecentActivity();
+
+        $this->renderAppShellEnd();
+    }
+
+    public function renderOperationalReports(): void
+    {
+        if (! $this->canViewOperationalReports()) {
+            wp_die('Forbidden');
+        }
+
+        $rawFilters = [
+            'status' => filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW),
+            'date_from' => filter_input(INPUT_GET, 'date_from', FILTER_UNSAFE_RAW),
+            'date_to' => filter_input(INPUT_GET, 'date_to', FILTER_UNSAFE_RAW),
+            'period' => filter_input(INPUT_GET, 'period', FILTER_UNSAFE_RAW),
+        ];
+        $selectedReport = sanitize_key((string) filter_input(INPUT_GET, 'report', FILTER_UNSAFE_RAW));
+        if ($selectedReport === '') {
+            $selectedReport = 'invoices';
+        }
+        $exportFormat = sanitize_key((string) filter_input(INPUT_GET, 'trn_export', FILTER_UNSAFE_RAW));
+
+        $filterResult = (new OperationalReportFilter())->normalize($rawFilters);
+        $filters = $filterResult['filters'];
+        $errors = $filterResult['errors'];
+
+        if ($exportFormat === 'csv') {
+            $this->renderOperationalReportsCsvExport($selectedReport, $filters, $errors);
+            exit;
+        }
+
+        $reportPayload = $this->buildOperationalReportPayload($filters);
+
+        $this->renderAppShellStart('Operational Reports / Export', 'Read-only operational reporting for finance, due visibility, tax, imports and backup activity.');
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open invoices', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open payments', 'url' => admin_url('admin.php?page=trn_payments')],
+            ['label' => 'Open reminders', 'url' => admin_url('admin.php?page=trn_reminders')],
+        ]);
+
+        foreach ($errors as $error) {
+            echo '<div class="notice notice-warning"><p>' . esc_html($error) . '</p></div>';
+        }
+
+        $this->renderOperationalReportsFilterForm($selectedReport, $filters);
+        $this->renderOperationalReportsSummary($reportPayload);
+        $this->renderOperationalReportOverviewPanels($reportPayload);
+        $this->renderOperationalReportTables($selectedReport, $reportPayload, $filters);
 
         $this->renderAppShellEnd();
     }
@@ -1155,6 +1205,7 @@ final class PageController
                     ['label' => 'Payments', 'page' => 'trn_payments', 'cap' => 'trn_record_payments'],
                     ['label' => 'Credit Notes', 'page' => 'trn_credit_notes', 'cap' => 'trn_issue_credit_notes'],
                     ['label' => 'Reminders', 'page' => 'trn_reminders', 'cap' => 'trn_issue_reminders'],
+                    ['label' => 'Operational Reports', 'page' => 'trn_operational_reports', 'cap' => 'read'],
                 ],
             ],
             [
@@ -1204,6 +1255,7 @@ final class PageController
             ['label' => 'Open offerts', 'url' => 'admin.php?page=trn_offerts'],
             ['label' => 'Open invoices', 'url' => 'admin.php?page=trn_invoices'],
             ['label' => 'Open payments', 'url' => 'admin.php?page=trn_payments'],
+            ['label' => 'Operational reports', 'url' => 'admin.php?page=trn_operational_reports'],
             ['label' => 'Price imports', 'url' => 'admin.php?page=trn_suppliers_prices'],
             ['label' => 'Backup / Restore', 'url' => 'admin.php?page=trn_settings'],
         ];
@@ -1273,6 +1325,315 @@ final class PageController
             echo '<tr><td>Invoice</td><td>' . esc_html((string) $id) . '</td><td>' . esc_html((string) ($invoice['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $id)) . '">Open</a></td></tr>';
         }
         echo '</tbody></table></section>';
+    }
+
+    private function canViewOperationalReports(): bool
+    {
+        return current_user_can('trn_issue_invoices')
+            || current_user_can('trn_record_payments')
+            || current_user_can('trn_issue_reminders')
+            || current_user_can('trn_manage_prices')
+            || current_user_can('trn_manage_backups');
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters @return array<string, mixed> */
+    private function buildOperationalReportPayload(array $filters): array
+    {
+        $builder = new OperationalReportBuilder();
+        $paymentTermsDays = (int) ((new DocumentSettings())->get()['payment_terms_days'] ?? 30);
+        $paymentTermsDays = $paymentTermsDays > 0 ? $paymentTermsDays : 30;
+
+        $invoices = $builder->invoices(
+            $this->factory->invoices()->all(),
+            fn (int $invoiceId): array => $this->factory->invoicePayments()->byInvoice($invoiceId),
+            $filters,
+            $paymentTermsDays
+        );
+        $payments = $builder->payments($this->factory->invoicePayments()->all(), $filters);
+        $reminders = $builder->reminders($this->factory->reminders()->all(), $filters);
+        $creditNotes = $builder->creditNotes($this->factory->creditNotes()->all(), $filters);
+        $supplierImportActivity = $builder->supplierImportActivity(
+            $this->factory->priceImportBatches()->latest(100),
+            $this->factory->materialSupplierPrices()->latest(100),
+            $filters
+        );
+        $backupActivity = $builder->backupActivity((new BackupManifestRepository())->latest(100), $filters);
+
+        return [
+            'invoices' => $invoices,
+            'payments' => $payments,
+            'payment_totals' => $builder->paymentTotals($payments),
+            'reminders' => $reminders,
+            'credit_notes' => $creditNotes,
+            'tax_visibility' => $builder->taxVisibility($this->factory->invoices()->all(), $this->factory->creditNotes()->all()),
+            'supplier_import_activity' => $supplierImportActivity,
+            'imports' => $supplierImportActivity['imports'] ?? [],
+            'price_changes' => $supplierImportActivity['price_changes'] ?? [],
+            'backup_activity' => $backupActivity,
+        ];
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters */
+    private function renderOperationalReportsFilterForm(string $selectedReport, array $filters): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Filters</h2><form method="get" class="trn-inline-form">';
+        echo '<input type="hidden" name="page" value="trn_operational_reports">';
+        echo '<label>Report <select name="report">';
+        foreach ($this->operationalReportRegistry() as $reportKey => $reportMeta) {
+            if (! current_user_can((string) ($reportMeta['capability'] ?? 'read'))) {
+                continue;
+            }
+            $selected = $reportKey === $selectedReport ? ' selected' : '';
+            echo '<option value="' . esc_attr($reportKey) . '"' . $selected . '>' . esc_html((string) ($reportMeta['label'] ?? $reportKey)) . '</option>';
+        }
+        echo '</select></label> ';
+        echo '<label>Status/method <input type="text" name="status" value="' . esc_attr($filters['status']) . '" placeholder="issued / paid / completed"></label> ';
+        echo '<label>Date from <input type="date" name="date_from" value="' . esc_attr($filters['date_from']) . '"></label> ';
+        echo '<label>Date to <input type="date" name="date_to" value="' . esc_attr($filters['date_to']) . '"></label> ';
+        echo '<label>Period <select name="period">';
+        $periods = [
+            '' => 'custom',
+            'today' => 'today',
+            '7d' => '7d',
+            '30d' => '30d',
+            'month' => 'month',
+        ];
+        foreach ($periods as $periodValue => $periodLabel) {
+            $selected = $periodValue === $filters['period'] ? ' selected' : '';
+            echo '<option value="' . esc_attr($periodValue) . '"' . $selected . '>' . esc_html($periodLabel) . '</option>';
+        }
+        echo '</select></label> ';
+        submit_button('Apply filters', 'secondary', 'submit', false);
+        echo '</form></section>';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function renderOperationalReportsSummary(array $payload): void
+    {
+        $invoiceRows = is_array($payload['invoices'] ?? null) ? $payload['invoices'] : [];
+        $overdueCount = 0;
+        $dueCount = 0;
+        $receivablesMinor = 0;
+        foreach ($invoiceRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ((string) ($row['due_state'] ?? '') === 'overdue') {
+                ++$overdueCount;
+            } elseif ((string) ($row['due_state'] ?? '') === 'due') {
+                ++$dueCount;
+            }
+            $receivablesMinor += (int) ($row['outstanding_minor'] ?? 0);
+        }
+        $taxVisibility = is_array($payload['tax_visibility'] ?? null) ? $payload['tax_visibility'] : [];
+        $paymentTotals = is_array($payload['payment_totals'] ?? null) ? $payload['payment_totals'] : [];
+        $supplierActivity = is_array($payload['supplier_import_activity'] ?? null) ? $payload['supplier_import_activity'] : [];
+        $backupActivity = is_array($payload['backup_activity'] ?? null) ? $payload['backup_activity'] : [];
+
+        echo '<section class="trn-shell__panel"><h2>Operational summary</h2><div class="trn-shell__stats">';
+        echo '<article class="trn-shell__stat"><h3>Overdue invoices</h3><p>' . esc_html((string) $overdueCount) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Due invoices</h3><p>' . esc_html((string) $dueCount) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Receivables</h3><p>' . esc_html($this->formatMinorMoney($receivablesMinor, 'SEK')) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Payments total</h3><p>' . esc_html($this->formatMinorMoney((int) ($paymentTotals['total_minor'] ?? 0), 'SEK')) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>ROT docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['rot_documents'] ?? 0))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Reverse charge docs</h3><p>' . esc_html((string) ((int) ($taxVisibility['reverse_charge_documents'] ?? 0))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Latest imports</h3><p>' . esc_html((string) count((array) ($supplierActivity['imports'] ?? []))) . '</p></article>';
+        echo '<article class="trn-shell__stat"><h3>Backup events</h3><p>' . esc_html((string) count((array) $backupActivity)) . '</p></article>';
+        echo '</div></section>';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function renderOperationalReportOverviewPanels(array $payload): void
+    {
+        $creditNotes = array_slice(is_array($payload['credit_notes'] ?? null) ? $payload['credit_notes'] : [], 0, 5);
+        $reminders = is_array($payload['reminders'] ?? null) ? $payload['reminders'] : [];
+        $backupRows = array_slice(is_array($payload['backup_activity'] ?? null) ? $payload['backup_activity'] : [], 0, 5);
+        $priceChanges = array_slice(is_array($payload['price_changes'] ?? null) ? $payload['price_changes'] : [], 0, 5);
+        $unresolvedReminders = array_values(array_filter($reminders, static fn (array $row): bool => sanitize_key((string) ($row['status'] ?? '')) !== 'archived'));
+        $unresolvedReminders = array_slice($unresolvedReminders, 0, 5);
+
+        echo '<section class="trn-shell__panel"><h2>Credit notes (latest)</h2>';
+        if ($creditNotes === []) {
+            $this->renderEmptyState('No credit notes found.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>document_number</th><th>status</th><th>issued_at</th></tr></thead><tbody>';
+            foreach ($creditNotes as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Unresolved reminders</h2>';
+        if ($unresolvedReminders === []) {
+            $this->renderEmptyState('No unresolved reminders.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>invoice_id</th><th>status</th><th>issued_at</th></tr></thead><tbody>';
+            foreach ($unresolvedReminders as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['invoice_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['issued_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Price changes (latest)</h2>';
+        if ($priceChanges === []) {
+            $this->renderEmptyState('No recent supplier price changes.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>supplier_id</th><th>material_key</th><th>buy_price_minor</th><th>created_at</th></tr></thead><tbody>';
+            foreach ($priceChanges as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['supplier_id'] ?? '')) . '</td><td>' . esc_html((string) ($row['material_key'] ?? '')) . '</td><td>' . esc_html($this->formatMinorMoney((int) ($row['buy_price_minor'] ?? 0), (string) ($row['currency'] ?? 'SEK'))) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+
+        echo '<section class="trn-shell__panel"><h2>Backup / restore activity</h2>';
+        if ($backupRows === []) {
+            $this->renderEmptyState('No backup activity rows found.');
+        } else {
+            echo '<table class="widefat striped"><thead><tr><th>id</th><th>backup_type</th><th>status</th><th>created_at</th><th>completed_at</th></tr></thead><tbody>';
+            foreach ($backupRows as $row) {
+                echo '<tr><td>' . esc_html((string) ($row['id'] ?? '')) . '</td><td>' . esc_html((string) ($row['backup_type'] ?? '')) . '</td><td>' . esc_html((string) ($row['status'] ?? '')) . '</td><td>' . esc_html((string) ($row['created_at'] ?? '')) . '</td><td>' . esc_html((string) ($row['completed_at'] ?? '')) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+        echo '</section>';
+    }
+
+    /** @param array<string, mixed> $payload @param array{status:string,date_from:string,date_to:string,period:string} $filters */
+    private function renderOperationalReportTables(string $selectedReport, array $payload, array $filters): void
+    {
+        $registry = $this->operationalReportRegistry();
+        $activeMeta = $registry[$selectedReport] ?? $registry['invoices'];
+        if (! current_user_can((string) ($activeMeta['capability'] ?? 'read'))) {
+            wp_die('Forbidden');
+        }
+        $activeKey = (string) ($activeMeta['payload_key'] ?? 'invoices');
+        $activeRows = $payload[$activeKey] ?? [];
+        if (! is_array($activeRows)) {
+            $activeRows = [];
+        }
+
+        echo '<section class="trn-shell__panel"><h2>' . esc_html((string) ($activeMeta['label'] ?? 'Report')) . '</h2>';
+        $exportUrl = add_query_arg([
+            'page' => 'trn_operational_reports',
+            'report' => $selectedReport,
+            'status' => $filters['status'],
+            'date_from' => $filters['date_from'],
+            'date_to' => $filters['date_to'],
+            'period' => $filters['period'],
+            'trn_export' => 'csv',
+        ], admin_url('admin.php'));
+        echo '<p><a class="button button-secondary" href="' . esc_url($exportUrl) . '">Export CSV</a></p>';
+
+        if ($activeRows === []) {
+            $this->renderEmptyState('No rows found for current filter set.');
+            echo '</section>';
+
+            return;
+        }
+
+        $headers = (array) ($activeMeta['headers'] ?? []);
+        echo '<table class="widefat striped"><thead><tr>';
+        foreach ($headers as $header) {
+            echo '<th>' . esc_html((string) $header) . '</th>';
+        }
+        echo '</tr></thead><tbody>';
+
+        foreach ($activeRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            echo '<tr>';
+            foreach ($headers as $header) {
+                $value = $row[(string) $header] ?? '';
+                if (is_int($value) && str_ends_with((string) $header, '_minor')) {
+                    $currency = (string) ($row['currency'] ?? 'SEK');
+                    $value = $this->formatMinorMoney($value, $currency);
+                } elseif (is_bool($value)) {
+                    $value = $value ? 'yes' : 'no';
+                }
+                echo '<td>' . esc_html((string) $value) . '</td>';
+            }
+            echo '</tr>';
+        }
+        echo '</tbody></table></section>';
+    }
+
+    /** @param array{status:string,date_from:string,date_to:string,period:string} $filters @param array<int,string> $errors */
+    private function renderOperationalReportsCsvExport(string $reportKey, array $filters, array $errors): void
+    {
+        if ($errors !== []) {
+            wp_die(esc_html('Invalid filter input for CSV export.'));
+        }
+
+        $registry = $this->operationalReportRegistry();
+        if (! isset($registry[$reportKey])) {
+            wp_die(esc_html('Unknown report export requested.'));
+        }
+        $meta = $registry[$reportKey];
+        $capability = (string) ($meta['capability'] ?? 'read');
+        if (! current_user_can($capability)) {
+            wp_die(esc_html('You do not have permissions to export this report.'));
+        }
+
+        $payload = $this->buildOperationalReportPayload($filters);
+        $payloadKey = (string) ($meta['payload_key'] ?? 'invoices');
+        $rows = $payload[$payloadKey] ?? [];
+        if (! is_array($rows)) {
+            wp_die(esc_html('Invalid report payload for export.'));
+        }
+
+        $headers = (array) ($meta['headers'] ?? []);
+        $normalizedRows = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $normalizedRows[] = $row;
+        }
+
+        $csv = (new OperationalCsvExporter())->build($headers, $normalizedRows);
+        if ($csv === '') {
+            wp_die(esc_html('Unable to produce export file.'));
+        }
+
+        nocache_headers();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="trn_' . $reportKey . '_report.csv"');
+        echo $csv;
+    }
+
+    /** @return array<string, array{label:string,capability:string,payload_key:string,headers:array<int,string>}> */
+    private function operationalReportRegistry(): array
+    {
+        return [
+            'invoices' => [
+                'label' => 'Invoices report',
+                'capability' => 'trn_issue_invoices',
+                'payload_key' => 'invoices',
+                'headers' => ['id', 'document_number', 'issued_at', 'status', 'due_date', 'due_state', 'invoice_total_minor', 'paid_total_minor', 'outstanding_minor', 'currency', 'tax_mode', 'rot_requested'],
+            ],
+            'payments' => [
+                'label' => 'Payments report',
+                'capability' => 'trn_record_payments',
+                'payload_key' => 'payments',
+                'headers' => ['id', 'invoice_id', 'payment_date', 'amount_minor', 'currency', 'method', 'reference'],
+            ],
+            'reminders' => [
+                'label' => 'Reminders report',
+                'capability' => 'trn_issue_reminders',
+                'payload_key' => 'reminders',
+                'headers' => ['id', 'invoice_id', 'document_number', 'status', 'reminder_level', 'issued_at', 'total_inc_vat_minor', 'currency'],
+            ],
+            'suppliers_imports' => [
+                'label' => 'Suppliers / Imports report',
+                'capability' => 'trn_manage_prices',
+                'payload_key' => 'imports',
+                'headers' => ['id', 'supplier_id', 'source_name', 'source_format', 'status', 'imported_at'],
+            ],
+        ];
     }
 
     private function renderCreateEstimateForm(): void
