@@ -42,7 +42,7 @@ final class Menu
         add_submenu_page('trn_dashboard', 'Работы', 'Work items', 'trn_manage_catalogs', 'trn_work_items', [$this->controller, 'renderWorkItems']);
         add_submenu_page('trn_dashboard', 'Материалы', 'Materials', 'trn_manage_catalogs', 'trn_materials', [$this->controller, 'renderMaterials']);
 
-        add_submenu_page('trn_dashboard', 'Настройки', 'Settings / Backup', 'trn_manage_templates', 'trn_settings', [$this->controller, 'renderSettings']);
+        add_submenu_page('trn_dashboard', 'Настройки', 'Settings / Backup', 'read', 'trn_settings', [$this->controller, 'renderSettings']);
         add_submenu_page('trn_dashboard', 'Журнал', 'Audit log', 'trn_archive_records', 'trn_audit_log', [$this->controller, 'renderAuditLog']);
     }
 

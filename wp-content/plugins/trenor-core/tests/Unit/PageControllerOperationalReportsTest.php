@@ -35,7 +35,7 @@ final class PageControllerOperationalReportsTest extends TestCase
         self::assertSame('trn_issue_invoices', $registry['invoices']['capability']);
         self::assertSame('trn_record_payments', $registry['payments']['capability']);
         self::assertSame('trn_issue_reminders', $registry['reminders']['capability']);
-        self::assertSame('trn_manage_prices', $registry['suppliers_imports']['capability']);
+        self::assertSame('trn_view_margin', $registry['suppliers_imports']['capability']);
     }
 
     public function testCanViewOperationalReportsRequiresAtLeastOneOperationalCapability(): void
