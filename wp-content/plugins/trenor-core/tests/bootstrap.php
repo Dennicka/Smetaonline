@@ -38,6 +38,13 @@ if (! function_exists('sanitize_textarea_field')) {
     }
 }
 
+if (! function_exists('esc_url_raw')) {
+    function esc_url_raw(string $url): string
+    {
+        return trim($url);
+    }
+}
+
 if (! function_exists('esc_textarea')) {
     function esc_textarea(string $text): string
     {
@@ -136,5 +143,12 @@ if (! function_exists('trn_set_test_wpdb')) {
     {
         // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Centralized test-only wpdb injection helper.
         $GLOBALS['wpdb'] = $wpdb;
+    }
+}
+
+if (! function_exists('wp_unslash')) {
+    function wp_unslash(string $value): string
+    {
+        return $value;
     }
 }

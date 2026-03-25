@@ -92,6 +92,8 @@ final class PageControllerUatSmokeTest extends TestCase
             'trn_manage_prices' => true,
             'trn_manage_backups' => true,
             'trn_manage_templates' => true,
+            'trn_manage_clients' => true,
+            'trn_manage_projects' => true,
         ]);
     }
 
@@ -176,6 +178,69 @@ final class PageControllerUatSmokeTest extends TestCase
 
         self::assertStringContainsString('No visible steps for current role in this path.', $output);
         self::assertStringNotContainsString('Open backup/restore', $output);
+    }
+
+    public function testCrmRoutesRenderRichWorkspaceSections(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderClients();
+        $clients = (string) ob_get_clean();
+        self::assertStringContainsString('Contact person', $clients);
+        self::assertStringContainsString('Список клиентов', $clients);
+
+        ob_start();
+        $controller->renderProjects();
+        $projects = (string) ob_get_clean();
+        self::assertStringContainsString('Attachment / photo', $projects);
+        self::assertStringContainsString('Dossier', $projects);
+
+        ob_start();
+        $controller->renderRooms();
+        $rooms = (string) ob_get_clean();
+        self::assertStringContainsString('Surface', $rooms);
+        self::assertStringContainsString('Rich room model', $rooms);
+    }
+
+    public function testCapabilityAwareCrmRoutesAreForbidden(): void
+    {
+        \trn_set_test_current_user_caps([
+            'read' => true,
+            'trn_manage_clients' => false,
+            'trn_manage_projects' => false,
+        ]);
+
+        $controller = new PageController(new RepositoryFactory());
+
+        $this->expectException(\RuntimeException::class);
+        $controller->renderRooms();
+    }
+
+    public function testProjectDossierAdjacencyLinksAreVisibleInProjectWorkspace(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderProjects();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Rooms', $output);
+        self::assertStringContainsString('Dossier', $output);
+        self::assertStringContainsString('Contacts:', $output);
+        self::assertStringContainsString('Attachments:', $output);
+    }
+
+    public function testRegressionEstimateWorkspaceStillRenders(): void
+    {
+        $controller = new PageController(new RepositoryFactory());
+
+        ob_start();
+        $controller->renderEstimates();
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('Сметы', $output);
+        self::assertStringContainsString('Список смет', $output);
     }
 }
 }

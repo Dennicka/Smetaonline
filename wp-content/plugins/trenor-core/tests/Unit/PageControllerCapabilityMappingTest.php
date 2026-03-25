@@ -62,6 +62,9 @@ final class PageControllerCapabilityMappingTest extends TestCase
             'document profile save' => [['document_profile_settings', 'save'], 'trn_manage_templates'],
             'backup create' => [['backup', 'create'], 'trn_manage_backups'],
             'backup restore' => [['backup', 'restore'], 'trn_manage_backups'],
+            'contact person create' => [['contact_person', 'create'], 'trn_manage_projects'],
+            'attachment create' => [['attachment', 'create'], 'trn_manage_projects'],
+            'surface create' => [['surface', 'create'], 'trn_manage_projects'],
         ];
     }
 }

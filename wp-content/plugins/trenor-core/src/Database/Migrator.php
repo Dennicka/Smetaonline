@@ -98,6 +98,11 @@ final class Migrator
             $this->runQueries($this->backupRestoreV1Queries($charsetCollate));
             $this->markMigration('017_backup_restore_v1');
         }
+
+        if (! $this->hasMigration('018_crm_rich_model_v1')) {
+            $this->runQueries($this->crmRichModelV1Queries($charsetCollate));
+            $this->markMigration('018_crm_rich_model_v1');
+        }
     }
 
     /** @param array<int, string> $queries */
@@ -1112,6 +1117,82 @@ final class Migrator
                 KEY status (status),
                 KEY created_at (created_at)
             ) {$charsetCollate};",
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function crmRichModelV1Queries(string $charsetCollate): array
+    {
+        global $wpdb;
+
+        return [
+            "CREATE TABLE {$wpdb->prefix}trn_contact_persons (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                client_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                property_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                project_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                name VARCHAR(191) NOT NULL,
+                role_title VARCHAR(191) NULL,
+                phone VARCHAR(64) NULL,
+                email VARCHAR(191) NULL,
+                notes TEXT NULL,
+                is_primary TINYINT(1) NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY client_id (client_id),
+                KEY property_id (property_id),
+                KEY project_id (project_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_attachments (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                parent_entity_type VARCHAR(32) NOT NULL,
+                parent_entity_id BIGINT UNSIGNED NOT NULL,
+                file_url VARCHAR(255) NULL,
+                file_path VARCHAR(255) NULL,
+                original_filename VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(128) NULL,
+                title VARCHAR(191) NULL,
+                caption TEXT NULL,
+                notes TEXT NULL,
+                uploaded_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                status VARCHAR(32) NOT NULL DEFAULT 'active',
+                archived_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY parent_lookup (parent_entity_type, parent_entity_id),
+                KEY status (status)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$wpdb->prefix}trn_surfaces (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                room_id BIGINT UNSIGNED NOT NULL,
+                surface_type VARCHAR(32) NOT NULL,
+                length_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                width_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                height_m DECIMAL(10,2) NOT NULL DEFAULT 0,
+                area_m2 DECIMAL(10,2) NOT NULL DEFAULT 0,
+                condition_state VARCHAR(32) NOT NULL DEFAULT 'unknown',
+                notes TEXT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY room_id (room_id),
+                KEY condition_state (condition_state)
+            ) {$charsetCollate};",
+            "ALTER TABLE {$wpdb->prefix}trn_rooms
+                ADD COLUMN room_type VARCHAR(64) NULL AFTER name,
+                ADD COLUMN notes TEXT NULL AFTER floor,
+                ADD COLUMN condition_state VARCHAR(32) NULL AFTER notes,
+                ADD COLUMN length_m DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER condition_state,
+                ADD COLUMN width_m DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER length_m,
+                ADD COLUMN height_m DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER width_m,
+                ADD COLUMN area_m2 DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER height_m,
+                ADD COLUMN window_count INT NOT NULL DEFAULT 0 AFTER area_m2,
+                ADD COLUMN door_count INT NOT NULL DEFAULT 0 AFTER window_count,
+                ADD COLUMN work_context TEXT NULL AFTER door_count;",
         ];
     }
 }
