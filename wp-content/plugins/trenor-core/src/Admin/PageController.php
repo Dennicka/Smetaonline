@@ -178,8 +178,10 @@ final class PageController
         $this->renderAppShellStart('Workspace / Dashboard', 'Operational workspace for document and finance flows.');
 
         $this->renderWorkspaceQuickActions();
+        $this->renderWorkspaceReadinessSection();
         $this->renderWorkspaceStatusCards();
         $this->renderWorkspaceRecentActivity();
+        $this->renderGoLiveLimitationsRegistry();
 
         $this->renderAppShellEnd();
     }
@@ -382,6 +384,9 @@ final class PageController
         ]);
         $this->renderSuppliersFilterForm($supplierFilters);
         echo '<h2>Suppliers registry</h2>';
+        if ($rawSuppliers === []) {
+            $this->renderEmptyState('No suppliers yet. Start by creating one supplier, then import a first price list CSV.');
+        }
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
         echo '<input type="hidden" name="trn_entity" value="supplier"><input type="hidden" name="trn_action" value="create">';
@@ -403,9 +408,15 @@ final class PageController
         echo '</form>';
 
         echo '<h2>Import batches</h2>';
+        if ($batches === []) {
+            $this->renderEmptyState('No import batches yet. After creating a supplier, run the CSV import form above.');
+        }
         $this->renderSimpleTable(['id', 'supplier_id', 'source_name', 'status', 'source_checksum', 'imported_at', 'imported_by_user_id'], $batches);
 
         echo '<h2>Price history (latest rows)</h2>';
+        if ($prices === []) {
+            $this->renderEmptyState('No supplier price history yet. This area is populated by successful imports.');
+        }
         $this->renderSimpleTable(['id', 'supplier_id', 'batch_id', 'material_key', 'buy_price_minor', 'currency', 'effective_from', 'effective_to', 'is_active'], $prices);
         $this->renderAppShellEnd();
     }
@@ -1318,6 +1329,127 @@ final class PageController
         echo '</div></section>';
     }
 
+    private function renderWorkspaceReadinessSection(): void
+    {
+        $snapshot = $this->buildReleaseReadinessSnapshot();
+        $blockers = $snapshot['blockers'];
+        $warnings = $snapshot['warnings'];
+        $ready = $snapshot['ready'];
+
+        echo '<section class="trn-shell__panel"><h2>Release candidate readiness</h2>';
+        echo '<p>Real setup signals for first-run and go-live sanity. This section does not show fake green status.</p>';
+
+        if ($blockers !== []) {
+            echo '<div class="notice notice-warning inline"><p>Go-live blockers detected. Resolve required setup before calling this environment ready.</p></div>';
+            echo '<h3>Required before go-live</h3><ul>';
+            foreach ($blockers as $line) {
+                echo '<li>' . esc_html($line) . '</li>';
+            }
+            echo '</ul>';
+        } else {
+            echo '<div class="notice notice-success inline"><p>Required setup baseline present for current application checks.</p></div>';
+        }
+
+        echo '<h3>Operational warnings</h3>';
+        if ($warnings === []) {
+            echo '<p>No first-priority operational warnings detected.</p>';
+        } else {
+            echo '<ul>';
+            foreach ($warnings as $line) {
+                echo '<li>' . esc_html($line) . '</li>';
+            }
+            echo '</ul>';
+        }
+
+        echo '<h3>Confirmed now</h3><ul>';
+        foreach ($ready as $line) {
+            echo '<li>' . esc_html($line) . '</li>';
+        }
+        echo '</ul>';
+
+        echo '<div class="trn-shell__actions">';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_settings')) . '">Open settings / backup</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_suppliers_prices')) . '">Open suppliers / imports</a>';
+        echo '<a class="button button-secondary" href="' . esc_url(admin_url('admin.php?page=trn_operational_reports')) . '">Open operational reports</a>';
+        echo '</div>';
+        echo '</section>';
+    }
+
+    /** @return array{blockers:array<int,string>,warnings:array<int,string>,ready:array<int,string>} */
+    private function buildReleaseReadinessSnapshot(): array
+    {
+        $settings = (new DocumentSettings())->get();
+        $companyName = trim((string) ($settings['company_name'] ?? ''));
+        $orgNumber = trim((string) ($settings['org_number'] ?? ''));
+        $paymentTerms = (int) ($settings['payment_terms_days'] ?? 0);
+
+        $supplierCount = count($this->factory->suppliers()->all());
+        $importBatchCount = count($this->factory->priceImportBatches()->latest(20));
+        $estimateCount = count($this->factory->estimates()->all());
+        $offertCount = count($this->factory->offerts()->all());
+        $invoiceCount = count($this->factory->invoices()->all());
+        $paymentCount = count($this->factory->invoicePayments()->all());
+        $projectCount = count($this->factory->projects()->all());
+        $backupCount = count($this->factory->backupManifests()->latest(10));
+
+        $blockers = [];
+        if ($companyName === '' || $orgNumber === '') {
+            $blockers[] = 'Document settings are incomplete: company_name and org_number are required.';
+        }
+        if ($paymentTerms <= 0) {
+            $blockers[] = 'Payment terms are not configured in document settings.';
+        }
+        if ($projectCount === 0) {
+            $blockers[] = 'No projects exist yet. Core estimate/offert/invoice flows have no project anchor.';
+        }
+
+        $warnings = [];
+        if ($supplierCount === 0) {
+            $warnings[] = 'No suppliers in registry yet.';
+        }
+        if ($importBatchCount === 0) {
+            $warnings[] = 'No supplier import batch history yet.';
+        }
+        if ($backupCount === 0) {
+            $warnings[] = 'No backup baseline created yet.';
+        }
+        if ($estimateCount === 0 && $offertCount === 0 && $invoiceCount === 0) {
+            $warnings[] = 'No document pipeline activity yet (estimate/offert/invoice).';
+        }
+        if ($invoiceCount > 0 && $paymentCount === 0) {
+            $warnings[] = 'Invoices exist without registered payments yet.';
+        }
+
+        $ready = [];
+        if ($companyName !== '' && $orgNumber !== '') {
+            $ready[] = 'Document issuer identity is configured.';
+        }
+        if ($paymentTerms > 0) {
+            $ready[] = 'Payment terms are configured.';
+        }
+        if ($projectCount > 0) {
+            $ready[] = 'Project registry is not empty.';
+        }
+        if ($supplierCount > 0) {
+            $ready[] = 'Supplier registry contains rows.';
+        }
+        if ($backupCount > 0) {
+            $ready[] = 'Backup manifest baseline exists.';
+        }
+        if ($estimateCount > 0 || $offertCount > 0 || $invoiceCount > 0) {
+            $ready[] = 'Document flow has recorded activity.';
+        }
+        if ($ready === []) {
+            $ready[] = 'No readiness confirmations yet.';
+        }
+
+        return [
+            'blockers' => $blockers,
+            'warnings' => $warnings,
+            'ready' => $ready,
+        ];
+    }
+
     private function renderWorkspaceRecentActivity(): void
     {
         echo '<section class="trn-shell__panel"><h2>Recent document activity</h2>';
@@ -1341,6 +1473,25 @@ final class PageController
             echo '<tr><td>Invoice</td><td>' . esc_html((string) $id) . '</td><td>' . esc_html((string) ($invoice['document_number'] ?? '')) . '</td><td>' . esc_html((string) ($invoice['status'] ?? '')) . '</td><td><a class="button" href="' . esc_url(admin_url('admin.php?page=trn_invoices&invoice_id=' . $id)) . '">Open</a></td></tr>';
         }
         echo '</tbody></table></section>';
+    }
+
+    private function renderGoLiveLimitationsRegistry(): void
+    {
+        echo '<section class="trn-shell__panel"><h2>Go-live limitations registry</h2>';
+        echo '<h3>Ready in this release candidate</h3><ul>';
+        echo '<li>Core document/finance lifecycle with hardened transitions and replay protection remains active.</li>';
+        echo '<li>Operational reports/export and backup/restore entry points are available from workspace navigation.</li>';
+        echo '<li>First-run readiness checks expose missing setup instead of fake success labels.</li>';
+        echo '</ul>';
+        echo '<h3>Intentionally deferred (non-blocking)</h3><ul>';
+        echo '<li>Deep UX polish of all table-heavy pages (kept minimal to avoid contour regressions).</li>';
+        echo '<li>Advanced deployment/observability automation outside plugin runtime scope.</li>';
+        echo '</ul>';
+        echo '<h3>Needs live validation outside CI</h3><ul>';
+        echo '<li>Manual browser pass for day-to-day operator workflow speed and clarity in real data volume.</li>';
+        echo '<li>Restore drill against a staging dataset before first production cut-over.</li>';
+        echo '</ul>';
+        echo '</section>';
     }
 
     private function canViewOperationalReports(): bool
@@ -1544,7 +1695,7 @@ final class PageController
         echo '<p><a class="button button-secondary" href="' . esc_url($exportUrl) . '">Export CSV</a></p>';
 
         if ($activeRows === []) {
-            $this->renderEmptyState('No rows found for current filter set.');
+            $this->renderEmptyState('No rows found for current filter set. Adjust filters or start creating operational data in invoices, payments, reminders, or suppliers/imports.');
             echo '</section>';
 
             return;
