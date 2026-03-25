@@ -179,23 +179,26 @@ final class InvoicePrintRenderer
         $moneyLabels = [
             'labour_total' => 'Labour total',
             'materials_total' => 'Materials total',
-            'subtotal_ex_vat' => 'Subtotal (ex VAT)',
+            'subtotal_ex_vat' => 'Subtotal (excl. VAT)',
             'vat' => 'VAT',
-            'tax_mode' => 'Tax mode',
-            'total_inc_vat' => 'Total (inc VAT)',
-            'rot_eligible_labour' => 'ROT eligible labour',
-            'preliminary_rot' => 'Preliminary ROT',
-            'amount_before_rot' => 'Amount before ROT',
-            'amount_after_preliminary_rot' => 'Amount after preliminary ROT',
-            'paid_total' => 'Paid total',
-            'outstanding' => 'Outstanding',
+            'total_inc_vat' => 'Total to pay (incl. VAT)',
+            'rot_eligible_labour' => 'ROT-eligible labour',
+            'preliminary_rot' => 'Preliminary ROT deduction',
+            'amount_before_rot' => 'Amount before ROT deduction',
+            'amount_after_preliminary_rot' => 'Amount after ROT deduction',
+            'paid_total' => 'Paid amount',
+            'outstanding' => 'Outstanding amount',
         ];
 
         foreach ($moneyLabels as $key => $label) {
             $minor = $rows[$key] ?? '';
+            if ($minor === '') {
+                continue;
+            }
             echo '<tr><th>' . esc_html($label) . '</th><td>' . esc_html($this->formatMinorMoney($minor, $currency)) . '</td></tr>';
         }
 
+        echo '<tr><th>Tax mode</th><td>' . esc_html($this->taxModeLabel((string) ($rows['tax_mode'] ?? ''))) . '</td></tr>';
         echo '<tr><th>Computed status</th><td>' . esc_html($rows['computed_status'] !== '' ? $rows['computed_status'] : '—') . '</td></tr>';
         echo '</tbody></table>';
     }
@@ -245,6 +248,23 @@ final class InvoicePrintRenderer
             echo '</tr>';
         }
         echo '</tbody></table>';
+    }
+
+    private function taxModeLabel(string $taxMode): string
+    {
+        if ($taxMode === '') {
+            return '—';
+        }
+
+        if ($taxMode === 'business_reverse_charge') {
+            return 'Reverse charge (VAT reported by buyer)';
+        }
+
+        if ($taxMode === 'business_standard_vat') {
+            return 'Business customer, standard VAT';
+        }
+
+        return 'Standard VAT';
     }
 
     private function formatMinorMoney(string $minor, string $currency): string
