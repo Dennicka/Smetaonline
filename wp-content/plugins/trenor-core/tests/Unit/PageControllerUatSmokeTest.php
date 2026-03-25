@@ -147,9 +147,10 @@ final class PageControllerUatSmokeTest extends TestCase
         $controller->renderSettings();
         $output = (string) ob_get_clean();
 
-        self::assertStringContainsString('Backup / Restore', $output);
+        self::assertStringContainsString('Backup / Restore v1', $output);
         self::assertStringContainsString('Create backup', $output);
-        self::assertStringContainsString('Type exactly', $output);
+        self::assertStringContainsString('Backup manifests', $output);
+        self::assertStringContainsString('No backups created yet.', $output);
     }
 
     public function testCapabilityAwareUatPathHidesRestrictedSteps(): void
