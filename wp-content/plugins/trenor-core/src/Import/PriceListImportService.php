@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Import;
 
-use Trenor\Core\Database\MaterialSupplierPriceRepository;
-use Trenor\Core\Database\PriceImportBatchRepository;
+use Trenor\Core\Import\Contract\MaterialSupplierPriceStoreInterface;
+use Trenor\Core\Import\Contract\PriceImportBatchStoreInterface;
 
 final class PriceListImportService
 {
     public function __construct(
-        private readonly PriceImportBatchRepository $batchRepository,
-        private readonly MaterialSupplierPriceRepository $priceRepository
+        private readonly PriceImportBatchStoreInterface $batchRepository,
+        private readonly MaterialSupplierPriceStoreInterface $priceRepository
     ) {
     }
 

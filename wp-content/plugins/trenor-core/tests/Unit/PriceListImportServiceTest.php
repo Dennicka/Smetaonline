@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Trenor\Core\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Trenor\Core\Import\Contract\MaterialSupplierPriceStoreInterface;
+use Trenor\Core\Import\Contract\PriceImportBatchStoreInterface;
 use Trenor\Core\Import\PriceImportException;
 use Trenor\Core\Import\PriceListImportService;
 
@@ -75,7 +77,7 @@ final class PriceListImportServiceTest extends TestCase
     }
 }
 
-final class InMemoryBatchRepository extends \Trenor\Core\Database\PriceImportBatchRepository
+final class InMemoryBatchRepository implements PriceImportBatchStoreInterface
 {
     public int $createdBatches = 0;
 
@@ -109,7 +111,7 @@ final class InMemoryBatchRepository extends \Trenor\Core\Database\PriceImportBat
     }
 }
 
-final class InMemoryPriceRepository extends \Trenor\Core\Database\MaterialSupplierPriceRepository
+final class InMemoryPriceRepository implements MaterialSupplierPriceStoreInterface
 {
     /** @var array<string, array<string, mixed>> */
     public array $active = [];

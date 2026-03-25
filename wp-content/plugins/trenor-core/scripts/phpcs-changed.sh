@@ -10,8 +10,15 @@ if ! git -C "${REPO_ROOT}" rev-parse --verify --quiet "${BASE_REF}" >/dev/null; 
   BASE_REF="HEAD~1"
 fi
 
+DIFF_RANGE="${BASE_REF}...HEAD"
+if ! git -C "${REPO_ROOT}" rev-parse --verify --quiet "${BASE_REF}" >/dev/null; then
+  DIFF_RANGE="HEAD"
+elif ! git -C "${REPO_ROOT}" rev-parse --verify --quiet HEAD~1 >/dev/null; then
+  DIFF_RANGE="HEAD"
+fi
+
 mapfile -t CHANGED_FILES < <(
-  git -C "${REPO_ROOT}" diff --name-only --diff-filter=ACMR "${BASE_REF}"...HEAD -- '*.php' \
+  git -C "${REPO_ROOT}" diff --name-only --diff-filter=ACMR "${DIFF_RANGE}" -- '*.php' \
     | grep '^wp-content/plugins/trenor-core/' \
     | sed 's#^wp-content/plugins/trenor-core/##' \
     | grep -v '^vendor/' || true

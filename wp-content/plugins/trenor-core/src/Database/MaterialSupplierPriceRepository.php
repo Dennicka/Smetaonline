@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
-final class MaterialSupplierPriceRepository
+use Trenor\Core\Import\Contract\MaterialSupplierPriceStoreInterface;
+
+final class MaterialSupplierPriceRepository implements MaterialSupplierPriceStoreInterface
 {
     public function findCurrentPrice(int $supplierId, string $materialKey): ?array
     {

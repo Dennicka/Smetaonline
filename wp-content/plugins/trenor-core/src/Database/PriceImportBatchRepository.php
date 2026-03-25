@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Trenor\Core\Database;
 
-final class PriceImportBatchRepository
+use Trenor\Core\Import\Contract\PriceImportBatchStoreInterface;
+
+final class PriceImportBatchRepository implements PriceImportBatchStoreInterface
 {
     public function create(array $data): ?int
     {
