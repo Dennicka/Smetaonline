@@ -16,6 +16,25 @@ namespace {
             return $text;
         }
     }
+
+    if (! function_exists('sanitize_key')) {
+        function sanitize_key(string $value): string
+        {
+            return strtolower(trim($value));
+        }
+    }
+
+    if (! function_exists('current_user_can')) {
+        function current_user_can(string $capability): bool
+        {
+            $map = $GLOBALS['trn_test_current_user_caps'] ?? [];
+            if (! is_array($map)) {
+                return false;
+            }
+
+            return (bool) ($map[$capability] ?? false);
+        }
+    }
 }
 
 namespace Trenor\Core\Tests\Unit {
@@ -32,18 +51,23 @@ final class OperationalWorkflowLinkBarTest extends TestCase
         $controller = new PageController(new RepositoryFactory());
         $method = new ReflectionMethod($controller, 'renderOperationalLinkBar');
         $method->setAccessible(true);
+        $GLOBALS['trn_test_current_user_caps'] = ['trn_manage_templates' => true];
 
         ob_start();
         $method->invoke($controller, [
             ['label' => 'Back to list', 'url' => '/wp-admin/admin.php?page=trn_estimates'],
             ['label' => '', 'url' => '/skip-invalid-empty-label'],
             ['label' => 'Skip invalid URL', 'url' => ''],
+            ['label' => 'Open settings / backup', 'url' => '/wp-admin/admin.php?page=trn_settings', 'cap' => 'trn_manage_templates'],
+            ['label' => 'Open audit log', 'url' => '/wp-admin/admin.php?page=trn_audit_log', 'cap' => 'trn_view_audit'],
         ]);
         $output = (string) ob_get_clean();
 
         self::assertStringContainsString('trn-shell__panel--compact', $output);
         self::assertStringContainsString('trn-shell__actions--dense', $output);
         self::assertStringContainsString('Back to list', $output);
+        self::assertStringContainsString('Open settings / backup', $output);
+        self::assertStringNotContainsString('Open audit log', $output);
         self::assertStringNotContainsString('skip-invalid-empty-label', $output);
         self::assertStringNotContainsString('Skip invalid URL', $output);
     }
@@ -55,6 +79,7 @@ final class OperationalWorkflowLinkBarTest extends TestCase
         self::assertStringContainsString('Open offerts for this estimate', $controllerSource);
         self::assertStringContainsString('Open payments register', $controllerSource);
         self::assertStringContainsString('View all reminders for this invoice', $controllerSource);
+        self::assertStringContainsString('View related avtals', $controllerSource);
         self::assertStringContainsString('Open suppliers / imports', $controllerSource);
     }
 }

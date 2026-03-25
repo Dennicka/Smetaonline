@@ -374,13 +374,13 @@ final class PageController
         $prices = $this->filterPriceHistoryRows($this->factory->materialSupplierPrices()->latest(50), $supplierFilters);
 
         $this->renderAppShellStart('Suppliers / Price import', 'Supplier registry, import batches, and price history.');
-$this->renderOperationalLinkBar([
-    ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
-    ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings')],
-    ['label' => 'Open audit log', 'url' => admin_url('admin.php?page=trn_audit_log')],
-    ['label' => 'Clear filters', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
-]);
-$this->renderSuppliersFilterForm($supplierFilters);
+        $this->renderOperationalLinkBar([
+            ['label' => 'Back to workspace', 'url' => admin_url('admin.php?page=trn_dashboard')],
+            ['label' => 'Open settings / backup', 'url' => admin_url('admin.php?page=trn_settings'), 'cap' => 'trn_manage_templates'],
+            ['label' => 'Open audit log', 'url' => admin_url('admin.php?page=trn_audit_log'), 'cap' => 'trn_view_audit'],
+            ['label' => 'Clear filters', 'url' => admin_url('admin.php?page=trn_suppliers_prices')],
+        ]);
+        $this->renderSuppliersFilterForm($supplierFilters);
         echo '<h2>Suppliers registry</h2>';
         echo '<form method="post">';
         wp_nonce_field('trn_supplier_create');
@@ -1266,7 +1266,7 @@ $this->renderSuppliersFilterForm($supplierFilters);
         echo '</div></section>';
     }
 
-    /** @param array<int, array{label:string,url:string}> $links */
+    /** @param array<int, array{label:string,url:string,cap?:string}> $links */
     private function renderOperationalLinkBar(array $links): void
     {
         if ($links === []) {
@@ -1277,7 +1277,11 @@ $this->renderSuppliersFilterForm($supplierFilters);
         foreach ($links as $link) {
             $label = (string) ($link['label'] ?? '');
             $url = (string) ($link['url'] ?? '');
+            $requiredCapability = sanitize_key((string) ($link['cap'] ?? ''));
             if ($label === '' || $url === '') {
+                continue;
+            }
+            if ($requiredCapability !== '' && ! current_user_can($requiredCapability)) {
                 continue;
             }
 
@@ -2951,14 +2955,15 @@ $this->renderSuppliersFilterForm($supplierFilters);
             ['label' => 'Back to offerts list', 'url' => $offertsUrl],
             ['label' => 'Print / Printable view', 'url' => $printUrl],
             ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
-            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices'), 'cap' => 'trn_issue_invoices'],
         ];
         if ($estimateId > 0) {
             $estimateUrl = admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId);
             $estimateOffertsUrl = admin_url('admin.php?page=trn_offerts&estimate_id=' . $estimateId);
-            $actionLinks[] = ['label' => 'Open source estimate', 'url' => $estimateUrl];
+            $actionLinks[] = ['label' => 'Open source estimate', 'url' => $estimateUrl, 'cap' => 'trn_manage_estimates'];
             $actionLinks[] = ['label' => 'View all offerts for this estimate', 'url' => $estimateOffertsUrl];
         }
+        $actionLinks[] = ['label' => 'View avtals for this offert', 'url' => admin_url('admin.php?page=trn_offerts&avtal_offert_id=' . $offertId), 'cap' => 'trn_issue_offerts'];
         $this->renderOperationalLinkBar($actionLinks);
         $this->renderKeyValueTable([
             'status' => (string) ($offert['status'] ?? ''),
@@ -3043,13 +3048,18 @@ $this->renderSuppliersFilterForm($supplierFilters);
             ['label' => 'Back to invoices list', 'url' => $invoicesUrl],
             ['label' => 'Print / Printable view', 'url' => $printUrl],
             ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
-            ['label' => 'Open payments register', 'url' => admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceId)],
-            ['label' => 'View all credit notes for this invoice', 'url' => admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId)],
-            ['label' => 'View all reminders for this invoice', 'url' => admin_url('admin.php?page=trn_reminders&invoice_id=' . $invoiceId)],
+            ['label' => 'Open payments register', 'url' => admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceId), 'cap' => 'trn_record_payments'],
+            ['label' => 'View all credit notes for this invoice', 'url' => admin_url('admin.php?page=trn_credit_notes&invoice_id=' . $invoiceId), 'cap' => 'trn_issue_credit_notes'],
+            ['label' => 'View all reminders for this invoice', 'url' => admin_url('admin.php?page=trn_reminders&invoice_id=' . $invoiceId), 'cap' => 'trn_issue_reminders'],
         ];
         if ($offertId > 0) {
             $offertUrl = admin_url('admin.php?page=trn_offerts&offert_id=' . $offertId);
-            $actionLinks[] = ['label' => 'Open source offert', 'url' => $offertUrl];
+            $actionLinks[] = ['label' => 'Open source offert', 'url' => $offertUrl, 'cap' => 'trn_issue_offerts'];
+            $actionLinks[] = ['label' => 'View related avtals', 'url' => admin_url('admin.php?page=trn_offerts&avtal_offert_id=' . $offertId), 'cap' => 'trn_issue_offerts'];
+        }
+        $estimateId = (int) ($invoice['estimate_id'] ?? 0);
+        if ($estimateId > 0) {
+            $actionLinks[] = ['label' => 'Open source estimate', 'url' => admin_url('admin.php?page=trn_estimates&estimate_id=' . $estimateId), 'cap' => 'trn_manage_estimates'];
         }
         $this->renderOperationalLinkBar($actionLinks);
         $this->renderKeyValueTable([
@@ -3143,10 +3153,11 @@ $this->renderSuppliersFilterForm($supplierFilters);
         $actionLinks = [
             ['label' => 'Back to reminders list', 'url' => $remindersUrl],
             ['label' => 'Generate / Download PDF', 'url' => $pdfUrl],
-            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices')],
+            ['label' => 'Open invoices module', 'url' => admin_url('admin.php?page=trn_invoices'), 'cap' => 'trn_issue_invoices'],
+            ['label' => 'Open payments register', 'url' => admin_url('admin.php?page=trn_payments&invoice_id=' . $invoiceId), 'cap' => 'trn_record_payments'],
         ];
         if ($invoiceId > 0) {
-            $actionLinks[] = ['label' => 'Open source invoice', 'url' => admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId)];
+            $actionLinks[] = ['label' => 'Open source invoice', 'url' => admin_url('admin.php?page=trn_invoices&invoice_id=' . $invoiceId), 'cap' => 'trn_issue_invoices'];
         }
         $this->renderOperationalLinkBar($actionLinks);
         $this->renderKeyValueTable([
